@@ -1809,7 +1809,8 @@ footer p {
 }
 
 .idol-copy button,
-.fnaf-copy button {
+.fnaf-copy button,
+.fnaf-game-link {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1822,8 +1823,10 @@ footer p {
   border-bottom: 1px solid rgba(255,255,255,.2);
   background: none;
   cursor: pointer;
+  color: inherit;
   font: 700 .55rem var(--font-mono);
   letter-spacing: .1em;
+  text-decoration: none;
 }
 
 .mj-world {
@@ -2107,6 +2110,253 @@ footer p {
   color: var(--red);
 }
 
+.camera-lens-data {
+  position: absolute;
+  z-index: 5;
+  top: 2.1rem;
+  left: 1.2rem;
+  right: 1.2rem;
+  display: flex;
+  justify-content: space-between;
+  color: rgba(186,204,184,.45);
+  font: .36rem var(--font-mono);
+  letter-spacing: .09em;
+}
+
+.camera-room {
+  position: absolute;
+  z-index: 1;
+  inset: 2.5rem .5rem 2.2rem;
+  overflow: hidden;
+  perspective: 420px;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.82), transparent 24% 76%, rgba(0,0,0,.82)),
+    linear-gradient(#101511 0 68%, #090b09 69%);
+}
+
+.camera-room::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5rem;
+  width: 160%;
+  height: 13rem;
+  transform: translateX(-50%) rotateX(65deg);
+  transform-origin: bottom;
+  background:
+    linear-gradient(90deg, transparent 49%, rgba(202,213,199,.1) 50%, transparent 51%),
+    linear-gradient(0deg, transparent 49%, rgba(202,213,199,.08) 50%, transparent 51%),
+    #0c0f0d;
+  background-size: 4rem 4rem;
+}
+
+.room-ceiling {
+  position: absolute;
+  top: -4.5rem;
+  left: 50%;
+  display: flex;
+  justify-content: space-around;
+  width: 150%;
+  height: 7rem;
+  transform: translateX(-50%) rotateX(-65deg);
+  background: repeating-linear-gradient(90deg, #0b0d0c 0 3rem, #171b18 3rem 3.15rem);
+}
+
+.room-ceiling i {
+  width: 2.6rem;
+  height: .18rem;
+  margin-top: 4.8rem;
+  background: #98a491;
+  box-shadow: 0 0 1rem rgba(191,211,183,.45);
+}
+
+.room-backwall {
+  position: absolute;
+  inset: 0 9% 22%;
+  border-bottom: .65rem solid #121713;
+  background:
+    linear-gradient(0deg, #0c0f0d 0 13%, transparent 14%),
+    repeating-linear-gradient(90deg, transparent 0 2.8rem, rgba(255,255,255,.018) 2.8rem 2.86rem),
+    #131815;
+}
+
+.room-backwall::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 13%;
+  height: 1rem;
+  background: repeating-linear-gradient(90deg, #9b9d91 0 1rem, #171a18 1rem 2rem);
+  opacity: .42;
+}
+
+.room-poster {
+  position: absolute;
+  z-index: 2;
+  top: 18%;
+  display: grid;
+  place-items: center;
+  width: 4rem;
+  height: 5.2rem;
+  border: .18rem solid #090a09;
+  background: #36372f;
+  color: #9ea697;
+  font: 700 .42rem var(--font-mono);
+  transform: rotate(-4deg);
+}
+
+.poster-one { left: 9%; }
+.poster-two { right: 10%; font: 2.2rem var(--font-display); transform: rotate(5deg); }
+
+.room-pipe {
+  position: absolute;
+  display: block;
+  width: .45rem;
+  border: .1rem solid #323933;
+  border-top: 0;
+  background: #1b211c;
+}
+
+.pipe-one { right: 23%; top: -1rem; height: 78%; }
+.pipe-two { right: 29%; top: -1rem; height: 48%; }
+
+.room-door {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 6.8rem;
+  height: 12rem;
+  transform: translateX(-50%);
+  border: .3rem solid #252b26;
+  background: linear-gradient(90deg, #101411, #20251f 48% 52%, #101411);
+  color: #788176;
+  font: .34rem var(--font-mono);
+}
+
+.party-table {
+  position: absolute;
+  z-index: 2;
+  bottom: 9%;
+  display: none;
+  width: 8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  background: #272d27;
+  transform: rotateX(68deg);
+  box-shadow: 0 1.3rem 0 -1.15rem #1a1e1a;
+}
+
+.party-table i {
+  position: absolute;
+  top: 35%;
+  width: .8rem;
+  height: .5rem;
+  border-radius: 50%;
+  background: #717a70;
+}
+
+.party-table i:nth-child(1) { left: 20%; }
+.party-table i:nth-child(2) { left: 47%; }
+.party-table i:nth-child(3) { right: 18%; }
+.table-one { left: 8%; }
+.table-two { right: 7%; bottom: 21%; transform: scale(.7) rotateX(68deg); }
+
+.office-desk {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 3%;
+  display: none;
+  width: 75%;
+  height: 3.2rem;
+  transform: translateX(-50%);
+  border-top: .35rem solid #313732;
+  background: #111512;
+}
+
+.desk-monitor {
+  position: absolute;
+  left: 46%;
+  top: -2.8rem;
+  width: 4rem;
+  height: 2.8rem;
+  border: .25rem solid #222a23;
+  background: #506052;
+  box-shadow: 0 0 1rem rgba(161,194,165,.25);
+}
+
+.desk-fan {
+  position: absolute;
+  left: 16%;
+  top: -2.2rem;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: .2rem solid #4b534c;
+  border-radius: 50%;
+  background: conic-gradient(from 25deg, #202521 0 12%, transparent 13% 25%, #202521 26% 38%, transparent 39% 51%, #202521 52% 64%, transparent 65% 77%, #202521 78% 90%, transparent 91%);
+  animation: fanSpin .8s linear infinite;
+}
+
+.desk-cup {
+  position: absolute;
+  right: 13%;
+  top: -1.4rem;
+  width: 1rem;
+  height: 1.4rem;
+  border: .12rem solid #444e46;
+  border-radius: 0 0 .2rem .2rem;
+}
+
+.vent-grille {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  display: none;
+  justify-content: space-around;
+  width: 68%;
+  height: 46%;
+  padding: .7rem;
+  transform: translate(-50%, -50%);
+  border: .55rem solid #282f29;
+  background: #040605;
+  box-shadow: inset 0 0 2rem #000;
+}
+
+.vent-grille i {
+  width: .2rem;
+  background: #202721;
+}
+
+.stage-curtain {
+  position: absolute;
+  z-index: 3;
+  top: -4%;
+  display: none;
+  width: 34%;
+  height: 94%;
+  background: repeating-linear-gradient(90deg, #260c0d 0 14%, #4b1516 15% 28%);
+  box-shadow: inset 0 -1.5rem 1rem #090303;
+}
+
+.curtain-left { left: 0; transform: skewX(-4deg); }
+.curtain-right { right: 0; transform: skewX(4deg); }
+
+.feed-0 .stage-curtain { display: block; }
+.feed-1 .party-table { display: block; }
+.feed-2 .room-poster,
+.feed-2 .party-table,
+.feed-2 .room-door { display: none; }
+.feed-3 .room-door { width: 11rem; }
+.feed-4 .room-backwall,
+.feed-4 .room-ceiling { display: none; }
+.feed-4 .vent-grille { display: flex; }
+.feed-5 .office-desk { display: block; }
+.feed-5 .room-door { left: 86%; width: 4.4rem; }
+
 .security-monitor > p {
   position: absolute;
   z-index: 4;
@@ -2138,6 +2388,19 @@ footer p {
 .feed-3 .animatronic-silhouette {
   left: 72%;
   opacity: .42;
+}
+
+.feed-4 .animatronic-silhouette {
+  top: 72%;
+  transform: translate(-50%, -50%) scale(1.35);
+  opacity: .72;
+}
+
+.feed-5 .animatronic-silhouette {
+  left: 18%;
+  top: 54%;
+  transform: translate(-50%, -50%) scale(.5);
+  opacity: .18;
 }
 
 .animatronic-silhouette i {
@@ -2189,6 +2452,40 @@ footer p {
   border-radius: 25% 25% 45% 45%;
 }
 
+.animatronic-silhouette .torso {
+  z-index: 1;
+  left: 2rem;
+  top: 12rem;
+  width: 8rem;
+  height: 7rem;
+  border-radius: 35% 35% 15% 15%;
+  background:
+    radial-gradient(circle at 50% 18%, #293129 0 .5rem, #060706 .55rem 1.1rem, transparent 1.15rem),
+    #050605;
+}
+
+.animatronic-silhouette .arm {
+  z-index: 0;
+  top: 12.6rem;
+  width: 2rem;
+  height: 7rem;
+  border-radius: 1rem;
+}
+
+.animatronic-silhouette .arm.left { left: .15rem; transform: rotate(14deg); }
+.animatronic-silhouette .arm.right { right: .15rem; transform: rotate(-14deg); }
+
+.animatronic-silhouette .hand {
+  z-index: 1;
+  top: 18.5rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+}
+
+.animatronic-silhouette .hand.left { left: -.35rem; }
+.animatronic-silhouette .hand.right { right: -.35rem; }
+
 .camera-console {
   display: flex;
   flex-direction: column;
@@ -2196,11 +2493,47 @@ footer p {
 }
 
 .camera-map {
+  position: relative;
   display: grid;
   gap: .55rem;
 }
 
+.camera-map .map-you {
+  position: absolute;
+  z-index: 4;
+  right: -.35rem;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 1rem;
+  transform: translateY(-50%);
+  border: 1px solid var(--red);
+  background: #210708;
+  color: #e5b6b6;
+  font: .35rem var(--font-mono);
+}
+
+.map-wire {
+  position: absolute;
+  z-index: 0;
+  right: .4rem;
+  top: 18%;
+  width: 1px;
+  height: 63%;
+  background: #3c473d;
+}
+
+.map-wire.wire-two {
+  right: 1.4rem;
+  top: 34%;
+  height: 42%;
+  transform: rotate(24deg);
+}
+
 .camera-map button {
+  position: relative;
+  z-index: 2;
   padding: .8rem .65rem;
   border: 1px solid #353a34;
   background: #10120f;
@@ -2566,10 +2899,19 @@ footer p {
   animation: pulse .45s infinite;
 }
 
-.fnaf-copy button + button {
+.fnaf-game-link + button {
   margin-top: .6rem;
   border-top: 0;
   color: #7d867a;
+}
+
+.fnaf-game-link {
+  color: #f0eee5;
+}
+
+.fnaf-game-link:hover {
+  color: var(--red);
+  border-color: var(--red);
 }
 
 .microtonal-jukebox {
@@ -3473,6 +3815,10 @@ footer p {
 
 @keyframes pulse {
   50% { opacity: .4; }
+}
+
+@keyframes fanSpin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes trailerText {

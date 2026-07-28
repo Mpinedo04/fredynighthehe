@@ -110,10 +110,12 @@ const trailerScenes = [
 ];
 
 const cameraFeeds = [
-  ["CAM 01", "ESCENARIO", "Movimiento detectado junto al micrófono."],
-  ["CAM 02", "PASILLO", "Una claqueta ha cambiado de sitio. Nadie sabe cómo."],
-  ["CAM 03", "ALMACÉN", "Animatrónico inmóvil. De momento."],
-  ["CAM 04", "MONTAJE", "FINAL_FINAL_AHORA_SÍ_v22 sigue exportando."],
+  ["CAM 01", "ESCENARIO", "Tres siluetas en escena. Una ya no mira al público."],
+  ["CAM 02", "COMEDOR", "Las mesas están vacías. Hay un plato recién movido."],
+  ["CAM 03", "PASILLO OESTE", "Movimiento detectado a 4,2 metros de la oficina."],
+  ["CAM 04", "SERVICIO", "Unidad animatrónica fuera de su punto de carga."],
+  ["CAM 05", "CONDUCTOS", "Ruido metálico avanzando por la ventilación."],
+  ["CAM 06", "OFICINA 22", "Energía estable. Puertas sin bloquear."],
 ];
 
 const microSteps = Array.from({ length: 22 }, (_, index) => ({
@@ -791,20 +793,54 @@ export default function Home() {
             <div className="security-office">
               <div className={`security-monitor feed-${cameraFeed}`}>
                 <div className="monitor-noise" aria-hidden="true" />
+                <div className="camera-lens-data" aria-hidden="true">
+                  <span>ISO 12800</span>
+                  <span>IR AUTO</span>
+                  <span>3.6 MM</span>
+                </div>
                 <div className="monitor-topline">
                   <span>● REC</span>
                   <strong>{cameraFeeds[cameraFeed][0]} · {cameraFeeds[cameraFeed][1]}</strong>
                   <span>12:0{cameraFeed + 1} AM</span>
                 </div>
+                <div className="camera-room" aria-hidden="true">
+                  <div className="room-ceiling">
+                    <i /><i /><i />
+                  </div>
+                  <div className="room-backwall">
+                    <span className="room-poster poster-one">CELEBRATE!</span>
+                    <span className="room-poster poster-two">22</span>
+                    <i className="room-pipe pipe-one" />
+                    <i className="room-pipe pipe-two" />
+                    <b className="room-door">EMPLOYEES ONLY</b>
+                  </div>
+                  <div className="party-table table-one"><i /><i /><i /></div>
+                  <div className="party-table table-two"><i /><i /><i /></div>
+                  <div className="office-desk">
+                    <i className="desk-fan" />
+                    <i className="desk-monitor" />
+                    <i className="desk-cup" />
+                  </div>
+                  <div className="vent-grille">
+                    {Array.from({ length: 6 }, (_, index) => <i key={index} />)}
+                  </div>
+                  <div className="stage-curtain curtain-left" />
+                  <div className="stage-curtain curtain-right" />
+                </div>
                 <div className="animatronic-silhouette" aria-hidden="true">
                   <i className="ear left" /><i className="ear right" />
                   <i className="head" /><i className="eye left" /><i className="eye right" />
                   <i className="jaw" />
+                  <i className="torso" /><i className="arm left" /><i className="arm right" />
+                  <i className="hand left" /><i className="hand right" />
                 </div>
                 <p>{cameraFeeds[cameraFeed][2]}</p>
               </div>
               <div className="camera-console">
                 <div className="camera-map">
+                  <span className="map-you">YOU</span>
+                  <i className="map-wire wire-one" />
+                  <i className="map-wire wire-two" />
                   {cameraFeeds.map(([camera, room], index) => (
                     <button
                       type="button"
@@ -860,9 +896,9 @@ export default function Home() {
                 Cámaras, estática, diseño sonoro, pistas escondidas y el tipo de
                 tensión que convierte un pasillo vacío en una historia entera.
               </p>
-              <button type="button" onClick={() => setChaseOpen(true)}>
+              <a className="fnaf-game-link" href="/walk-exe">
                 ENTRAR AL PASADIZO M00NW4LK.EXE <span>→</span>
-              </button>
+              </a>
               <button type="button" onClick={() => setRecovered(true)}>
                 LEER TARJETA “MATERIAL RECUPERADO” <span>↗</span>
               </button>
