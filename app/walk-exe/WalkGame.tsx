@@ -409,6 +409,7 @@ export default function WalkExe() {
   const [cctvIndex, setCctvIndex] = useState(0);
   const [power, setPower] = useState(96);
   const [inVent, setInVent] = useState(false);
+  const [pointerHelp, setPointerHelp] = useState(false);
   const [prompt, setPrompt] = useState("Encuentra una salida. No corras sin escuchar.");
   const [message, setMessage] = useState("El sistema está generando una ruta nueva.");
 
@@ -440,14 +441,23 @@ export default function WalkExe() {
 
   const requestControl = useCallback(() => {
     if (phaseRef.current !== "playing") return;
-    void canvasRef.current?.requestPointerLock();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.focus({ preventScroll: true });
+    try {
+      void canvas.requestPointerLock().catch(() => setPointerHelp(true));
+    } catch {
+      setPointerHelp(true);
+    }
   }, []);
 
   const beginGame = useCallback(() => {
     startAudio();
     setGamePhase("playing");
+    setPointerHelp(false);
     setMessage("Encuentra la puerta de emergencia. TAB abre la red CCTV.");
-    window.setTimeout(requestControl, 80);
+    // Pointer lock must be requested synchronously inside the user's click.
+    requestControl();
   }, [requestControl, setGamePhase, startAudio]);
 
   const restart = useCallback(() => {
@@ -875,7 +885,16 @@ export default function WalkExe() {
             : "Cámara corporal restaurada.",
         );
         if (tabletRef.current) document.exitPointerLock?.();
-        else window.setTimeout(() => void renderer.domElement.requestPointerLock(), 50);
+        else {
+          renderer.domElement.focus({ preventScroll: true });
+          try {
+            void renderer.domElement
+              .requestPointerLock()
+              .catch(() => setPointerHelp(true));
+          } catch {
+            setPointerHelp(true);
+          }
+        }
       }
       if (event.code === "KeyF") {
         flashlightEnabled = !flashlightEnabled;
@@ -899,13 +918,31 @@ export default function WalkExe() {
     };
     const canvasClick = () => {
       if (phaseRef.current === "playing" && !tabletRef.current) {
-        void renderer.domElement.requestPointerLock();
+        renderer.domElement.focus({ preventScroll: true });
+        try {
+          void renderer.domElement
+            .requestPointerLock()
+            .catch(() => setPointerHelp(true));
+        } catch {
+          setPointerHelp(true);
+        }
       }
     };
+    const pointerLockChange = () => {
+      const locked = document.pointerLockElement === renderer.domElement;
+      if (locked) {
+        setPointerHelp(false);
+      } else if (phaseRef.current === "playing" && !tabletRef.current) {
+        setPointerHelp(true);
+      }
+    };
+    const pointerLockError = () => setPointerHelp(true);
 
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
     document.addEventListener("mousemove", mouseMove);
+    document.addEventListener("pointerlockchange", pointerLockChange);
+    document.addEventListener("pointerlockerror", pointerLockError);
     renderer.domElement.addEventListener("click", canvasClick);
 
     const resize = () => {
@@ -1118,6 +1155,8 @@ export default function WalkExe() {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
       document.removeEventListener("mousemove", mouseMove);
+      document.removeEventListener("pointerlockchange", pointerLockChange);
+      document.removeEventListener("pointerlockerror", pointerLockError);
       renderer.domElement.removeEventListener("click", canvasClick);
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock?.();
       renderer.dispose();
@@ -1204,6 +1243,17 @@ export default function WalkExe() {
             <span><b>TAB</b> CÁMARAS</span>
             <span><b>F</b> LINTERNA</span>
           </div>
+
+          {pointerHelp && !tabletOpen && (
+            <button
+              className="pointer-help"
+              type="button"
+              onClick={requestControl}
+            >
+              <span>CONTROL SIN CAPTURAR</span>
+              HAZ CLIC AQUÍ PARA ACTIVAR RATÓN + WASD
+            </button>
+          )}
         </>
       )}
 
@@ -1264,7 +1314,7 @@ export default function WalkExe() {
                 onClick={() => {
                   tabletRef.current = false;
                   setTabletOpen(false);
-                  window.setTimeout(requestControl, 50);
+                  requestControl();
                 }}
               >
                 BAJAR MONITOR · TAB
