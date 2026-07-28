@@ -121,6 +121,38 @@ const microSteps = Array.from({ length: 22 }, (_, index) => ({
   cents: Math.round((1200 / 22) * index),
 }));
 
+const microtonalTracks = [
+  {
+    title: "RATTLESNAKE",
+    subtitle: "Official Video · Flying Microtonal Banana",
+    videoId: "Q-i1XZc8ZwA",
+    tuning: "24-TET / MICROTONAL GUITARS",
+  },
+  {
+    title: "NUCLEAR FUSION",
+    subtitle: "Official Audio · Flying Microtonal Banana",
+    videoId: "4MFVhqcRpN4",
+    tuning: "CUSTOM MICROTONAL FRETS",
+  },
+  {
+    title: "SLEEP DRIFTER",
+    subtitle: "Official Audio · Flying Microtonal Banana",
+    videoId: "8XW8yofuGao",
+    tuning: "PSYCHEDELIC MICROTONAL",
+  },
+];
+
+const animatronicArchive = [
+  ["FREDDY", "FZ-01", 0.82],
+  ["BONNIE", "BN-02", 0.92],
+  ["CHICA", "CH-03", 1],
+  ["FOXY", "FX-04", 1.12],
+  ["GOLDEN FREDDY", "GF-05", 0.68],
+  ["SPRINGTRAP", "ST-06", 0.76],
+  ["PUPPET", "PP-07", 1.24],
+  ["MANGLE", "MG-08", 1.35],
+] as const;
+
 const heeButtonLabels = [
   "SILENCIAR EL HEE-HEE",
   "CASI. PRUEBA OTRA VEZ",
@@ -142,6 +174,10 @@ export default function Home() {
   const [activeVideo, setActiveVideo] = useState<number | null>(null);
   const [cameraFeed, setCameraFeed] = useState(0);
   const [microActive, setMicroActive] = useState<number | null>(null);
+  const [microTrack, setMicroTrack] = useState(0);
+  const [screamActive, setScreamActive] = useState<number | null>(null);
+  const [chaseOpen, setChaseOpen] = useState(false);
+  const [chasePhase, setChasePhase] = useState(0);
   const [scrollDepth, setScrollDepth] = useState(0);
   const [scrollBand, setScrollBand] = useState(0);
   const [heeReady, setHeeReady] = useState(false);
@@ -151,6 +187,7 @@ export default function Home() {
   const [postCredits, setPostCredits] = useState(false);
   const scrollDepthRef = useRef(0);
   const heeAudioRef = useRef<Set<HTMLAudioElement>>(new Set());
+  const jumpscareAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioRef = useRef<{
     context: AudioContext;
     oscillators: OscillatorNode[];
@@ -185,6 +222,8 @@ export default function Home() {
         sample.currentTime = 0;
       });
       heeAudioRef.current.clear();
+      jumpscareAudioRef.current?.pause();
+      jumpscareAudioRef.current = null;
     };
   }, []);
 
@@ -255,6 +294,26 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [recovered]);
 
+  useEffect(() => {
+    if (!chaseOpen) return;
+    setChasePhase(0);
+    const timers = [
+      window.setTimeout(() => setChasePhase(1), 700),
+      window.setTimeout(() => setChasePhase(2), 3300),
+      window.setTimeout(() => setChasePhase(3), 5000),
+      window.setTimeout(() => {
+        setChasePhase(4);
+        jumpscareAudioRef.current?.pause();
+        const scream = new Audio("/audio/fnaf-jumpscare-scream.mp3");
+        scream.volume = 0.5;
+        scream.playbackRate = 0.72;
+        jumpscareAudioRef.current = scream;
+        void scream.play();
+      }, 6900),
+    ];
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [chaseOpen]);
+
   const toggleSound = () => {
     if (soundOn && audioRef.current) {
       audioRef.current.gain.gain.exponentialRampToValueAtTime(
@@ -311,6 +370,31 @@ export default function Home() {
     oscillator.addEventListener("ended", () => void context.close());
     setMicroActive(index);
     window.setTimeout(() => setMicroActive(null), 720);
+  };
+
+  const playJumpscare = (index: number) => {
+    jumpscareAudioRef.current?.pause();
+    const sample = new Audio("/audio/fnaf-jumpscare-scream.mp3");
+    sample.volume = 0.42;
+    sample.playbackRate = animatronicArchive[index][2];
+    jumpscareAudioRef.current = sample;
+    setScreamActive(index);
+    sample.addEventListener(
+      "ended",
+      () => {
+        setScreamActive(null);
+        jumpscareAudioRef.current = null;
+      },
+      { once: true },
+    );
+    void sample.play().catch(() => setScreamActive(null));
+  };
+
+  const closeChase = () => {
+    jumpscareAudioRef.current?.pause();
+    jumpscareAudioRef.current = null;
+    setChaseOpen(false);
+    setChasePhase(0);
   };
 
   const silenceHee = () => {
@@ -632,18 +716,25 @@ export default function Home() {
               <span>REFERENTE 01</span>
               <strong>THE KING OF POP</strong>
             </div>
-            <div className="mj-stage" aria-hidden="true">
+            <figure className="mj-stage">
+              <img
+                src="/michael/michael-jackson-1988.jpg"
+                alt="Michael Jackson actuando durante la gira Bad en 1988"
+              />
               <i className="spotlight left" />
               <i className="spotlight right" />
-              <div className="mj-figure">
-                <span className="mj-hat" />
-                <span className="mj-head" />
-                <span className="mj-body" />
-                <span className="mj-leg one" />
-                <span className="mj-leg two" />
-              </div>
-              <div className="stage-floor" />
-            </div>
+              <div className="mj-photo-scan" aria-hidden="true" />
+              <figcaption>
+                <span>BAD WORLD TOUR · 1988</span>
+                <a
+                  href="https://commons.wikimedia.org/wiki/File:Michael_Jackson_in_1988.jpg"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  FOTO REAL · ZORAN VESELINOVIC · CC BY-SA 2.0 ↗
+                </a>
+              </figcaption>
+            </figure>
             <div className="idol-copy">
               <p className="eyebrow red">RITMO · ESPECTÁCULO · PRECISIÓN</p>
               <h3>MICHAEL<br />JACKSON</h3>
@@ -733,6 +824,35 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            <div className="scream-archive">
+              <div className="scream-heading">
+                <div>
+                  <span>ARCHIVO DE GRITOS</span>
+                  <strong>ANIMATRÓNICOS PRINCIPALES</strong>
+                </div>
+                <small>VOLUMEN DE SEGURIDAD · 42%</small>
+              </div>
+              <div className="scream-grid">
+                {animatronicArchive.map(([name, code], index) => (
+                  <button
+                    type="button"
+                    key={name}
+                    className={screamActive === index ? "active" : ""}
+                    onClick={() => playJumpscare(index)}
+                    aria-label={`Reproducir grito de ${name}`}
+                  >
+                    <span className="scream-face" aria-hidden="true">
+                      <i /><i /><b>{name.slice(0, 1)}</b>
+                    </span>
+                    <span>
+                      <small>{code}</small>
+                      <strong>{name}</strong>
+                    </span>
+                    <em>{screamActive === index ? "SONANDO" : "▶ GRITO"}</em>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="idol-copy fnaf-copy">
               <p className="eyebrow red">FIVE NIGHTS AT FREDDY’S / HORROR</p>
               <h3>NO MIRES<br />LA PUERTA.</h3>
@@ -740,8 +860,11 @@ export default function Home() {
                 Cámaras, estática, diseño sonoro, pistas escondidas y el tipo de
                 tensión que convierte un pasillo vacío en una historia entera.
               </p>
+              <button type="button" onClick={() => setChaseOpen(true)}>
+                ENTRAR AL PASADIZO M00NW4LK.EXE <span>→</span>
+              </button>
               <button type="button" onClick={() => setRecovered(true)}>
-                LEER TARJETA “MATERIAL RECUPERADO” <span>→</span>
+                LEER TARJETA “MATERIAL RECUPERADO” <span>↗</span>
               </button>
             </div>
           </article>
@@ -786,6 +909,43 @@ export default function Home() {
                 ))}
               </div>
               <p>PULSA LOS PASOS · EL SONIDO SOLO SE ACTIVA AL INTERACTUAR</p>
+            </div>
+            <div className="microtonal-jukebox">
+              <div className="micro-player">
+                <iframe
+                  key={microtonalTracks[microTrack].videoId}
+                  src={`https://www.youtube-nocookie.com/embed/${microtonalTracks[microTrack].videoId}?rel=0`}
+                  title={`${microtonalTracks[microTrack].title} de King Gizzard & the Lizard Wizard`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+              <div className="micro-tracklist">
+                <div>
+                  <span>FLYING MICROTONAL BANANA</span>
+                  <strong>KING GIZZARD &amp; THE LIZARD WIZARD</strong>
+                  <p>
+                    Tres puertas de entrada a su etapa microtonal. Selecciona
+                    una pista y pulsa play en el reproductor oficial.
+                  </p>
+                </div>
+                {microtonalTracks.map((track, index) => (
+                  <button
+                    type="button"
+                    key={track.videoId}
+                    className={microTrack === index ? "active" : ""}
+                    onClick={() => setMicroTrack(index)}
+                    aria-pressed={microTrack === index}
+                  >
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <span>
+                      <strong>{track.title}</strong>
+                      <small>{track.subtitle}</small>
+                    </span>
+                    <em>{track.tuning}</em>
+                  </button>
+                ))}
+              </div>
             </div>
           </article>
         </div>
@@ -906,6 +1066,86 @@ export default function Home() {
         <p>Hecho con recuerdos, cariño y alguna toma de más.</p>
         <span>RAAULINHOO © ESCENA 22</span>
       </footer>
+
+      {chaseOpen && (
+        <div
+          className={`moonwalk-chase phase-${chasePhase}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pasadizo animatrónico M00NW4LK"
+        >
+          <div className="chase-corridor" aria-hidden="true">
+            <div className="corridor-ceiling" />
+            <div className="corridor-floor" />
+            <div className="corridor-door door-one">CAM 01</div>
+            <div className="corridor-door door-two">CAM 02</div>
+            <div className="corridor-door door-three">CAM 03</div>
+            <i className="corridor-light light-one" />
+            <i className="corridor-light light-two" />
+            <i className="corridor-light light-three" />
+          </div>
+          <div className="chase-hud">
+            <span>● REC · PASADIZO 22</span>
+            <strong>
+              {
+                [
+                  "MOVIMIENTO DETECTADO",
+                  "SUJETO APROXIMÁNDOSE EN MOONWALK",
+                  "SOMBRERO RETIRADO · ERROR CERVICAL",
+                  "CABEZA DESACOPLADA · CORRE",
+                  "NO MIRES ATRÁS",
+                ][chasePhase]
+              }
+            </strong>
+            <span>FASE 0{chasePhase + 1}/05</span>
+          </div>
+          <div className="hybrid-performer" aria-hidden="true">
+            <span className="hybrid-hat" />
+            <span className="hybrid-head">
+              <i className="hybrid-eye left" />
+              <i className="hybrid-eye right" />
+              <i className="hybrid-jaw" />
+            </span>
+            <span className="hybrid-neck" />
+            <span className="hybrid-torso">
+              <i /><i /><i />
+            </span>
+            <span className="hybrid-arm arm-left">
+              <i className="white-glove" />
+            </span>
+            <span className="hybrid-arm arm-right" />
+            <span className="hybrid-leg leg-left" />
+            <span className="hybrid-leg leg-right" />
+          </div>
+          <div className="detached-hybrid-head" aria-hidden="true">
+            <i className="head-ear left" />
+            <i className="head-ear right" />
+            <span>
+              <i className="eye left" /><i className="eye right" />
+              <b>22</b>
+            </span>
+            <i className="head-jaw" />
+          </div>
+          <div className="chase-jumpscare" aria-hidden="true">
+            <span>22</span>
+          </div>
+          <div className="chase-instruction">
+            <small>M00NW4LK.EXE</small>
+            <p>
+              {chasePhase < 4
+                ? "El protocolo no recomienda quedarse quieto."
+                : "Te ha encontrado. Feliz escena 22."}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="chase-close"
+            onClick={closeChase}
+          >
+            {chasePhase < 4 ? "ABORTAR PASADIZO ×" : "SALIR CON VIDA →"}
+          </button>
+        </div>
+      )}
 
       {heeReady && scrollBand >= 6 && !heeMuted && (
         <aside
