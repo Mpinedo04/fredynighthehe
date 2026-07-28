@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const credits = [
   "Dirección",
@@ -121,6 +121,15 @@ const microSteps = Array.from({ length: 22 }, (_, index) => ({
   cents: Math.round((1200 / 22) * index),
 }));
 
+const heeButtonLabels = [
+  "SILENCIAR EL HEE-HEE",
+  "CASI. PRUEBA OTRA VEZ",
+  "¿DE VERDAD QUIERES PARARLO?",
+  "NO PUEDES HUIR DEL RITMO",
+  "ÚLTIMO INTENTO… CREEMOS",
+  "AHORA SÍ: SILENCIAR",
+];
+
 export default function Home() {
   const [started, setStarted] = useState(false);
   const [soundOn, setSoundOn] = useState(false);
@@ -133,13 +142,109 @@ export default function Home() {
   const [activeVideo, setActiveVideo] = useState<number | null>(null);
   const [cameraFeed, setCameraFeed] = useState(0);
   const [microActive, setMicroActive] = useState<number | null>(null);
+  const [scrollDepth, setScrollDepth] = useState(0);
+  const [scrollBand, setScrollBand] = useState(0);
+  const [heeReady, setHeeReady] = useState(false);
+  const [heeMuted, setHeeMuted] = useState(false);
+  const [muteAttempts, setMuteAttempts] = useState(0);
   const [clapped, setClapped] = useState(false);
   const [postCredits, setPostCredits] = useState(false);
+  const scrollDepthRef = useRef(0);
   const audioRef = useRef<{
     context: AudioContext;
     oscillators: OscillatorNode[];
     gain: GainNode;
   } | null>(null);
+
+  const playHee = useCallback(() => {
+    if (heeMuted || typeof window === "undefined") return;
+
+    const volume = Math.min(0.18 + scrollDepthRef.current * 0.72, 0.9);
+
+    if ("speechSynthesis" in window) {
+      const utterance = new SpeechSynthesisUtterance("hee-hee!");
+      const voices = window.speechSynthesis.getVoices();
+      utterance.voice =
+        voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ??
+        null;
+      utterance.lang = "en-US";
+      utterance.pitch = 1.75;
+      utterance.rate = 2.25;
+      utterance.volume = volume;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    const context = new AudioContext();
+    [0, 0.16].forEach((delay) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(620, context.currentTime + delay);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        1040,
+        context.currentTime + delay + 0.09,
+      );
+      gain.gain.setValueAtTime(0.0001, context.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(
+        volume * 0.18,
+        context.currentTime + delay + 0.02,
+      );
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        context.currentTime + delay + 0.14,
+      );
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(context.currentTime + delay);
+      oscillator.stop(context.currentTime + delay + 0.15);
+    });
+    window.setTimeout(() => void context.close(), 450);
+  }, [heeMuted]);
+
+  useEffect(() => {
+    const updateScrollDepth = () => {
+      const available =
+        document.documentElement.scrollHeight - window.innerHeight;
+      const depth = available > 0 ? Math.min(window.scrollY / available, 1) : 0;
+      scrollDepthRef.current = depth;
+      setScrollDepth(Math.round(depth * 100));
+      setScrollBand(Math.min(10, Math.floor(depth * 10)));
+    };
+
+    updateScrollDepth();
+    window.addEventListener("scroll", updateScrollDepth, { passive: true });
+    window.addEventListener("resize", updateScrollDepth);
+    return () => {
+      window.removeEventListener("scroll", updateScrollDepth);
+      window.removeEventListener("resize", updateScrollDepth);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleEveryClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("[data-hee-control]")
+      ) {
+        return;
+      }
+      setHeeReady(true);
+      playHee();
+    };
+
+    document.addEventListener("click", handleEveryClick, true);
+    return () => document.removeEventListener("click", handleEveryClick, true);
+  }, [playHee]);
+
+  useEffect(() => {
+    if (!heeReady || heeMuted || scrollBand < 2) return;
+    const delay = Math.max(650, 4200 - scrollBand * 355);
+    const timer = window.setInterval(playHee, delay);
+    return () => window.clearInterval(timer);
+  }, [heeReady, heeMuted, playHee, scrollBand]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -221,6 +326,27 @@ export default function Home() {
     oscillator.addEventListener("ended", () => void context.close());
     setMicroActive(index);
     window.setTimeout(() => setMicroActive(null), 720);
+  };
+
+  const silenceHee = () => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setHeeMuted(true);
+  };
+
+  const handleMuteAttempt = () => {
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    if (muteAttempts >= 5 || reduceMotion) {
+      silenceHee();
+      return;
+    }
+
+    playHee();
+    setMuteAttempts((attempt) => attempt + 1);
   };
 
   return (
@@ -793,6 +919,77 @@ export default function Home() {
         <p>Hecho con recuerdos, cariño y alguna toma de más.</p>
         <span>RAAULINHOO © ESCENA 22</span>
       </footer>
+
+      {heeReady && scrollBand >= 6 && !heeMuted && (
+        <aside
+          className={`hee-control-panel evade-${muteAttempts}`}
+          data-hee-control
+          aria-live="polite"
+        >
+          <div className="hee-alert-line">
+            <span className="hee-alert-dot" />
+            <small>ALERTA DE SATURACIÓN VOCAL</small>
+            <b>{String(muteAttempts).padStart(2, "0")}/05</b>
+          </div>
+          <div className="hee-control-copy">
+            <span aria-hidden="true">HEE</span>
+            <div>
+              <strong>HEE-HEE INTENSIFICADO</strong>
+              <p>
+                Has bajado demasiado. El sistema ya no puede contener el ritmo.
+              </p>
+            </div>
+          </div>
+          <div className="hee-readouts">
+            <div>
+              <span>PROFUNDIDAD</span>
+              <b>{scrollDepth}%</b>
+            </div>
+            <div>
+              <span>VOLUMEN</span>
+              <b>{Math.min(90, Math.round(18 + scrollDepth * 0.72))}%</b>
+            </div>
+            <div>
+              <span>REPETICIÓN</span>
+              <b>{(Math.max(650, 4200 - scrollBand * 355) / 1000).toFixed(1)}s</b>
+            </div>
+          </div>
+          <div className="hee-intensity-track" aria-hidden="true">
+            <i style={{ width: `${scrollDepth}%` }} />
+          </div>
+          <button
+            type="button"
+            onClick={handleMuteAttempt}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                silenceHee();
+              }
+            }}
+            aria-label={
+              muteAttempts < 5
+                ? `Intentar silenciar el hee-hee. Intento ${muteAttempts + 1} de 6`
+                : "Silenciar definitivamente el hee-hee"
+            }
+          >
+            {heeButtonLabels[muteAttempts]}
+            <span aria-hidden="true">{muteAttempts < 5 ? "↗" : "■"}</span>
+          </button>
+          <p className="hee-footnote">
+            {muteAttempts < 5
+              ? "El botón presenta una resistencia coreográfica inesperada."
+              : "Ya se ha cansado. Ahora sí puedes atraparlo."}
+          </p>
+        </aside>
+      )}
+
+      {heeMuted && (
+        <div className="hee-silenced" role="status" data-hee-control>
+          <span>■</span>
+          HEE-HEE SILENCIADO · MISCHIEF MANAGED
+        </div>
+      )}
 
       {activeVideo !== null && (
         <div
