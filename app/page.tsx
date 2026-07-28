@@ -19,57 +19,78 @@ const projects = [
   {
     title: "EL PAN TA’ DURO",
     code: "P01",
-    kind: "Videoclip / comedia",
-    year: "ARCHIVO 01",
-    role: "Una idea pequeña convertida en universo propio.",
+    kind: "Parodia de la parodia · InstaStories",
+    year: "01 MAR 2021",
+    duration: "02:22",
+    videoId: "_XADAh8xvbw",
+    thumbnail: "/youtube/el-pan-ta-duro.jpg",
+    role: "La prehistoria oficial: humor, móvil en vertical y la prueba de que una broma también merece montaje.",
     color: "red",
   },
   {
     title: "WTF EL DOCUMENTAL",
     code: "P02",
-    kind: "Documental",
-    year: "ARCHIVO 02",
-    role: "Porque la realidad también necesita montaje.",
+    kind: "Documental · trabajo de síntesis",
+    year: "06 NOV 2022",
+    duration: "14:33",
+    videoId: "zBXT3ObzWbg",
+    thumbnail: "/youtube/wtf-documental.jpg",
+    role: "Catorce minutos de proyecto final, entrevistas y realidad pasada por la mesa de montaje.",
     color: "blue",
   },
   {
     title: "CORAZÓN INTACTO",
     code: "P03",
-    kind: "Pieza musical",
-    year: "ARCHIVO 03",
-    role: "Sensibilidad, ritmo y una toma más por si acaso.",
+    kind: "Cortometraje · Festival Metropolis XVII",
+    year: "09 NOV 2022",
+    duration: "05:05",
+    videoId: "fRHjDz_n-bk",
+    thumbnail: "/youtube/corazon-intacto.jpg",
+    role: "Cinco minutos para demostrar que la sensibilidad también se ilumina, se encuadra y se monta.",
     color: "violet",
   },
   {
     title: "CATARSIS",
     code: "P04",
     kind: "Cortometraje",
-    year: "ARCHIVO 04",
-    role: "Cuando crear también sirve para decir lo que cuesta.",
+    year: "27 MAY 2023",
+    duration: "09:29",
+    videoId: "lBw1lPJprK4",
+    thumbnail: "/youtube/catarsis.jpg",
+    role: "Cuando crear también sirve para decir lo que cuesta. Nueve minutos de atmósfera y verdad.",
     color: "amber",
   },
   {
     title: "Imágenes Ocultas",
     code: "48H",
-    kind: "Proyección especial · selección oficial",
-    year: "RODADO EN 48 HORAS",
-    role: "Cuarenta y ocho horas. Cero excusas. Mucho cine.",
+    kind: "Selección oficial · Festival de Curtmetratges de L’Hospitalet",
+    year: "17 DIC 2023",
+    duration: "05:05",
+    videoId: "0reV7bmrZts",
+    thumbnail: "/youtube/imagenes-ocultas.jpg",
+    role: "Rodado en 48 horas y seleccionado oficialmente. Cero excusas, mucha intensidad y más de una mirada que lo dice todo.",
     color: "special",
   },
   {
     title: "DAVINCI",
     code: "P06",
-    kind: "Proyecto audiovisual",
-    year: "ARCHIVO 06",
-    role: "Precisión técnica con alma de experimento.",
+    kind: "Parodia de Picky · videoclip",
+    year: "21 DIC 2023",
+    duration: "03:17",
+    videoId: "DnFRuyQgcsE",
+    thumbnail: "/youtube/davinci.jpg",
+    role: "Una parodia hecha videoclip: interpretación, música y precisión técnica con alma de experimento.",
     color: "blue",
   },
   {
     title: "QUE CALOREH",
     code: "P07",
-    kind: "Parodia musical",
-    year: "ARCHIVO 07",
-    role: "La prueba de que hasta el calor puede tener videoclip.",
+    kind: "Parodia de Espresso Macchiato",
+    year: "14 JUL 2025",
+    duration: "02:51",
+    videoId: "PBrqAnVZn78",
+    thumbnail: "/youtube/que-caloreh.jpg",
+    role: "La prueba más reciente de que hasta una ola de calor puede tener estribillo, personaje y videoclip.",
     color: "red",
   },
 ];
@@ -88,6 +109,18 @@ const trailerScenes = [
   ["22", "ESTO NO ES UN RESUMEN. ES UN TRÁILER."],
 ];
 
+const cameraFeeds = [
+  ["CAM 01", "ESCENARIO", "Movimiento detectado junto al micrófono."],
+  ["CAM 02", "PASILLO", "Una claqueta ha cambiado de sitio. Nadie sabe cómo."],
+  ["CAM 03", "ALMACÉN", "Animatrónico inmóvil. De momento."],
+  ["CAM 04", "MONTAJE", "FINAL_FINAL_AHORA_SÍ_v22 sigue exportando."],
+];
+
+const microSteps = Array.from({ length: 22 }, (_, index) => ({
+  number: String(index + 1).padStart(2, "0"),
+  cents: Math.round((1200 / 22) * index),
+}));
+
 export default function Home() {
   const [started, setStarted] = useState(false);
   const [soundOn, setSoundOn] = useState(false);
@@ -97,6 +130,9 @@ export default function Home() {
   const [recovered, setRecovered] = useState(false);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [trailerScene, setTrailerScene] = useState(0);
+  const [activeVideo, setActiveVideo] = useState<number | null>(null);
+  const [cameraFeed, setCameraFeed] = useState(0);
+  const [microActive, setMicroActive] = useState<number | null>(null);
   const [clapped, setClapped] = useState(false);
   const [postCredits, setPostCredits] = useState(false);
   const audioRef = useRef<{
@@ -167,6 +203,26 @@ export default function Home() {
     }, 350);
   };
 
+  const playMicrotone = (index: number) => {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const frequency = 110 * Math.pow(2, index / 22);
+
+    oscillator.type = index % 2 === 0 ? "sine" : "triangle";
+    oscillator.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.7);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.72);
+    oscillator.addEventListener("ended", () => void context.close());
+    setMicroActive(index);
+    window.setTimeout(() => setMicroActive(null), 720);
+  };
+
   return (
     <main className={started ? "experience started" : "experience"}>
       <div className="grain" aria-hidden="true" />
@@ -183,6 +239,7 @@ export default function Home() {
         <nav aria-label="Navegación principal">
           <a href="#filmografia">Filmografía</a>
           <a href="#expediente">Expediente</a>
+          <a href="#referentes">Referentes</a>
           <a href="#final">Escena final</a>
         </nav>
         <button
@@ -283,13 +340,25 @@ export default function Home() {
       <section className="filmography section-pad" id="filmografia">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">ARCHIVO / PRODUCCIONES ANTERIORES</p>
-            <h2>Siete historias.<br />Ninguna última toma.</h2>
+            <p className="eyebrow">ARCHIVO REAL / CANAL RAAULINHOO</p>
+            <h2>La videoteca<br />de Raúl.</h2>
           </div>
           <p>
-            Una filmografía sentimental en forma de cinta. Selecciona un
-            fotograma para revisar su ficha.
+            Siete producciones reales, con sus miniaturas y fechas originales.
+            Selecciona una cinta y reprodúcela sin salir de la premiere.
           </p>
+        </div>
+
+        <div className="channel-marquee">
+          <div className="channel-avatar">R</div>
+          <div>
+            <small>CANAL OFICIAL EN YOUTUBE</small>
+            <strong>@Raaulinhoo</strong>
+          </div>
+          <span>7 PRODUCCIONES EN ESTE ARCHIVO</span>
+          <a href="https://www.youtube.com/@Raaulinhoo" target="_blank" rel="noreferrer">
+            ABRIR CANAL ↗
+          </a>
         </div>
 
         <div className="film-strip" role="list" aria-label="Proyectos de Raúl">
@@ -306,9 +375,15 @@ export default function Home() {
             >
               <span className="sprockets" aria-hidden="true" />
               <span className="film-visual">
-                <small>{project.code}</small>
+                <img
+                  src={project.thumbnail}
+                  alt={`Miniatura oficial de ${project.title}`}
+                />
+                <span className="film-shade" aria-hidden="true" />
+                <small className="reel-code">{project.code}</small>
                 <b>{project.title}</b>
                 {project.color === "special" && <em>SELECCIÓN OFICIAL</em>}
+                <span className="duration-badge">▶ {project.duration}</span>
               </span>
               <span className="film-meta">
                 <small>{project.year}</small>
@@ -319,18 +394,32 @@ export default function Home() {
         </div>
 
         <article className="project-focus" aria-live="polite">
-          <div className="focus-index">{projects[selectedProject].code}</div>
+          <button
+            type="button"
+            className="focus-still"
+            onClick={() => setActiveVideo(selectedProject)}
+            aria-label={`Reproducir ${projects[selectedProject].title}`}
+          >
+            <img
+              src={projects[selectedProject].thumbnail}
+              alt=""
+            />
+            <span>▶</span>
+          </button>
           <div>
-            <p className="eyebrow red">{projects[selectedProject].kind}</p>
+            <p className="eyebrow red">
+              {projects[selectedProject].year} · {projects[selectedProject].duration}
+            </p>
             <h3>{projects[selectedProject].title}</h3>
             <p>{projects[selectedProject].role}</p>
+            <small className="focus-kind">{projects[selectedProject].kind}</small>
           </div>
           <button
             type="button"
-            onClick={() => setTrailerOpen(true)}
+            onClick={() => setActiveVideo(selectedProject)}
             className="text-action"
           >
-            VER EN EL TRÁILER <span aria-hidden="true">↗</span>
+            REPRODUCIR EN SALA <span aria-hidden="true">▶</span>
           </button>
         </article>
       </section>
@@ -412,56 +501,179 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="reference-room section-pad">
+      <section className="reference-room section-pad" id="referentes">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">03 / SALA DE REFERENTES</p>
-            <h2>Entrar bajo<br />tu propia responsabilidad.</h2>
+            <p className="eyebrow">03 / EL MULTIVERSO DE RAÚL</p>
+            <h2>Cuatro obsesiones.<br />Cuatro mundos.</h2>
           </div>
           <p>
-            Tres obsesiones, una habitación y demasiados cables sin etiquetar.
+            Aquí no hay tarjetas genéricas: cada referente cambia las reglas,
+            la estética y hasta la forma de interactuar.
           </p>
         </div>
-        <div className="room-grid">
-          <article className="reference-card jackson">
-            <span className="room-number">A / 01</span>
-            <div className="mj-silhouette" aria-hidden="true">♬</div>
-            <p className="eyebrow red">SMOOTH REFERENCE</p>
-            <h3>Raúl,<br />are you OK?</h3>
-            <button type="button" onClick={() => setMjAnswer(!mjAnswer)}>
-              {mjAnswer ? "OCULTAR RESPUESTA" : "COMPROBAR ESTADO"}
-            </button>
-            <p className={mjAnswer ? "room-answer visible" : "room-answer"}>
-              Está más que OK. Acaba de comenzar la escena 22.
-            </p>
-          </article>
 
-          <article className="reference-card nolan">
-            <span className="room-number">B / 02</span>
-            <div className="countdown" aria-live="polite">
-              <span>00</span>:<span>{String(countdown).padStart(2, "0")}</span>
+        <div className="idol-worlds">
+          <article className="idol-card mj-world">
+            <div className="idol-label">
+              <span>REFERENTE 01</span>
+              <strong>THE KING OF POP</strong>
             </div>
-            <p className="eyebrow">CRONOLOGÍA NO LINEAL</p>
-            <h3>El tiempo<br />es relativo.</h3>
-            <p className="room-quote">
-              “No intentes entender la cronología. Es una producción de Raúl.”
-            </p>
-          </article>
-
-          <article className="reference-card horror">
-            <span className="room-number">CAM 03</span>
-            <div className="cctv">
-              <span>● REC</span>
-              <div className="secret-door" aria-hidden="true">
-                <i />
+            <div className="mj-stage" aria-hidden="true">
+              <i className="spotlight left" />
+              <i className="spotlight right" />
+              <div className="mj-figure">
+                <span className="mj-hat" />
+                <span className="mj-head" />
+                <span className="mj-body" />
+                <span className="mj-leg one" />
+                <span className="mj-leg two" />
               </div>
-              <small>NO SIGNAL</small>
+              <div className="stage-floor" />
             </div>
-            <p className="eyebrow red">MATERIAL RECUPERADO</p>
-            <h3>No abras<br />esa puerta.</h3>
-            <button type="button" onClick={() => setRecovered(true)}>
-              LEER TARJETA SD
-            </button>
+            <div className="idol-copy">
+              <p className="eyebrow red">RITMO · ESPECTÁCULO · PRECISIÓN</p>
+              <h3>MICHAEL<br />JACKSON</h3>
+              <p>
+                El gusto por hacer que una canción no solo suene: que tenga
+                concepto, personaje, coreografía, luz y una silueta imposible
+                de confundir.
+              </p>
+              <div className="era-tapes" aria-label="Eras musicales">
+                <span>THRILLER</span><span>BAD</span><span>DANGEROUS</span><span>HISTORY</span>
+              </div>
+              <button type="button" onClick={() => setMjAnswer(!mjAnswer)}>
+                RAÚL, ARE YOU OK? <span>→</span>
+              </button>
+              <p className={mjAnswer ? "room-answer visible" : "room-answer"}>
+                Está más que OK. Acaba de empezar la escena 22.
+              </p>
+            </div>
+          </article>
+
+          <article className="idol-card nolan-world">
+            <div className="idol-label">
+              <span>REFERENTE 02</span>
+              <strong>TIEMPO / ESCALA / CINE</strong>
+            </div>
+            <div className="nolan-clock" aria-live="polite">
+              <div className="clock-ring ring-one" />
+              <div className="clock-ring ring-two" />
+              <div className="clock-ring ring-three" />
+              <span>00:{String(countdown).padStart(2, "0")}</span>
+              <small>T– ESCENA 22</small>
+            </div>
+            <div className="idol-copy">
+              <p className="eyebrow">CRONOLOGÍA NO LINEAL</p>
+              <h3>CHRISTOPHER<br />NOLAN</h3>
+              <p>
+                Relojes, estructuras dentro de estructuras, espectáculo a gran
+                escala y la sospecha permanente de que falta una capa más.
+              </p>
+              <blockquote>
+                “No intentes entender la cronología. Es una producción de Raúl.”
+              </blockquote>
+              <div className="time-layers">
+                <span>REALIDAD</span><span>RODAJE</span><span>MONTAJE</span>
+              </div>
+            </div>
+          </article>
+
+          <article className="idol-card fnaf-world">
+            <div className="idol-label">
+              <span>REFERENTE 03</span>
+              <strong>TURNO DE NOCHE · 12 AM</strong>
+            </div>
+            <div className="security-office">
+              <div className={`security-monitor feed-${cameraFeed}`}>
+                <div className="monitor-noise" aria-hidden="true" />
+                <div className="monitor-topline">
+                  <span>● REC</span>
+                  <strong>{cameraFeeds[cameraFeed][0]} · {cameraFeeds[cameraFeed][1]}</strong>
+                  <span>12:0{cameraFeed + 1} AM</span>
+                </div>
+                <div className="animatronic-silhouette" aria-hidden="true">
+                  <i className="ear left" /><i className="ear right" />
+                  <i className="head" /><i className="eye left" /><i className="eye right" />
+                  <i className="jaw" />
+                </div>
+                <p>{cameraFeeds[cameraFeed][2]}</p>
+              </div>
+              <div className="camera-console">
+                <div className="camera-map">
+                  {cameraFeeds.map(([camera, room], index) => (
+                    <button
+                      type="button"
+                      key={camera}
+                      className={cameraFeed === index ? "active" : ""}
+                      onClick={() => setCameraFeed(index)}
+                    >
+                      <span>{camera}</span>
+                      <small>{room}</small>
+                    </button>
+                  ))}
+                </div>
+                <div className="power-readout">
+                  <span>ENERGÍA</span>
+                  <div><i style={{ width: `${88 - cameraFeed * 9}%` }} /></div>
+                  <b>{88 - cameraFeed * 9}%</b>
+                </div>
+              </div>
+            </div>
+            <div className="idol-copy fnaf-copy">
+              <p className="eyebrow red">FIVE NIGHTS AT FREDDY’S / HORROR</p>
+              <h3>NO MIRES<br />LA PUERTA.</h3>
+              <p>
+                Cámaras, estática, diseño sonoro, pistas escondidas y el tipo de
+                tensión que convierte un pasillo vacío en una historia entera.
+              </p>
+              <button type="button" onClick={() => setRecovered(true)}>
+                LEER TARJETA “MATERIAL RECUPERADO” <span>→</span>
+              </button>
+            </div>
+          </article>
+
+          <article className="idol-card micro-world">
+            <div className="idol-label">
+              <span>OBSESIÓN SONORA 04</span>
+              <strong>SISTEMA DE AFINACIÓN 22-EDO</strong>
+            </div>
+            <div className="micro-copy">
+              <p className="eyebrow">MÚSICA MICROTONAL</p>
+              <h3>ENTRE DOS NOTAS<br />HAY OTRO UNIVERSO.</h3>
+              <p>
+                La octava no tiene por qué dividirse en doce. Aquí se reparte
+                en veintidós pasos: pulsa cualquiera para escuchar los matices
+                que viven entre las teclas conocidas.
+              </p>
+              <div className="tuning-readout">
+                <span>BASE</span><b>110.00 Hz</b>
+                <span>DIVISIÓN</span><b>22 EDO</b>
+                <span>PASO</span><b>54.55 ¢</b>
+              </div>
+            </div>
+            <div className="micro-sequencer" aria-label="Teclado microtonal de veintidós pasos">
+              <div className="waveform" aria-hidden="true">
+                {Array.from({ length: 44 }, (_, index) => (
+                  <i key={index} style={{ height: `${18 + ((index * 17) % 72)}%` }} />
+                ))}
+              </div>
+              <div className="micro-keys">
+                {microSteps.map((step, index) => (
+                  <button
+                    type="button"
+                    key={step.number}
+                    className={microActive === index ? "active" : ""}
+                    onClick={() => playMicrotone(index)}
+                    aria-label={`Reproducir paso microtonal ${step.number}, ${step.cents} cents`}
+                  >
+                    <span>{step.number}</span>
+                    <small>{step.cents}¢</small>
+                  </button>
+                ))}
+              </div>
+              <p>PULSA LOS PASOS · EL SONIDO SOLO SE ACTIVA AL INTERACTUAR</p>
+            </div>
           </article>
         </div>
       </section>
@@ -581,6 +793,43 @@ export default function Home() {
         <p>Hecho con recuerdos, cariño y alguna toma de más.</p>
         <span>RAAULINHOO © ESCENA 22</span>
       </footer>
+
+      {activeVideo !== null && (
+        <div
+          className="youtube-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Reproduciendo ${projects[activeVideo].title}`}
+        >
+          <button
+            className="modal-close"
+            type="button"
+            onClick={() => setActiveVideo(null)}
+            aria-label="Cerrar vídeo"
+          >
+            CERRAR SALA ×
+          </button>
+          <div className="youtube-player">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${projects[activeVideo].videoId}?autoplay=1&rel=0`}
+              title={projects[activeVideo].title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+          <div className="player-caption">
+            <span>{projects[activeVideo].code} · {projects[activeVideo].year}</span>
+            <strong>{projects[activeVideo].title}</strong>
+            <a
+              href={`https://www.youtube.com/watch?v=${projects[activeVideo].videoId}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              VER EN YOUTUBE ↗
+            </a>
+          </div>
+        </div>
+      )}
 
       {trailerOpen && (
         <div className="trailer-modal" role="dialog" aria-modal="true" aria-label="Tráiler de la escena 22">
