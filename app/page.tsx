@@ -164,6 +164,23 @@ const heeButtonLabels = [
   "AHORA SÍ: SILENCIAR",
 ];
 
+const heeDelayForDepth = (depth: number) => {
+  const normalized = Math.max(0, Math.min(1, depth));
+  if (normalized <= 0.5) {
+    // At 50% this already reaches the old end-of-page maximum: 650 ms.
+    return Math.round(4200 - (normalized / 0.5) * 3550);
+  }
+  // The second half keeps accelerating until it becomes deliberately absurd.
+  return Math.round(650 - ((normalized - 0.5) / 0.5) * 470);
+};
+
+const heeMultiplierForDepth = (depth: number) => {
+  if (depth >= 0.92) return 8;
+  if (depth >= 0.76) return 4;
+  if (depth >= 0.58) return 2;
+  return 1;
+};
+
 export default function Home() {
   const [started, setStarted] = useState(false);
   const [soundOn, setSoundOn] = useState(false);
@@ -189,6 +206,7 @@ export default function Home() {
   const [postCredits, setPostCredits] = useState(false);
   const scrollDepthRef = useRef(0);
   const heeAudioRef = useRef<Set<HTMLAudioElement>>(new Set());
+  const heeBurstTimersRef = useRef<Set<number>>(new Set());
   const jumpscareAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioRef = useRef<{
     context: AudioContext;
@@ -199,19 +217,45 @@ export default function Home() {
   const playHee = useCallback(() => {
     if (heeMuted || typeof window === "undefined") return;
 
-    const volume = Math.min(0.18 + scrollDepthRef.current * 0.72, 0.9);
-    const sample = new Audio("/audio/michael-jackson-hee-hee.mp3");
-    sample.preload = "auto";
-    sample.volume = volume;
-    heeAudioRef.current.add(sample);
+    const depth = scrollDepthRef.current;
+    const multiplier = heeMultiplierForDepth(depth);
+    const baseVolume = Math.min(0.18 + depth * 0.72, 0.9);
+    const stagger = Math.max(28, Math.round(105 - depth * 70));
 
-    const releaseSample = () => {
-      heeAudioRef.current.delete(sample);
-    };
+    Array.from({ length: multiplier }, (_, index) => {
+      const playLayer = () => {
+        // A hard ceiling keeps the prank intense without exhausting the tab.
+        if (heeAudioRef.current.size >= 48) return;
+        const sample = new Audio("/audio/michael-jackson-hee-hee.mp3");
+        sample.preload = "auto";
+        sample.volume = Math.min(
+          0.9,
+          baseVolume * (multiplier >= 4 ? 0.82 : 1),
+        );
+        sample.playbackRate =
+          0.96 + ((index % 5) - 2) * 0.025 + depth * 0.035;
+        heeAudioRef.current.add(sample);
 
-    sample.addEventListener("ended", releaseSample, { once: true });
-    sample.addEventListener("error", releaseSample, { once: true });
-    void sample.play().catch(releaseSample);
+        const releaseSample = () => {
+          heeAudioRef.current.delete(sample);
+        };
+
+        sample.addEventListener("ended", releaseSample, { once: true });
+        sample.addEventListener("error", releaseSample, { once: true });
+        void sample.play().catch(releaseSample);
+      };
+
+      if (index === 0) {
+        playLayer();
+        return;
+      }
+
+      const timer = window.setTimeout(() => {
+        heeBurstTimersRef.current.delete(timer);
+        playLayer();
+      }, index * stagger);
+      heeBurstTimersRef.current.add(timer);
+    });
   }, [heeMuted]);
 
   useEffect(() => {
@@ -224,6 +268,8 @@ export default function Home() {
         sample.currentTime = 0;
       });
       heeAudioRef.current.clear();
+      heeBurstTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      heeBurstTimersRef.current.clear();
       jumpscareAudioRef.current?.pause();
       jumpscareAudioRef.current = null;
     };
@@ -236,7 +282,7 @@ export default function Home() {
       const depth = available > 0 ? Math.min(window.scrollY / available, 1) : 0;
       scrollDepthRef.current = depth;
       setScrollDepth(Math.round(depth * 100));
-      setScrollBand(Math.min(10, Math.floor(depth * 10)));
+      setScrollBand(Math.min(20, Math.floor(depth * 20)));
     };
 
     updateScrollDepth();
@@ -266,8 +312,8 @@ export default function Home() {
   }, [playHee]);
 
   useEffect(() => {
-    if (!heeReady || heeMuted || scrollBand < 2) return;
-    const delay = Math.max(650, 4200 - scrollBand * 355);
+    if (!heeReady || heeMuted || scrollBand < 3) return;
+    const delay = heeDelayForDepth(scrollBand / 20);
     const timer = window.setInterval(playHee, delay);
     return () => window.clearInterval(timer);
   }, [heeReady, heeMuted, playHee, scrollBand]);
@@ -400,6 +446,8 @@ export default function Home() {
   };
 
   const silenceHee = () => {
+    heeBurstTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    heeBurstTimersRef.current.clear();
     heeAudioRef.current.forEach((sample) => {
       sample.pause();
       sample.currentTime = 0;
@@ -1183,7 +1231,23 @@ export default function Home() {
         </div>
       )}
 
-      {heeReady && scrollBand >= 6 && !heeMuted && (
+      {heeReady && scrollDepth >= 50 && !heeMuted && (
+        <div
+          className={`hee-chaos-visual chaos-x${heeMultiplierForDepth(scrollDepth / 100)}`}
+          aria-hidden="true"
+        >
+          {Array.from(
+            { length: heeMultiplierForDepth(scrollDepth / 100) },
+            (_, index) => (
+              <span key={index} style={{ animationDelay: `${index * -0.11}s` }}>
+                {index % 2 ? "HI-HI" : "HEE-HEE"}
+              </span>
+            ),
+          )}
+        </div>
+      )}
+
+      {heeReady && scrollDepth >= 50 && !heeMuted && (
         <aside
           className={`hee-control-panel evade-${muteAttempts}`}
           data-hee-control
@@ -1197,9 +1261,10 @@ export default function Home() {
           <div className="hee-control-copy">
             <span aria-hidden="true">HEE</span>
             <div>
-              <strong>HEE-HEE INTENSIFICADO</strong>
+              <strong>HEE-HEE EN REACCIÓN EN CADENA</strong>
               <p>
-                Has bajado demasiado. El sistema ya no puede contener el ritmo.
+                La frecuencia ya ha superado el límite anterior. Ahora también
+                se multiplica.
               </p>
             </div>
           </div>
@@ -1213,8 +1278,12 @@ export default function Home() {
               <b>{Math.min(90, Math.round(18 + scrollDepth * 0.72))}%</b>
             </div>
             <div>
-              <span>REPETICIÓN</span>
-              <b>{(Math.max(650, 4200 - scrollBand * 355) / 1000).toFixed(1)}s</b>
+              <span>FRECUENCIA</span>
+              <b>{(1000 / heeDelayForDepth(scrollDepth / 100)).toFixed(1)}/s</b>
+            </div>
+            <div>
+              <span>MULTIPLICADOR</span>
+              <b>×{heeMultiplierForDepth(scrollDepth / 100)}</b>
             </div>
           </div>
           <div className="hee-intensity-track" aria-hidden="true">
