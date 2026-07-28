@@ -150,6 +150,7 @@ export default function Home() {
   const [clapped, setClapped] = useState(false);
   const [postCredits, setPostCredits] = useState(false);
   const scrollDepthRef = useRef(0);
+  const heeAudioRef = useRef<Set<HTMLAudioElement>>(new Set());
   const audioRef = useRef<{
     context: AudioContext;
     oscillators: OscillatorNode[];
@@ -160,48 +161,32 @@ export default function Home() {
     if (heeMuted || typeof window === "undefined") return;
 
     const volume = Math.min(0.18 + scrollDepthRef.current * 0.72, 0.9);
+    const sample = new Audio("/audio/michael-jackson-hee-hee.mp3");
+    sample.preload = "auto";
+    sample.volume = volume;
+    heeAudioRef.current.add(sample);
 
-    if ("speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance("hee-hee!");
-      const voices = window.speechSynthesis.getVoices();
-      utterance.voice =
-        voices.find((voice) => voice.lang.toLowerCase().startsWith("en")) ??
-        null;
-      utterance.lang = "en-US";
-      utterance.pitch = 1.75;
-      utterance.rate = 2.25;
-      utterance.volume = volume;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-      return;
-    }
+    const releaseSample = () => {
+      heeAudioRef.current.delete(sample);
+    };
 
-    const context = new AudioContext();
-    [0, 0.16].forEach((delay) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "triangle";
-      oscillator.frequency.setValueAtTime(620, context.currentTime + delay);
-      oscillator.frequency.exponentialRampToValueAtTime(
-        1040,
-        context.currentTime + delay + 0.09,
-      );
-      gain.gain.setValueAtTime(0.0001, context.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(
-        volume * 0.18,
-        context.currentTime + delay + 0.02,
-      );
-      gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        context.currentTime + delay + 0.14,
-      );
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start(context.currentTime + delay);
-      oscillator.stop(context.currentTime + delay + 0.15);
-    });
-    window.setTimeout(() => void context.close(), 450);
+    sample.addEventListener("ended", releaseSample, { once: true });
+    sample.addEventListener("error", releaseSample, { once: true });
+    void sample.play().catch(releaseSample);
   }, [heeMuted]);
+
+  useEffect(() => {
+    const preload = new Audio("/audio/michael-jackson-hee-hee.mp3");
+    preload.preload = "auto";
+    preload.load();
+    return () => {
+      heeAudioRef.current.forEach((sample) => {
+        sample.pause();
+        sample.currentTime = 0;
+      });
+      heeAudioRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     const updateScrollDepth = () => {
@@ -329,9 +314,11 @@ export default function Home() {
   };
 
   const silenceHee = () => {
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
+    heeAudioRef.current.forEach((sample) => {
+      sample.pause();
+      sample.currentTime = 0;
+    });
+    heeAudioRef.current.clear();
     setHeeMuted(true);
   };
 
@@ -928,7 +915,7 @@ export default function Home() {
         >
           <div className="hee-alert-line">
             <span className="hee-alert-dot" />
-            <small>ALERTA DE SATURACIÓN VOCAL</small>
+            <small>CLIP REAL · SATURACIÓN VOCAL</small>
             <b>{String(muteAttempts).padStart(2, "0")}/05</b>
           </div>
           <div className="hee-control-copy">
