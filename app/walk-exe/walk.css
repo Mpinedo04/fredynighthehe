@@ -93,6 +93,7 @@
 .walk-canvas {
   display: block;
   cursor: crosshair;
+  touch-action: none;
 }
 
 .walk-noise,
@@ -292,6 +293,7 @@
   letter-spacing: .1em;
   cursor: pointer;
   box-shadow: 0 0 2rem rgba(0, 0, 0, .8);
+  text-align: center;
 }
 
 .pointer-help span {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import * as THREE from "three";
 
 const MAZE_SIZE = 17;
@@ -8,6 +9,7 @@ const CELL_SIZE = 4.2;
 const WALL_HEIGHT = 3.8;
 const PLAYER_HEIGHT = 1.58;
 const PLAYER_RADIUS = 0.34;
+const WALL_THICKNESS = 0.22;
 
 type Direction = "n" | "e" | "s" | "w";
 type GamePhase = "briefing" | "playing" | "caught" | "escaped";
@@ -148,6 +150,14 @@ function positionCell(position: THREE.Vector3) {
     Math.min(MAZE_SIZE - 1, Math.floor((position.z + half) / CELL_SIZE)),
   );
   return row * MAZE_SIZE + column;
+}
+
+function openingDirection(cell: MazeCell) {
+  if (cell.s) return { x: 0, z: 1, yaw: Math.PI };
+  if (cell.e) return { x: 1, z: 0, yaw: -Math.PI / 2 };
+  if (cell.n) return { x: 0, z: -1, yaw: 0 };
+  if (cell.w) return { x: -1, z: 0, yaw: Math.PI / 2 };
+  return { x: 0, z: 1, yaw: Math.PI };
 }
 
 function mazePath(cells: MazeCell[], start: number, target: number) {
@@ -347,7 +357,7 @@ function createEcho(color = 0x87d9e9) {
   addMesh(ghost, new THREE.SphereGeometry(0.26, 16, 12), glow, [0, 1.48, 0]);
   addMesh(ghost, new THREE.CapsuleGeometry(0.08, 0.42, 4, 8), glow, [-0.18, 0.68, 0], [0, 0, -0.24]);
   addMesh(ghost, new THREE.CapsuleGeometry(0.08, 0.42, 4, 8), glow, [0.18, 0.68, 0], [0, 0, 0.24]);
-  const light = new THREE.PointLight(color, 1.25, 4);
+  const light = new THREE.PointLight(color, 5, 5);
   light.position.y = 1.1;
   ghost.add(light);
   return ghost;
@@ -404,6 +414,7 @@ export default function WalkExe() {
   const [echoes, setEchoes] = useState(0);
   const [bpm, setBpm] = useState(48);
   const [distance, setDistance] = useState(99);
+  const [traveled, setTraveled] = useState(0);
   const [sector, setSector] = useState("A-01");
   const [tabletOpen, setTabletOpen] = useState(false);
   const [cctvIndex, setCctvIndex] = useState(0);
@@ -445,9 +456,13 @@ export default function WalkExe() {
     if (!canvas) return;
     canvas.focus({ preventScroll: true });
     try {
-      void canvas.requestPointerLock().catch(() => setPointerHelp(true));
+      void canvas.requestPointerLock().catch(() => {
+        setPointerHelp(true);
+        setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
+      });
     } catch {
       setPointerHelp(true);
+      setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
     }
   }, []);
 
@@ -455,6 +470,7 @@ export default function WalkExe() {
     startAudio();
     setGamePhase("playing");
     setPointerHelp(false);
+    setPrompt("Sigue las marcas del suelo. WASD mueve; arrastra para mirar.");
     setMessage("Encuentra la puerta de emergencia. TAB abre la red CCTV.");
     // Pointer lock must be requested synchronously inside the user's click.
     requestControl();
@@ -463,6 +479,7 @@ export default function WalkExe() {
   const restart = useCallback(() => {
     document.exitPointerLock?.();
     setEchoes(0);
+    setTraveled(0);
     setPower(96);
     setTabletOpen(false);
     tabletRef.current = false;
@@ -484,8 +501,8 @@ export default function WalkExe() {
     const ventCells = spread.slice(8, 12);
     const cctvCells = [0, ...spread.slice(2, 6), exitCell].slice(0, 6);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020303);
-    scene.fog = new THREE.FogExp2(0x020303, 0.092);
+    scene.background = new THREE.Color(0x050807);
+    scene.fog = new THREE.FogExp2(0x050807, 0.04);
 
     const camera = new THREE.PerspectiveCamera(
       74,
@@ -505,16 +522,18 @@ export default function WalkExe() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.72;
+    renderer.toneMappingExposure = 1.12;
     renderer.domElement.className = "walk-canvas";
     renderer.domElement.tabIndex = 0;
     mount.appendChild(renderer.domElement);
     canvasRef.current = renderer.domElement;
 
     const start = cellCenter(0);
+    const startOpening = openingDirection(maze[0]);
     const player = new THREE.Vector3(start.x, PLAYER_HEIGHT, start.z);
-    let yaw = Math.PI;
+    let yaw = startOpening.yaw;
     let pitch = 0;
+    let traveledDistance = 0;
     let echoesHeld = 0;
     let nextHeartbeat = 0;
     let nextFootstep = 0;
@@ -528,28 +547,27 @@ export default function WalkExe() {
     let flashlightEnabled = true;
     let caught = false;
     let escaped = false;
+    let draggingLook = false;
 
     const world = new THREE.Group();
     scene.add(world);
-    scene.add(new THREE.HemisphereLight(0x82908d, 0x080808, 0.32));
-    const emergencyLight = new THREE.DirectionalLight(0x6d7d77, 0.25);
+    scene.add(new THREE.HemisphereLight(0x9caaa5, 0x0b0d0c, 0.72));
+    const emergencyLight = new THREE.DirectionalLight(0x7f948b, 0.52);
     emergencyLight.position.set(4, 12, 2);
     scene.add(emergencyLight);
 
     const concrete = new THREE.MeshStandardMaterial({
-      color: 0x171a18,
+      color: 0x252a27,
       roughness: 0.92,
       metalness: 0.05,
       bumpScale: 0.3,
     });
     const dampConcrete = new THREE.MeshStandardMaterial({
-      color: 0x0b0f0d,
+      color: 0x141916,
       roughness: 0.82,
       metalness: 0.18,
     });
     const metal = material(0x282d2c, 0.36, 0.88);
-    const half = (MAZE_SIZE * CELL_SIZE) / 2;
-
     addMesh(
       world,
       new THREE.PlaneGeometry(MAZE_SIZE * CELL_SIZE, MAZE_SIZE * CELL_SIZE),
@@ -565,11 +583,16 @@ export default function WalkExe() {
       [Math.PI / 2, 0, 0],
     );
 
-    const horizontalWall = new THREE.BoxGeometry(CELL_SIZE + 0.18, WALL_HEIGHT, 0.22);
-    const verticalWall = new THREE.BoxGeometry(0.22, WALL_HEIGHT, CELL_SIZE + 0.18);
-    const wallEdges = new THREE.EdgesGeometry(new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, 0.23));
-    const edgeSurface = new THREE.LineBasicMaterial({ color: 0x29332e, transparent: true, opacity: 0.3 });
-
+    const horizontalWall = new THREE.BoxGeometry(
+      CELL_SIZE + 0.18,
+      WALL_HEIGHT,
+      WALL_THICKNESS,
+    );
+    const verticalWall = new THREE.BoxGeometry(
+      WALL_THICKNESS,
+      WALL_HEIGHT,
+      CELL_SIZE + 0.18,
+    );
     maze.forEach((cell, index) => {
       const center = cellCenter(index);
       const row = Math.floor(index / MAZE_SIZE);
@@ -621,8 +644,8 @@ export default function WalkExe() {
         addMesh(world, new THREE.BoxGeometry(0.16, 0.08, 1.15), lampSurface, [center.x, 3.69, center.z]);
         const light = new THREE.PointLight(
           random() > 0.25 ? 0xa9b7a0 : 0xc01b17,
-          1.05,
-          8,
+          9,
+          10,
           2.1,
         );
         light.position.set(center.x, 3.5, center.z);
@@ -630,6 +653,30 @@ export default function WalkExe() {
         scene.add(light);
       }
     });
+
+    const routeGuide = new THREE.MeshStandardMaterial({
+      color: 0x789081,
+      emissive: 0x9fcbb0,
+      emissiveIntensity: 2.6,
+      roughness: 0.44,
+    });
+    for (let marker = 0; marker < 3; marker += 1) {
+      const longX = startOpening.x !== 0;
+      addMesh(
+        world,
+        new THREE.BoxGeometry(
+          longX ? 0.42 : 0.12,
+          0.025,
+          longX ? 0.12 : 0.42,
+        ),
+        routeGuide,
+        [
+          start.x + startOpening.x * (0.58 + marker * 0.48),
+          0.018,
+          start.z + startOpening.z * (0.58 + marker * 0.48),
+        ],
+      );
+    }
 
     // Physical surveillance cameras make the maze itself part of the CCTV network.
     cctvCells.forEach((cellIndex, index) => {
@@ -646,7 +693,7 @@ export default function WalkExe() {
     exit.position.y = 0;
     exit.rotation.y = Math.PI;
     world.add(exit);
-    const exitLight = new THREE.PointLight(0xff1717, 2.5, 8);
+    const exitLight = new THREE.PointLight(0xff1717, 34, 10, 1.8);
     exitLight.position.copy(exitPosition).add(new THREE.Vector3(0, 2.4, 0));
     scene.add(exitLight);
 
@@ -696,13 +743,23 @@ export default function WalkExe() {
     const leftArm = subject.getObjectByName("armLeft");
     const rightArm = subject.getObjectByName("armRight");
 
-    const flashlight = new THREE.SpotLight(0xe8f4e9, 5.2, 16, Math.PI / 6.5, 0.55, 1.4);
+    const flashlight = new THREE.SpotLight(
+      0xe8f4e9,
+      92,
+      20,
+      Math.PI / 5.5,
+      0.58,
+      1.55,
+    );
     flashlight.castShadow = true;
     flashlight.shadow.mapSize.set(512, 512);
     camera.add(flashlight);
     flashlight.position.set(0, -0.1, 0);
     flashlight.target.position.set(0, -0.1, -1);
     camera.add(flashlight.target);
+    const bodyFill = new THREE.PointLight(0xa9c6af, 4.5, 5, 2);
+    bodyFill.position.set(0, 0.08, 0.18);
+    camera.add(bodyFill);
     scene.add(camera);
 
     const cctvViews = cctvCells.map((cell, index) => {
@@ -765,44 +822,55 @@ export default function WalkExe() {
     };
 
     const tryMoveAxis = (axis: "x" | "z", delta: number) => {
-      if (!delta) return;
+      if (!delta) return 0;
       const currentCell = positionCell(player);
-      const row = Math.floor(currentCell / MAZE_SIZE);
-      const column = currentCell % MAZE_SIZE;
-      const next = player.clone();
-      next[axis] += delta;
-      const nextCell = positionCell(next);
+      const cell = maze[currentCell];
+      const center = cellCenter(currentCell);
+      const corridorLimit =
+        CELL_SIZE / 2 - PLAYER_RADIUS - WALL_THICKNESS / 2;
+      const worldLimit =
+        (MAZE_SIZE * CELL_SIZE) / 2 -
+        PLAYER_RADIUS -
+        WALL_THICKNESS / 2;
+      const before = player[axis];
+      let next = before + delta;
 
-      if (nextCell !== currentCell) {
-        const nextRow = Math.floor(nextCell / MAZE_SIZE);
-        const nextColumn = nextCell % MAZE_SIZE;
-        let allowed = false;
-        if (nextColumn > column) allowed = maze[currentCell].e;
-        if (nextColumn < column) allowed = maze[currentCell].w;
-        if (nextRow > row) allowed = maze[currentCell].s;
-        if (nextRow < row) allowed = maze[currentCell].n;
-        if (!allowed) return;
+      if (axis === "x") {
+        if (!cell.e) next = Math.min(next, center.x + corridorLimit);
+        if (!cell.w) next = Math.max(next, center.x - corridorLimit);
+      } else {
+        if (!cell.s) next = Math.min(next, center.z + corridorLimit);
+        if (!cell.n) next = Math.max(next, center.z - corridorLimit);
       }
 
-      const center = cellCenter(positionCell(next));
-      const localX = Math.abs(next.x - center.x);
-      const localZ = Math.abs(next.z - center.z);
-      if (
-        localX > CELL_SIZE / 2 - PLAYER_RADIUS ||
-        localZ > CELL_SIZE / 2 - PLAYER_RADIUS
-      ) {
-        const candidateCell = positionCell(next);
-        const candidate = maze[candidateCell];
-        if (axis === "x" && localZ > CELL_SIZE / 2 - PLAYER_RADIUS) {
-          const towardSouth = next.z > center.z;
-          if (!(towardSouth ? candidate.s : candidate.n)) return;
-        }
-        if (axis === "z" && localX > CELL_SIZE / 2 - PLAYER_RADIUS) {
-          const towardEast = next.x > center.x;
-          if (!(towardEast ? candidate.e : candidate.w)) return;
-        }
-      }
-      player[axis] = next[axis];
+      player[axis] = THREE.MathUtils.clamp(next, -worldLimit, worldLimit);
+      return Math.abs(player[axis] - before);
+    };
+
+    const applyPlayerMovement = (
+      forward: number,
+      strafe: number,
+      distanceToMove: number,
+    ) => {
+      if (!forward && !strafe) return 0;
+      const length = Math.hypot(forward, strafe) || 1;
+      const forwardX = -Math.sin(yaw);
+      const forwardZ = -Math.cos(yaw);
+      const rightX = Math.cos(yaw);
+      const rightZ = -Math.sin(yaw);
+      const moveX =
+        ((forward / length) * forwardX + (strafe / length) * rightX) *
+        distanceToMove;
+      const moveZ =
+        ((forward / length) * forwardZ + (strafe / length) * rightZ) *
+        distanceToMove;
+      const beforeX = player.x;
+      const beforeZ = player.z;
+      tryMoveAxis("x", moveX);
+      tryMoveAxis("z", moveZ);
+      const moved = Math.hypot(player.x - beforeX, player.z - beforeZ);
+      traveledDistance += moved;
+      return moved;
     };
 
     const dropEcho = (now: number) => {
@@ -873,6 +941,27 @@ export default function WalkExe() {
 
     const keyDown = (event: KeyboardEvent) => {
       keysRef.current[event.code] = true;
+      if (
+        !event.repeat &&
+        phaseRef.current === "playing" &&
+        !tabletRef.current &&
+        !ventTrip
+      ) {
+        const tap =
+          event.code === "KeyW" || event.code === "ArrowUp"
+            ? [1, 0]
+            : event.code === "KeyS" || event.code === "ArrowDown"
+              ? [-1, 0]
+              : event.code === "KeyD" || event.code === "ArrowRight"
+                ? [0, 1]
+                : event.code === "KeyA" || event.code === "ArrowLeft"
+                  ? [0, -1]
+                  : null;
+        if (tap) {
+          event.preventDefault();
+          applyPlayerMovement(tap[0], tap[1], 0.16);
+        }
+      }
       if (event.code === "KeyE") interactQueuedRef.current = true;
       if (event.code === "KeyG") dropQueuedRef.current = true;
       if (event.code === "Tab" && phaseRef.current === "playing" && cctvPower > 0) {
@@ -890,9 +979,13 @@ export default function WalkExe() {
           try {
             void renderer.domElement
               .requestPointerLock()
-              .catch(() => setPointerHelp(true));
+              .catch(() => {
+                setPointerHelp(true);
+                setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
+              });
           } catch {
             setPointerHelp(true);
+            setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
           }
         }
       }
@@ -905,8 +998,9 @@ export default function WalkExe() {
       keysRef.current[event.code] = false;
     };
     const mouseMove = (event: MouseEvent) => {
+      const locked = document.pointerLockElement === renderer.domElement;
       if (
-        document.pointerLockElement !== renderer.domElement ||
+        (!locked && !draggingLook) ||
         tabletRef.current ||
         phaseRef.current !== "playing"
       ) {
@@ -916,15 +1010,32 @@ export default function WalkExe() {
       pitch -= event.movementY * 0.0018;
       pitch = Math.max(-1.02, Math.min(1.02, pitch));
     };
+    const pointerDown = (event: PointerEvent) => {
+      if (
+        event.button === 0 &&
+        phaseRef.current === "playing" &&
+        !tabletRef.current
+      ) {
+        draggingLook = true;
+        renderer.domElement.focus({ preventScroll: true });
+      }
+    };
+    const pointerUp = () => {
+      draggingLook = false;
+    };
     const canvasClick = () => {
       if (phaseRef.current === "playing" && !tabletRef.current) {
         renderer.domElement.focus({ preventScroll: true });
         try {
           void renderer.domElement
             .requestPointerLock()
-            .catch(() => setPointerHelp(true));
+            .catch(() => {
+              setPointerHelp(true);
+              setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
+            });
         } catch {
           setPointerHelp(true);
+          setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
         }
       }
     };
@@ -936,14 +1047,24 @@ export default function WalkExe() {
         setPointerHelp(true);
       }
     };
-    const pointerLockError = () => setPointerHelp(true);
+    const pointerLockError = () => {
+      setPointerHelp(true);
+      setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
+    };
+    const clearInput = () => {
+      keysRef.current = {};
+      draggingLook = false;
+    };
 
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
+    window.addEventListener("blur", clearInput);
     document.addEventListener("mousemove", mouseMove);
     document.addEventListener("pointerlockchange", pointerLockChange);
     document.addEventListener("pointerlockerror", pointerLockError);
     renderer.domElement.addEventListener("click", canvasClick);
+    renderer.domElement.addEventListener("pointerdown", pointerDown);
+    window.addEventListener("pointerup", pointerUp);
 
     const resize = () => {
       if (!mount) return;
@@ -1003,15 +1124,7 @@ export default function WalkExe() {
           const sprinting = Boolean(keysRef.current.ShiftLeft || keysRef.current.ShiftRight);
           const speed = sprinting ? 3.75 : 2.35;
           if (moving) {
-            const length = Math.hypot(forward, strafe) || 1;
-            const forwardX = -Math.sin(yaw);
-            const forwardZ = -Math.cos(yaw);
-            const rightX = Math.cos(yaw);
-            const rightZ = -Math.sin(yaw);
-            const moveX = ((forward / length) * forwardX + (strafe / length) * rightX) * speed * delta;
-            const moveZ = ((forward / length) * forwardZ + (strafe / length) * rightZ) * speed * delta;
-            tryMoveAxis("x", moveX);
-            tryMoveAxis("z", moveZ);
+            applyPlayerMovement(forward, strafe, speed * delta);
             player.y = PLAYER_HEIGHT + Math.sin(now * 0.011 * (sprinting ? 1.45 : 1)) * 0.035;
             if (now > nextFootstep) {
               playStep();
@@ -1089,6 +1202,7 @@ export default function WalkExe() {
           const row = Math.floor(currentCell / MAZE_SIZE);
           const column = currentCell % MAZE_SIZE;
           setDistance(Math.max(1, Math.round(playerDistance)));
+          setTraveled(traveledDistance);
           setBpm(currentBpm);
           setSector(`${String.fromCharCode(65 + Math.floor(row / 4))}-${String(column + 1).padStart(2, "0")}`);
 
@@ -1143,7 +1257,7 @@ export default function WalkExe() {
 
       // Cheap failing fluorescent effect.
       frame += 1;
-      emergencyLight.intensity = frame % 217 < 5 ? 0.03 : 0.25;
+      emergencyLight.intensity = frame % 217 < 5 ? 0.08 : 0.52;
       renderer.render(scene, camera);
     };
 
@@ -1154,10 +1268,13 @@ export default function WalkExe() {
       resizeObserver.disconnect();
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
+      window.removeEventListener("blur", clearInput);
       document.removeEventListener("mousemove", mouseMove);
       document.removeEventListener("pointerlockchange", pointerLockChange);
       document.removeEventListener("pointerlockerror", pointerLockError);
       renderer.domElement.removeEventListener("click", canvasClick);
+      renderer.domElement.removeEventListener("pointerdown", pointerDown);
+      window.removeEventListener("pointerup", pointerUp);
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock?.();
       renderer.dispose();
       scene.traverse((object) => {
@@ -1197,7 +1314,7 @@ export default function WalkExe() {
       <div className="walk-vignette" aria-hidden="true" />
 
       <header className="walk-topbar">
-        <a href="/" className="walk-back">← PREMIERE 22</a>
+        <Link href="/" className="walk-back">← PREMIERE 22</Link>
         <div>
           <span className="rec-dot" />
           BODY CAM · M00NW4LK.EXE
@@ -1218,6 +1335,7 @@ export default function WalkExe() {
             <div className="hud-block">
               <span>SECTOR</span>
               <strong>{sector}</strong>
+              <small>RECORRIDO · {traveled.toFixed(1)} m</small>
               <small>SUJETO M · ~{distance} m</small>
             </div>
             <div className="hud-block echo-block">
@@ -1250,8 +1368,8 @@ export default function WalkExe() {
               type="button"
               onClick={requestControl}
             >
-              <span>CONTROL SIN CAPTURAR</span>
-              HAZ CLIC AQUÍ PARA ACTIVAR RATÓN + WASD
+              <span>CONTROL ALTERNATIVO ACTIVO</span>
+              CLIC PARA CAPTURAR · O WASD + ARRASTRAR
             </button>
           )}
         </>
@@ -1375,7 +1493,7 @@ export default function WalkExe() {
           <h2>TE HA<br />ENCONTRADO.</h2>
           <p>{message}</p>
           <button type="button" onClick={restart}>GENERAR OTRO LABERINTO</button>
-          <a href="/">ABANDONAR ARCHIVO</a>
+          <Link href="/">ABANDONAR ARCHIVO</Link>
         </section>
       )}
 
@@ -1385,7 +1503,7 @@ export default function WalkExe() {
           <h2>HAS SALIDO.<br /><strong>ÉL TAMBIÉN.</strong></h2>
           <p>{message}</p>
           <button type="button" onClick={restart}>ENTRAR EN OTRA RUTA</button>
-          <a href="/">VOLVER A LA PREMIERE</a>
+          <Link href="/">VOLVER A LA PREMIERE</Link>
         </section>
       )}
 
