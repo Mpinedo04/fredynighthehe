@@ -34,6 +34,9 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase,
     title: "Premiere 22 — Raúl García",
     description,
+    icons: {
+      icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    },
     openGraph: {
       title: "Premiere 22 — Raúl García",
       description,
