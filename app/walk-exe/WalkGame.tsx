@@ -547,6 +547,7 @@ export default function WalkExe() {
     let caught = false;
     let escaped = false;
     let draggingLook = false;
+    const keyPulseUntil: Record<string, number> = {};
 
     const world = new THREE.Group();
     scene.add(world);
@@ -592,22 +593,23 @@ export default function WalkExe() {
       WALL_HEIGHT,
       CELL_SIZE + 0.18,
     );
+    const horizontalWallPositions: Array<[number, number]> = [];
+    const verticalWallPositions: Array<[number, number]> = [];
     maze.forEach((cell, index) => {
       const center = cellCenter(index);
       const row = Math.floor(index / MAZE_SIZE);
       const column = index % MAZE_SIZE;
-      const placeWall = (geometry: THREE.BufferGeometry, x: number, z: number) => {
-        const wall = addMesh(world, geometry, concrete, [x, WALL_HEIGHT / 2, z]);
-        wall.castShadow = false;
-        wall.receiveShadow = true;
-      };
-      if (!cell.n) placeWall(horizontalWall, center.x, center.z - CELL_SIZE / 2);
-      if (!cell.w) placeWall(verticalWall, center.x - CELL_SIZE / 2, center.z);
+      if (!cell.n) {
+        horizontalWallPositions.push([center.x, center.z - CELL_SIZE / 2]);
+      }
+      if (!cell.w) {
+        verticalWallPositions.push([center.x - CELL_SIZE / 2, center.z]);
+      }
       if (row === MAZE_SIZE - 1 && !cell.s) {
-        placeWall(horizontalWall, center.x, center.z + CELL_SIZE / 2);
+        horizontalWallPositions.push([center.x, center.z + CELL_SIZE / 2]);
       }
       if (column === MAZE_SIZE - 1 && !cell.e) {
-        placeWall(verticalWall, center.x + CELL_SIZE / 2, center.z);
+        verticalWallPositions.push([center.x + CELL_SIZE / 2, center.z]);
       }
 
       if (index % 11 === 3) {
@@ -652,6 +654,29 @@ export default function WalkExe() {
         scene.add(light);
       }
     });
+
+    const addWallInstances = (
+      geometry: THREE.BufferGeometry,
+      positions: Array<[number, number]>,
+    ) => {
+      const walls = new THREE.InstancedMesh(
+        geometry,
+        concrete,
+        positions.length,
+      );
+      const transform = new THREE.Matrix4();
+      positions.forEach(([x, z], index) => {
+        transform.makeTranslation(x, WALL_HEIGHT / 2, z);
+        walls.setMatrixAt(index, transform);
+      });
+      walls.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      walls.instanceMatrix.needsUpdate = true;
+      walls.castShadow = false;
+      walls.receiveShadow = false;
+      world.add(walls);
+    };
+    addWallInstances(horizontalWall, horizontalWallPositions);
+    addWallInstances(verticalWall, verticalWallPositions);
 
     const routeGuide = new THREE.MeshStandardMaterial({
       color: 0x789081,
@@ -939,6 +964,9 @@ export default function WalkExe() {
 
     const keyDown = (event: KeyboardEvent) => {
       keysRef.current[event.code] = true;
+      if (event.repeat) {
+        keyPulseUntil[event.code] = performance.now() + 180;
+      }
       if (
         !event.repeat &&
         phaseRef.current === "playing" &&
@@ -1052,6 +1080,9 @@ export default function WalkExe() {
     const clearHiddenInput = () => {
       if (!document.hidden) return;
       keysRef.current = {};
+      Object.keys(keyPulseUntil).forEach((code) => {
+        keyPulseUntil[code] = 0;
+      });
       draggingLook = false;
     };
 
@@ -1064,6 +1095,38 @@ export default function WalkExe() {
     renderer.domElement.addEventListener("click", canvasClick);
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     window.addEventListener("pointerup", pointerUp);
+
+    let lastMovementTick = performance.now();
+    const movementTimer = window.setInterval(() => {
+      const tickNow = performance.now();
+      const tickDelta = Math.min((tickNow - lastMovementTick) / 1000, 0.2);
+      lastMovementTick = tickNow;
+      if (
+        phaseRef.current !== "playing" ||
+        tabletRef.current ||
+        ventTrip
+      ) {
+        return;
+      }
+
+      const active = (code: string) =>
+        Boolean(keysRef.current[code]) ||
+        (keyPulseUntil[code] ?? 0) > tickNow;
+      const forward =
+        Number(active("KeyW") || active("ArrowUp")) -
+        Number(active("KeyS") || active("ArrowDown"));
+      const strafe =
+        Number(active("KeyD") || active("ArrowRight")) -
+        Number(active("KeyA") || active("ArrowLeft"));
+      if (!forward && !strafe) return;
+
+      const sprinting = active("ShiftLeft") || active("ShiftRight");
+      applyPlayerMovement(
+        forward,
+        strafe,
+        (sprinting ? 4.35 : 2.75) * tickDelta,
+      );
+    }, 16);
 
     const resize = () => {
       if (!mount) return;
@@ -1082,7 +1145,7 @@ export default function WalkExe() {
       animation = requestAnimationFrame(renderFrame);
       const elapsed = clock.getDelta();
       const delta = Math.min(elapsed, 0.05);
-      const movementDelta = Math.min(elapsed, 0.2);
+      const simulationDelta = Math.min(elapsed, 0.2);
       const playing = phaseRef.current === "playing";
 
       runtimeEchoes.forEach((echo, index) => {
@@ -1123,9 +1186,7 @@ export default function WalkExe() {
             Number(keysRef.current.KeyA || keysRef.current.ArrowLeft);
           const moving = forward !== 0 || strafe !== 0;
           const sprinting = Boolean(keysRef.current.ShiftLeft || keysRef.current.ShiftRight);
-          const speed = sprinting ? 4.35 : 2.75;
           if (moving) {
-            applyPlayerMovement(forward, strafe, speed * movementDelta);
             player.y = PLAYER_HEIGHT + Math.sin(now * 0.011 * (sprinting ? 1.45 : 1)) * 0.035;
             if (now > nextFootstep) {
               playStep();
@@ -1164,14 +1225,14 @@ export default function WalkExe() {
           direction.normalize();
           subject.position.addScaledVector(
             direction,
-            Math.min(remaining, speed * movementDelta),
+            Math.min(remaining, speed * simulationDelta),
           );
           // The body faces away from its direction of travel: a mechanical moonwalk.
           const targetYaw = Math.atan2(direction.x, direction.z) + Math.PI;
           subject.rotation.y += Math.atan2(
             Math.sin(targetYaw - subject.rotation.y),
             Math.cos(targetYaw - subject.rotation.y),
-          ) * Math.min(1, movementDelta * 4);
+          ) * Math.min(1, simulationDelta * 4);
         }
 
         const gait = now * 0.0065 * (speed / 1.15);
@@ -1269,6 +1330,7 @@ export default function WalkExe() {
 
     return () => {
       cancelAnimationFrame(animation);
+      window.clearInterval(movementTimer);
       resizeObserver.disconnect();
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
