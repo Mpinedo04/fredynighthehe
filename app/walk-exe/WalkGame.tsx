@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import Link from "next/link";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   CELL_SIZE,
   CROUCH_HEIGHT,
@@ -22,8 +29,27 @@ import {
   resolveGridMovement,
   seededRandom,
   uniqueReachableCells,
+  validateMaze,
   type EnemyState,
 } from "./game-core";
+import {
+  capsuleVelocityFromInput,
+  createCapsuleCollisionWorld,
+  createCapsuleState,
+  stepCapsuleController,
+} from "./capsule-controller";
+import { SpatialAudioEngine } from "./spatial-audio";
+import {
+  advanceVentTraversal,
+  drainCctvBattery,
+  sequenceProgress,
+} from "./runtime-core";
+import {
+  WalkInputController,
+  walkInputActionForCode,
+  type InputSlice,
+  type WalkInputAction,
+} from "./input-controller";
 
 type GamePhase = "briefing" | "playing" | "caught" | "escaped";
 type QualityProfile = "low" | "medium" | "high" | "ultra";
@@ -43,21 +69,37 @@ type RuntimeEcho = {
 };
 
 type VentTrip = {
-  from: THREE.Vector3;
+  sourceCell: number;
   to: THREE.Vector3;
   destinationCell: number;
   pairIndex: number;
   path: THREE.Vector3[];
   cumulative: number[];
   totalDistance: number;
-  startedAt: number;
-  duration: number;
+  distanceAlong: number;
 };
 
 type ActiveLure = {
   mesh: THREE.Group;
   cell: number;
   expiresAt: number;
+};
+
+type RuntimeNoiseObject = {
+  mesh: THREE.Mesh;
+  activeUntil: number;
+};
+
+type EscapeSequence = {
+  startedAt: number;
+  playerStart: THREE.Vector3;
+  playerEnd: THREE.Vector3;
+};
+
+type CaughtSequence = {
+  startedAt: number;
+  subjectStart: THREE.Vector3;
+  subjectYaw: number;
 };
 
 const cameraNames = [
@@ -83,7 +125,7 @@ const qualitySettings: Record<
   low: {
     pixelRatio: 0.85,
     dust: 180,
-    localLights: 5,
+    localLights: 4,
     shadows: false,
     cctvWidth: 480,
     cctvFps: 10,
@@ -91,7 +133,7 @@ const qualitySettings: Record<
   medium: {
     pixelRatio: 1,
     dust: 360,
-    localLights: 8,
+    localLights: 6,
     shadows: false,
     cctvWidth: 640,
     cctvFps: 12,
@@ -99,15 +141,15 @@ const qualitySettings: Record<
   high: {
     pixelRatio: 1.25,
     dust: 620,
-    localLights: 12,
+    localLights: 8,
     shadows: false,
-    cctvWidth: 640,
-    cctvFps: 12,
+    cctvWidth: 854,
+    cctvFps: 15,
   },
   ultra: {
     pixelRatio: 1.55,
     dust: 900,
-    localLights: 16,
+    localLights: 10,
     shadows: true,
     cctvWidth: 960,
     cctvFps: 20,
@@ -295,6 +337,69 @@ function createSubjectM() {
   return root;
 }
 
+function createSubjectMProxy() {
+  const proxy = new THREE.Group();
+  proxy.name = "SUJETO_M_PROXY";
+  const dark = material(0x0a0b0c, 0.62, 0.4);
+  const metal = material(0x555b5d, 0.34, 0.8);
+  const eye = new THREE.MeshStandardMaterial({
+    color: 0x220000,
+    emissive: 0xe30d0d,
+    emissiveIntensity: 2.5,
+  });
+  addMesh(proxy, new THREE.CapsuleGeometry(0.42, 1.5, 4, 8), dark, [0, 1.55, 0]);
+  addMesh(proxy, new THREE.SphereGeometry(0.35, 10, 8), metal, [0, 2.75, 0]);
+  addMesh(proxy, new THREE.CylinderGeometry(0.48, 0.48, 0.06, 12), dark, [0, 3.14, 0]);
+  addMesh(proxy, new THREE.CylinderGeometry(0.3, 0.35, 0.3, 10), dark, [0, 3.28, 0]);
+  addMesh(proxy, new THREE.SphereGeometry(0.055, 8, 6), eye, [-0.12, 2.8, -0.3]);
+  addMesh(proxy, new THREE.SphereGeometry(0.055, 8, 6), eye, [0.12, 2.8, -0.3]);
+  proxy.scale.setScalar(1.08);
+  return proxy;
+}
+
+function createSubjectMotionClips() {
+  const cyclic = (
+    name: string,
+    duration: number,
+    legSwing: number,
+    armSwing: number,
+    hipsTravel: number,
+  ) =>
+    new THREE.AnimationClip(name, duration, [
+      new THREE.NumberKeyframeTrack(
+        "legLeft.rotation[x]",
+        [0, duration * 0.25, duration * 0.5, duration * 0.75, duration],
+        [0, legSwing, 0, -legSwing, 0],
+      ),
+      new THREE.NumberKeyframeTrack(
+        "legRight.rotation[x]",
+        [0, duration * 0.25, duration * 0.5, duration * 0.75, duration],
+        [0, -legSwing, 0, legSwing, 0],
+      ),
+      new THREE.NumberKeyframeTrack(
+        "armLeft.rotation[x]",
+        [0, duration * 0.25, duration * 0.5, duration * 0.75, duration],
+        [0, -armSwing, 0, armSwing, 0],
+      ),
+      new THREE.NumberKeyframeTrack(
+        "armRight.rotation[x]",
+        [0, duration * 0.25, duration * 0.5, duration * 0.75, duration],
+        [0, armSwing, 0, -armSwing, 0],
+      ),
+      new THREE.NumberKeyframeTrack(
+        "hips.position[z]",
+        [0, duration * 0.5, duration],
+        [0, hipsTravel, 0],
+      ),
+    ]);
+  return {
+    idle: cyclic("idle", 2.4, 0.025, 0.02, 0.012),
+    moonwalk: cyclic("moonwalk", 1.18, 0.42, 0.2, -0.12),
+    investigate: cyclic("investigate", 0.92, 0.3, 0.18, -0.06),
+    chase: cyclic("chase", 0.54, 0.62, 0.48, -0.08),
+  };
+}
+
 function createEcho(color = 0x87d9e9) {
   const ghost = new THREE.Group();
   const glow = new THREE.MeshStandardMaterial({
@@ -340,10 +445,16 @@ function createExitDoor() {
     emissive: 0xe01111,
     emissiveIntensity: 1.25,
   });
-  addMesh(door, new THREE.BoxGeometry(2.4, 3.25, 0.24), steel, [0, 1.62, 0]);
-  addMesh(door, new THREE.BoxGeometry(1.72, 2.45, 0.12), material(0x090909, 0.8, 0.3), [0, 1.48, -0.18]);
-  addMesh(door, new THREE.BoxGeometry(1.6, 0.14, 0.1), red, [0, 2.88, -0.28]);
-  addMesh(door, new THREE.BoxGeometry(0.22, 0.55, 0.18), red, [0.69, 1.52, -0.28]);
+  addMesh(door, new THREE.BoxGeometry(0.28, 3.35, 0.34), steel, [-1.08, 1.66, 0]);
+  addMesh(door, new THREE.BoxGeometry(0.28, 3.35, 0.34), steel, [1.08, 1.66, 0]);
+  addMesh(door, new THREE.BoxGeometry(2.44, 0.28, 0.34), steel, [0, 3.22, 0]);
+  const panel = new THREE.Group();
+  panel.name = "emergencyDoorPanel";
+  addMesh(panel, new THREE.BoxGeometry(1.86, 2.9, 0.18), material(0x090909, 0.8, 0.3), [0, 1.48, 0]);
+  addMesh(panel, new THREE.BoxGeometry(1.6, 0.14, 0.1), red, [0, 2.72, -0.13]);
+  addMesh(panel, new THREE.BoxGeometry(0.22, 0.55, 0.18), red, [0.69, 1.52, -0.16]);
+  door.add(panel);
+  door.userData.panel = panel;
   return door;
 }
 
@@ -351,25 +462,20 @@ export default function WalkExe() {
   const mountRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const phaseRef = useRef<GamePhase>("briefing");
-  const keysRef = useRef<Record<string, boolean>>({});
+  const inputControllerRef = useRef<WalkInputController | null>(null);
+  if (inputControllerRef.current === null) {
+    inputControllerRef.current = new WalkInputController();
+  }
+  const mobilePointersRef = useRef(
+    new Map<number, { action: WalkInputAction; source: string }>(),
+  );
   const interactQueuedRef = useRef(false);
   const dropQueuedRef = useRef(false);
+  const objectQueuedRef = useRef(false);
   const tabletRef = useRef(false);
   const cctvIndexRef = useRef(0);
   const cctvFeedRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<{
-    context: AudioContext;
-    hum: OscillatorNode;
-    drone: OscillatorNode;
-    lfo: OscillatorNode;
-    humGain: GainNode;
-    master: GainNode;
-    ambience: GainNode;
-    music: GainNode;
-    sfx: GainNode;
-    heartbeat: GainNode;
-    jumpscare: GainNode;
-  } | null>(null);
+  const audioRef = useRef<SpatialAudioEngine | null>(null);
   const [phase, setPhase] = useState<GamePhase>("briefing");
   const [seed, setSeed] = useState(220722);
   const [echoes, setEchoes] = useState(0);
@@ -382,12 +488,17 @@ export default function WalkExe() {
   const [power, setPower] = useState(96);
   const [inVent, setInVent] = useState(false);
   const [pointerHelp, setPointerHelp] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [enemyMode, setEnemyMode] = useState<EnemyState>("patrol");
   const [quality, setQuality] = useState<QualityProfile>("high");
   const [motionDetected, setMotionDetected] = useState(false);
+  const [signalLost, setSignalLost] = useState(false);
   const [mapPlayer, setMapPlayer] = useState({ left: 3, top: 3 });
   const [cameraMapPositions, setCameraMapPositions] = useState<
     Array<{ left: number; top: number }>
+  >([]);
+  const [mapSegments, setMapSegments] = useState<
+    Array<{ x1: number; y1: number; x2: number; y2: number }>
   >([]);
   const [audioLevels, setAudioLevels] = useState<AudioLevels>({
     master: 0.82,
@@ -405,76 +516,44 @@ export default function WalkExe() {
   }, [phase]);
 
   const startAudio = useCallback(() => {
-    if (audioRef.current) {
-      void audioRef.current.context.resume();
-      return;
-    }
-    const context = new AudioContext();
-    const master = context.createGain();
-    const compressor = context.createDynamicsCompressor();
-    const ambience = context.createGain();
-    const music = context.createGain();
-    const sfx = context.createGain();
-    const heartbeat = context.createGain();
-    const jumpscare = context.createGain();
-    const hum = context.createOscillator();
-    const drone = context.createOscillator();
-    const lfo = context.createOscillator();
-    const humGain = context.createGain();
-    const droneGain = context.createGain();
-    const lfoGain = context.createGain();
-    const droneFilter = context.createBiquadFilter();
-    hum.type = "sawtooth";
-    hum.frequency.value = 42;
-    humGain.gain.value = 0.011;
-    hum.connect(humGain);
-    humGain.connect(ambience);
-    drone.type = "triangle";
-    drone.frequency.value = 54;
-    droneFilter.type = "lowpass";
-    droneFilter.frequency.value = 185;
-    droneFilter.Q.value = 5.4;
-    droneGain.gain.value = 0.045;
-    lfo.type = "sine";
-    lfo.frequency.value = 0.17;
-    lfoGain.gain.value = 0.018;
-    lfo.connect(lfoGain);
-    lfoGain.connect(droneGain.gain);
-    drone.connect(droneFilter);
-    droneFilter.connect(droneGain);
-    droneGain.connect(music);
-    ambience.gain.value = audioLevels.ambience;
-    music.gain.value = audioLevels.music;
-    sfx.gain.value = audioLevels.sfx;
-    heartbeat.gain.value = audioLevels.heartbeat;
-    jumpscare.gain.value = audioLevels.jumpscare;
-    master.gain.value = audioLevels.master;
-    ambience.connect(master);
-    music.connect(master);
-    sfx.connect(master);
-    heartbeat.connect(master);
-    jumpscare.connect(master);
-    master.connect(compressor);
-    compressor.connect(context.destination);
-    hum.start();
-    drone.start();
-    lfo.start();
-    audioRef.current = {
-      context,
-      hum,
-      drone,
-      lfo,
-      humGain,
-      master,
-      ambience,
-      music,
-      sfx,
-      heartbeat,
-      jumpscare,
-    };
-  }, [audioLevels]);
+    const engine =
+      audioRef.current ??
+      new SpatialAudioEngine({
+        seed,
+        levels: audioLevels,
+      });
+    audioRef.current = engine;
+    engine.setLevels(audioLevels);
+    void engine
+      .unlock()
+      .then((unlocked) => {
+        if (!unlocked || audioRef.current !== engine) return;
+        engine.startBeds();
+        engine.ensureEmitter("subject-m", {
+          bus: "sfx",
+          gain: 1,
+          refDistance: 1.5,
+          maxDistance: 44,
+          rolloffFactor: 1.4,
+        });
+        engine.ensureEmitter("metal-impact", {
+          bus: "sfx",
+          gain: 0.9,
+          refDistance: 1.2,
+          maxDistance: 35,
+          rolloffFactor: 1.55,
+        });
+      })
+      .catch(() => {
+        setMessage(
+          "El navegador ha bloqueado el audio. El juego continúa en silencio.",
+        );
+      });
+  }, [audioLevels, seed]);
 
   const setGamePhase = useCallback((next: GamePhase) => {
+    inputControllerRef.current?.reset(performance.now());
+    mobilePointersRef.current.clear();
     phaseRef.current = next;
     setPhase(next);
   }, []);
@@ -485,10 +564,13 @@ export default function WalkExe() {
     if (!canvas) return;
     canvas.focus({ preventScroll: true });
     try {
-      void canvas.requestPointerLock().catch(() => {
-        setPointerHelp(true);
-        setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
-      });
+      const request = canvas.requestPointerLock();
+      if (request && typeof request.catch === "function") {
+        void request.catch(() => {
+          setPointerHelp(true);
+          setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
+        });
+      }
     } catch {
       setPointerHelp(true);
       setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
@@ -507,6 +589,10 @@ export default function WalkExe() {
 
   const restart = useCallback(() => {
     document.exitPointerLock?.();
+    if (audioRef.current) {
+      void audioRef.current.cleanup();
+      audioRef.current = null;
+    }
     setEchoes(0);
     setTraveled(0);
     setPower(96);
@@ -520,11 +606,38 @@ export default function WalkExe() {
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
+    const inputController = inputControllerRef.current;
+    if (!inputController) return;
+    const mobilePointers = mobilePointersRef.current;
+    inputController.reset(performance.now());
+    mobilePointers.clear();
+    setRuntimeError(null);
 
-    const maze = createMaze(seed);
+    let maze = createMaze(seed);
+    let validation = validateMaze(maze);
+    for (let attempt = 1; !validation.valid && attempt < 8; attempt += 1) {
+      maze = createMaze(seed + attempt * 104729);
+      validation = validateMaze(maze);
+    }
+    if (!validation.valid) {
+      setRuntimeError(
+        `MAPA RECHAZADO · ${validation.issues.join(" · ")}`,
+      );
+      return;
+    }
+    const capsuleWorld = createCapsuleCollisionWorld(maze, {
+      size: MAZE_SIZE,
+      cellSize: CELL_SIZE,
+      wallThickness: WALL_THICKNESS,
+      standingEyeHeight: PLAYER_HEIGHT,
+      crouchingEyeHeight: CROUCH_HEIGHT,
+    });
     const zones = createZoneMap(maze, seed);
     const random = seededRandom(seed * 7 + 22);
     const graphics = qualitySettings[quality];
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     const exitCell = farthestCell(maze, 0);
     const spread = chooseSpreadCells(maze, seed, 14);
     const enemyStart = spread[0] ?? exitCell;
@@ -547,6 +660,35 @@ export default function WalkExe() {
             88,
       })),
     );
+    const gridPercent = (coordinate: number) =>
+      4 + (coordinate / Math.max(1, MAZE_SIZE - 1)) * 88;
+    const schematic: Array<{
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+    }> = [];
+    maze.forEach((cell, index) => {
+      const row = Math.floor(index / MAZE_SIZE);
+      const column = index % MAZE_SIZE;
+      if (cell.e && column + 1 < MAZE_SIZE) {
+        schematic.push({
+          x1: gridPercent(column),
+          y1: gridPercent(row),
+          x2: gridPercent(column + 1),
+          y2: gridPercent(row),
+        });
+      }
+      if (cell.s && row + 1 < MAZE_SIZE) {
+        schematic.push({
+          x1: gridPercent(column),
+          y1: gridPercent(row),
+          x2: gridPercent(column),
+          y2: gridPercent(row + 1),
+        });
+      }
+    });
+    setMapSegments(schematic);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x050807);
     scene.fog = new THREE.FogExp2(0x050807, 0.032);
@@ -603,6 +745,11 @@ export default function WalkExe() {
     const start = cellCenter(0);
     const startOpening = openingDirection(maze[0]);
     const player = new THREE.Vector3(start.x, PLAYER_HEIGHT, start.z);
+    let capsuleState = createCapsuleState(capsuleWorld, {
+      x: player.x,
+      z: player.z,
+    });
+    let lastCapsuleCollided = false;
     let yaw = startOpening.yaw;
     let pitch = 0;
     let traveledDistance = 0;
@@ -617,10 +764,16 @@ export default function WalkExe() {
     let enemyPath = mazePath(maze, enemyStart, 0);
     let ventTrip: VentTrip | null = null;
     let activeLure: ActiveLure | null = null;
+    let escapeSequence: EscapeSequence | null = null;
+    let caughtSequence: CaughtSequence | null = null;
     let flashlightEnabled = true;
     let caught = false;
     let escaped = false;
     let draggingLook = false;
+    let dragPointerId: number | null = null;
+    let dragLastX = 0;
+    let dragLastY = 0;
+    let pointerWasLocked = false;
     let simulationPaused = document.hidden;
     let simulationTime = performance.now();
     let simulationAccumulator = 0;
@@ -636,11 +789,14 @@ export default function WalkExe() {
     let lastSeenAt = Number.NEGATIVE_INFINITY;
     let lastSeenCell = 0;
     let cctvExposureMs = 0;
+    let cctvSignalLost = false;
     let patrolCursor = 0;
     let playerMoving = false;
     let playerSprinting = false;
     let playerCrouching = false;
-    const keyPulseUntil: Record<string, number> = {};
+    let nextObjectDropAt = 0;
+    let lastAppliedVelocity = { x: 0, z: 0 };
+    let lastInputSlices: InputSlice[] = [];
 
     const world = new THREE.Group();
     scene.add(world);
@@ -1040,13 +1196,31 @@ export default function WalkExe() {
 
     const exit = createExitDoor();
     const exitPosition = cellCenter(exitCell);
+    const exitOpening = openingDirection(maze[exitCell]);
     exit.position.copy(exitPosition);
     exit.position.y = 0;
-    exit.rotation.y = Math.PI;
+    exit.rotation.y = exitOpening.yaw;
     world.add(exit);
+    const exitPanel = exit.getObjectByName("emergencyDoorPanel");
     const exitLight = new THREE.PointLight(0xff1717, 34, 10, 1.8);
     exitLight.position.copy(exitPosition).add(new THREE.Vector3(0, 2.4, 0));
     scene.add(exitLight);
+
+    // Reusable dropped hardware: one shared geometry/material and no allocations
+    // during gameplay. Q throws a metal part that SUJETO M can hear.
+    const noiseObjectGeometry = new THREE.CylinderGeometry(0.07, 0.07, 0.22, 8);
+    const noiseObjectMaterial = material(0x676d6d, 0.28, 0.92);
+    const noiseObjects: RuntimeNoiseObject[] = Array.from(
+      { length: 8 },
+      (_, index) => {
+        const mesh = new THREE.Mesh(noiseObjectGeometry, noiseObjectMaterial);
+        mesh.name = `NOISE_OBJECT_${index + 1}`;
+        mesh.rotation.z = Math.PI / 2;
+        mesh.visible = false;
+        world.add(mesh);
+        return { mesh, activeUntil: 0 };
+      },
+    );
 
     const runtimeEchoes: RuntimeEcho[] = echoCells.map((cell, index) => {
       const mesh = createEcho(index % 2 ? 0x7ec6ff : 0xb58bff);
@@ -1142,17 +1316,80 @@ export default function WalkExe() {
       ductRoutes[pairIndex] = duct;
     });
 
-    const subject = createSubjectM();
+    const subjectDetail = createSubjectM();
+    const subject = new THREE.LOD();
+    subject.name = "SUJETO_M_LOD";
+    subject.addLevel(subjectDetail, 0);
+    subject.addLevel(createSubjectMProxy(), 24);
     const enemyPosition = cellCenter(enemyStart);
     subject.position.set(enemyPosition.x, 0, enemyPosition.z);
     world.add(subject);
-    const head = subject.getObjectByName("head");
-    const jaw = subject.getObjectByName("jaw");
-    const subjectHat = subject.getObjectByName("hat");
-    const leftLeg = subject.getObjectByName("legLeft");
-    const rightLeg = subject.getObjectByName("legRight");
-    const leftArm = subject.getObjectByName("armLeft");
-    const rightArm = subject.getObjectByName("armRight");
+    const head = subjectDetail.getObjectByName("head");
+    const jaw = subjectDetail.getObjectByName("jaw");
+    const subjectHat = subjectDetail.getObjectByName("hat");
+    const enemyMixer = new THREE.AnimationMixer(subjectDetail);
+    const enemyClips = createSubjectMotionClips();
+    const enemyActions = {
+      idle: enemyMixer.clipAction(enemyClips.idle),
+      moonwalk: enemyMixer.clipAction(enemyClips.moonwalk),
+      investigate: enemyMixer.clipAction(enemyClips.investigate),
+      chase: enemyMixer.clipAction(enemyClips.chase),
+    };
+    Object.values(enemyActions).forEach((action) => {
+      action.enabled = true;
+      action.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
+    });
+    let activeEnemyAction = enemyActions.moonwalk;
+    activeEnemyAction.play();
+    let rigLoadCancelled = false;
+    let gltfRigLoaded = false;
+    let gltfRigFailed = false;
+    const transitionEnemyAnimation = (state: EnemyState) => {
+      const nextAction =
+        state === "chase" || state === "ambush"
+          ? enemyActions.chase
+          : state === "investigate" ||
+              state === "search" ||
+              state === "lure" ||
+              state === "vent-watch"
+            ? enemyActions.investigate
+            : state === "listen" || state === "recover"
+              ? enemyActions.idle
+              : enemyActions.moonwalk;
+      if (nextAction === activeEnemyAction) return;
+      nextAction.reset().play();
+      nextAction.crossFadeFrom(activeEnemyAction, 0.26, true);
+      activeEnemyAction = nextAction;
+    };
+    new GLTFLoader().load(
+      "/models/subject-m-rig.gltf",
+      (gltf) => {
+        if (rigLoadCancelled) return;
+        const importedMoonwalk = gltf.animations.find(
+          (clip) => clip.name === "moonwalk",
+        );
+        if (!importedMoonwalk) {
+          gltfRigFailed = true;
+          return;
+        }
+        const previousMoonwalk = enemyActions.moonwalk;
+        const importedAction = enemyMixer.clipAction(importedMoonwalk);
+        importedAction.enabled = true;
+        importedAction.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
+        enemyActions.moonwalk = importedAction;
+        if (activeEnemyAction === previousMoonwalk) {
+          importedAction.reset().play();
+          importedAction.crossFadeFrom(previousMoonwalk, 0.32, true);
+          activeEnemyAction = importedAction;
+        }
+        gltfRigLoaded = true;
+        subject.userData.gltfRigLoaded = true;
+      },
+      undefined,
+      () => {
+        if (!rigLoadCancelled) gltfRigFailed = true;
+      },
+    );
 
     const flashlight = new THREE.SpotLight(
       0xe8f4e9,
@@ -1173,201 +1410,93 @@ export default function WalkExe() {
     scene.add(camera);
 
     const playPulse = (strength: number) => {
-      const system = audioRef.current;
-      if (!system) return;
-      const now = system.context.currentTime;
-      [0, 0.13].forEach((offset, index) => {
-        const osc = system.context.createOscillator();
-        const gain = system.context.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(index ? 43 : 52, now + offset);
-        osc.frequency.exponentialRampToValueAtTime(34, now + offset + 0.1);
-        gain.gain.setValueAtTime(0.0001, now + offset);
-        gain.gain.exponentialRampToValueAtTime(Math.max(0.01, strength * (index ? 0.55 : 1)), now + offset + 0.018);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.13);
-        osc.connect(gain);
-        gain.connect(system.heartbeat);
-        osc.start(now + offset);
-        osc.stop(now + offset + 0.15);
-        osc.addEventListener(
-          "ended",
-          () => {
-            osc.disconnect();
-            gain.disconnect();
-          },
-          { once: true },
-        );
-      });
+      audioRef.current?.playHeartbeat(
+        THREE.MathUtils.clamp(strength * 5.5, 0.2, 1.65),
+      );
     };
 
     const playStep = () => {
-      const system = audioRef.current;
-      if (!system) return;
-      const now = system.context.currentTime;
-      const osc = system.context.createOscillator();
-      const gain = system.context.createGain();
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(75, now);
-      osc.frequency.exponentialRampToValueAtTime(38, now + 0.09);
-      gain.gain.setValueAtTime(0.025, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
-      osc.connect(gain);
-      gain.connect(system.sfx);
-      osc.start();
-      osc.stop(now + 0.12);
-      osc.addEventListener(
-        "ended",
-        () => {
-          osc.disconnect();
-          gain.disconnect();
-        },
-        { once: true },
+      audioRef.current?.playPlayerStep(
+        playerCrouching ? 0.08 : playerSprinting ? 0.24 : 0.16,
       );
+    };
+
+    const playClank = (position: THREE.Vector3) => {
+      const system = audioRef.current;
+      if (!system?.isUnlocked) return;
+      system.updateEmitter("metal-impact", {
+        position,
+        occlusion: corridorLineOfSight(
+          maze,
+          positionCell(player),
+          positionCell(position),
+        )
+          ? 0
+          : 0.72,
+      });
+      system.playMetalImpact("metal-impact");
     };
 
     const playEnemyStep = (distanceToPlayer: number) => {
       const system = audioRef.current;
-      if (!system) return;
-      const now = system.context.currentTime;
-      const oscillator = system.context.createOscillator();
-      const gain = system.context.createGain();
-      const pan = system.context.createStereoPanner();
-      const relative = subject.position.clone().sub(player);
-      const facingRight = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-      pan.pan.value = THREE.MathUtils.clamp(
-        relative.normalize().dot(facingRight),
-        -0.92,
-        0.92,
-      );
-      oscillator.type = "square";
-      oscillator.frequency.setValueAtTime(96, now);
-      oscillator.frequency.exponentialRampToValueAtTime(31, now + 0.14);
-      gain.gain.setValueAtTime(
-        THREE.MathUtils.clamp(
-          0.12 / Math.max(1, distanceToPlayer * 0.3),
-          0.008,
-          0.09,
+      if (!system?.isUnlocked) return;
+      system.playMechanicalStep("subject-m", {
+        gain: THREE.MathUtils.clamp(
+          1.15 / Math.max(1, distanceToPlayer * 0.08),
+          0.28,
+          1.15,
         ),
-        now,
-      );
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-      oscillator.connect(gain);
-      gain.connect(pan);
-      pan.connect(system.sfx);
-      oscillator.start(now);
-      oscillator.stop(now + 0.2);
-      oscillator.addEventListener(
-        "ended",
-        () => {
-          oscillator.disconnect();
-          gain.disconnect();
-          pan.disconnect();
-        },
-        { once: true },
-      );
+        playbackRate: currentEnemyMode === "chase" ? 1.16 : 0.94,
+      });
     };
 
     const playMechanicalScream = () => {
-      const system = audioRef.current;
-      if (!system) return;
-      const audioNow = system.context.currentTime;
-      const duration = 0.82;
-      const sampleRate = system.context.sampleRate;
-      const buffer = system.context.createBuffer(
-        1,
-        Math.ceil(sampleRate * duration),
-        sampleRate,
-      );
-      const samples = buffer.getChannelData(0);
-      for (let index = 0; index < samples.length; index += 1) {
-        const time = index / sampleRate;
-        const envelope = Math.pow(1 - time / duration, 0.7);
-        samples[index] =
-          (Math.random() * 2 - 1) *
-          envelope *
-          (0.55 + Math.sin(time * 1130) * 0.24);
-      }
-      const noise = system.context.createBufferSource();
-      const filter = system.context.createBiquadFilter();
-      const gain = system.context.createGain();
-      const low = system.context.createOscillator();
-      const lowGain = system.context.createGain();
-      noise.buffer = buffer;
-      filter.type = "bandpass";
-      filter.frequency.setValueAtTime(2700, audioNow);
-      filter.frequency.exponentialRampToValueAtTime(620, audioNow + duration);
-      filter.Q.value = 4.2;
-      gain.gain.setValueAtTime(0.0001, audioNow);
-      gain.gain.exponentialRampToValueAtTime(0.42, audioNow + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioNow + duration);
-      low.type = "sawtooth";
-      low.frequency.setValueAtTime(118, audioNow);
-      low.frequency.exponentialRampToValueAtTime(34, audioNow + 0.58);
-      lowGain.gain.setValueAtTime(0.16, audioNow);
-      lowGain.gain.exponentialRampToValueAtTime(0.0001, audioNow + 0.62);
-      noise.connect(filter);
-      filter.connect(gain);
-      gain.connect(system.jumpscare);
-      low.connect(lowGain);
-      lowGain.connect(system.jumpscare);
-      noise.start(audioNow);
-      low.start(audioNow);
-      noise.stop(audioNow + duration);
-      low.stop(audioNow + 0.64);
-      noise.addEventListener(
-        "ended",
-        () => {
-          noise.disconnect();
-          filter.disconnect();
-          gain.disconnect();
-        },
-        { once: true },
-      );
-      low.addEventListener(
-        "ended",
-        () => {
-          low.disconnect();
-          lowGain.disconnect();
-        },
-        { once: true },
-      );
+      audioRef.current?.playJumpscare(1);
     };
 
-    const triggerCaught = () => {
+    const triggerCaught = (now: number) => {
       if (caught || escaped) return;
       caught = true;
+      caughtSequence = {
+        startedAt: now,
+        subjectStart: subject.position.clone(),
+        subjectYaw: subject.rotation.y,
+      };
+      inputController.reset(now);
+      mobilePointers.clear();
+      lastAppliedVelocity = { x: 0, z: 0 };
       document.exitPointerLock?.();
       setMessage("SUJETO M ha interceptado la señal.");
-      setGamePhase("caught");
+      setPrompt("INTERFERENCIA CERVICAL · SEÑAL PERDIDA");
       playMechanicalScream();
     };
 
     const applyPlayerMovement = (
       forward: number,
       strafe: number,
-      distanceToMove: number,
+      speed: number,
+      delta: number,
+      crouching: boolean,
     ) => {
-      if (!forward && !strafe) return 0;
-      const length = Math.hypot(forward, strafe) || 1;
-      const forwardX = -Math.sin(yaw);
-      const forwardZ = -Math.cos(yaw);
-      const rightX = Math.cos(yaw);
-      const rightZ = -Math.sin(yaw);
-      const moveX =
-        ((forward / length) * forwardX + (strafe / length) * rightX) *
-        distanceToMove;
-      const moveZ =
-        ((forward / length) * forwardZ + (strafe / length) * rightZ) *
-        distanceToMove;
-      const resolved = resolveGridMovement(
-        maze,
-        { x: player.x, z: player.z },
-        { x: moveX, z: moveZ },
-      );
-      player.x = resolved.x;
-      player.z = resolved.z;
-      traveledDistance += resolved.moved;
-      return resolved.moved;
+      const velocity = capsuleVelocityFromInput({
+        forward,
+        strafe,
+        yaw,
+        speed,
+      });
+      lastAppliedVelocity = velocity;
+      const result = stepCapsuleController(capsuleWorld, capsuleState, {
+        velocity,
+        deltaSeconds: delta,
+        crouch: crouching,
+      });
+      capsuleState = result.state;
+      player.x = result.state.position.x;
+      player.z = result.state.position.z;
+      player.y = result.eyeHeight;
+      lastCapsuleCollided = result.collided;
+      traveledDistance += result.moved;
+      return result;
     };
 
     const dropEcho = (now: number) => {
@@ -1391,6 +1520,36 @@ export default function WalkExe() {
         expiresAt: now + 7600,
       };
       setPrompt("Eco proyectado. SUJETO M está cambiando de ruta.");
+    };
+
+    const dropNoiseObject = (now: number) => {
+      if (ventTrip || now < nextObjectDropAt) return;
+      const reusable =
+        noiseObjects.find((object) => !object.mesh.visible) ??
+        noiseObjects.reduce((oldest, object) =>
+          object.activeUntil < oldest.activeUntil ? object : oldest,
+        );
+      const forwardX = -Math.sin(yaw);
+      const forwardZ = -Math.cos(yaw);
+      const resolved = resolveGridMovement(
+        maze,
+        { x: player.x, z: player.z },
+        { x: forwardX * 2.35, z: forwardZ * 2.35 },
+        MAZE_SIZE,
+        CELL_SIZE,
+        0.1,
+      );
+      reusable.mesh.position.set(resolved.x, 0.11, resolved.z);
+      reusable.mesh.rotation.x = random() * Math.PI;
+      reusable.mesh.rotation.y = random() * Math.PI;
+      reusable.mesh.visible = true;
+      reusable.activeUntil = now + 11500;
+      lastNoiseAt = now;
+      lastNoiseCell = positionCell(reusable.mesh.position);
+      lastNoiseRadius = 10;
+      nextObjectDropAt = now + 1600;
+      playClank(reusable.mesh.position);
+      setPrompt("Pieza metálica lanzada. Algo está investigando el golpe.");
     };
 
     const interact = (now: number) => {
@@ -1443,33 +1602,48 @@ export default function WalkExe() {
         const totalDistance = cumulative[cumulative.length - 1];
         if (ductRoutes[pairIndex]) ductRoutes[pairIndex].visible = true;
         ventTrip = {
-          from: player.clone(),
+          sourceCell: currentCell,
           to: destination.clone().setY(0.72),
           destinationCell: pairedCell,
           pairIndex,
           path,
           cumulative,
           totalDistance,
-          startedAt: now,
-          duration: THREE.MathUtils.clamp(
-            (totalDistance / 4.2) * 1000,
-            4800,
-            12000,
-          ),
+          distanceAlong: 0,
         };
         lastNoiseAt = now;
         lastNoiseCell = currentCell;
         lastNoiseRadius = 13;
         setInVent(true);
-        setPrompt("Dentro del conducto. No hagas ruido.");
+        setPrompt("Conducto activo: W avanza · S retrocede · puedes detenerte.");
         return;
       }
 
       if (cellCenter(exitCell).distanceTo(player.clone().setY(0)) < 1.55) {
         escaped = true;
+        escapeSequence = {
+          startedAt: now,
+          playerStart: player.clone(),
+          playerEnd: exitPosition
+            .clone()
+            .add(
+              new THREE.Vector3(
+                exitOpening.x * 3.2,
+                PLAYER_HEIGHT,
+                exitOpening.z * 3.2,
+              ),
+            ),
+        };
+        inputController.reset(now);
+        mobilePointers.clear();
+        lastAppliedVelocity = { x: 0, z: 0 };
+        lastNoiseAt = now;
+        lastNoiseCell = exitCell;
+        lastNoiseRadius = 16;
+        playClank(exitPosition);
         document.exitPointerLock?.();
-        setGamePhase("escaped");
-        setMessage("La puerta se ha cerrado detrás de ti. El pasadizo sigue cambiando.");
+        setPrompt("APERTURA DE EMERGENCIA · mecanismo en movimiento");
+        setMessage("La puerta de emergencia está liberando el cierre.");
       }
     };
 
@@ -1481,25 +1655,38 @@ export default function WalkExe() {
       }
       return event.key;
     };
+    const inputTimestamp = (event: { timeStamp: number }) => {
+      const timestamp = event.timeStamp;
+      if (!Number.isFinite(timestamp) || timestamp <= 0) {
+        return performance.now();
+      }
+      return timestamp > performance.timeOrigin
+        ? timestamp - performance.timeOrigin
+        : timestamp;
+    };
     const keyDown = (event: KeyboardEvent) => {
       const code = normalizedKeyCode(event);
-      keysRef.current[code] = true;
-      if (
-        code === "KeyW" ||
-        code === "KeyS" ||
-        code === "KeyA" ||
-        code === "KeyD" ||
-        code.startsWith("Arrow")
-      ) {
-        keyPulseUntil[code] = performance.now() + 90;
+      const action = walkInputActionForCode(code);
+      const timestamp = inputTimestamp(event);
+      if (action) {
+        inputController.press(action, `keyboard:${code}`, timestamp);
         event.preventDefault();
       }
-      if (code === "KeyE") interactQueuedRef.current = true;
-      if (code === "KeyG") dropQueuedRef.current = true;
-      if (code === "Tab" && phaseRef.current === "playing" && cctvPower > 0) {
+      if (!event.repeat && code === "KeyE") interactQueuedRef.current = true;
+      if (!event.repeat && code === "KeyG") dropQueuedRef.current = true;
+      if (!event.repeat && code === "KeyQ") objectQueuedRef.current = true;
+      if (
+        !event.repeat &&
+        code === "Tab" &&
+        phaseRef.current === "playing" &&
+        cctvPower > 0
+      ) {
         event.preventDefault();
         tabletRef.current = !tabletRef.current;
+        inputController.reset(timestamp);
+        mobilePointers.clear();
         setTabletOpen(tabletRef.current);
+        if (tabletRef.current) audioRef.current?.playCctvStatic();
         setPrompt(
           tabletRef.current
             ? "Red CCTV activa. El consumo de energía aumenta."
@@ -1508,30 +1695,24 @@ export default function WalkExe() {
         if (tabletRef.current) document.exitPointerLock?.();
         else {
           renderer.domElement.focus({ preventScroll: true });
-          try {
-            void renderer.domElement
-              .requestPointerLock()
-              .catch(() => {
-                setPointerHelp(true);
-                setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
-              });
-          } catch {
-            setPointerHelp(true);
-            setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
-          }
+          requestControl();
         }
       }
-      if (code === "KeyF") {
+      if (!event.repeat && code === "KeyF") {
         flashlightEnabled = !flashlightEnabled;
         flashlight.visible = flashlightEnabled;
       }
     };
     const keyUp = (event: KeyboardEvent) => {
       const code = normalizedKeyCode(event);
-      keysRef.current[code] = false;
-      if (event.key.length === 1) {
-        keysRef.current[`Key${event.key.toUpperCase()}`] = false;
-      }
+      const action = walkInputActionForCode(code);
+      if (!action) return;
+      inputController.release(
+        action,
+        `keyboard:${code}`,
+        inputTimestamp(event),
+      );
+      event.preventDefault();
     };
     const pointerMove = (event: PointerEvent) => {
       const locked = document.pointerLockElement === renderer.domElement;
@@ -1542,8 +1723,17 @@ export default function WalkExe() {
       ) {
         return;
       }
-      yaw -= event.movementX * 0.0021;
-      pitch -= event.movementY * 0.0018;
+      if (!locked && dragPointerId !== null && event.pointerId !== dragPointerId) {
+        return;
+      }
+      const movementX = locked ? event.movementX : event.clientX - dragLastX;
+      const movementY = locked ? event.movementY : event.clientY - dragLastY;
+      if (!locked) {
+        dragLastX = event.clientX;
+        dragLastY = event.clientY;
+      }
+      yaw -= movementX * 0.0021;
+      pitch -= movementY * 0.0018;
       pitch = Math.max(-1.02, Math.min(1.02, pitch));
     };
     const pointerDown = (event: PointerEvent) => {
@@ -1553,30 +1743,35 @@ export default function WalkExe() {
         !tabletRef.current
       ) {
         draggingLook = true;
+        dragPointerId = event.pointerId;
+        dragLastX = event.clientX;
+        dragLastY = event.clientY;
         renderer.domElement.focus({ preventScroll: true });
+        renderer.domElement.setPointerCapture?.(event.pointerId);
       }
     };
-    const pointerUp = () => {
+    const pointerUp = (event?: PointerEvent) => {
       draggingLook = false;
+      dragPointerId = null;
+      if (
+        event &&
+        renderer.domElement.hasPointerCapture?.(event.pointerId)
+      ) {
+        renderer.domElement.releasePointerCapture?.(event.pointerId);
+      }
     };
     const canvasClick = () => {
       if (phaseRef.current === "playing" && !tabletRef.current) {
-        renderer.domElement.focus({ preventScroll: true });
-        try {
-          void renderer.domElement
-            .requestPointerLock()
-            .catch(() => {
-              setPointerHelp(true);
-              setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
-            });
-        } catch {
-          setPointerHelp(true);
-          setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
-        }
+        requestControl();
       }
     };
     const pointerLockChange = () => {
       const locked = document.pointerLockElement === renderer.domElement;
+      if (!locked && pointerWasLocked) {
+        inputController.reset(performance.now());
+        mobilePointers.clear();
+      }
+      pointerWasLocked = locked;
       if (locked) {
         setPointerHelp(false);
       } else if (phaseRef.current === "playing" && !tabletRef.current) {
@@ -1588,23 +1783,40 @@ export default function WalkExe() {
       setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
     };
     const clearHiddenInput = () => {
-      keysRef.current = {};
-      Object.keys(keyPulseUntil).forEach((code) => {
-        keyPulseUntil[code] = 0;
-      });
+      inputController.reset(performance.now());
+      mobilePointers.clear();
       draggingLook = false;
       simulationPaused = document.hidden;
       simulationAccumulator = 0;
       lastRenderTime = performance.now();
       if (document.hidden) {
-        void audioRef.current?.context.suspend();
+        void audioRef.current?.pause();
       } else if (phaseRef.current === "playing") {
-        void audioRef.current?.context.resume();
+        void audioRef.current?.resume();
       }
     };
     const clearFocusInput = () => {
-      keysRef.current = {};
+      inputController.reset(performance.now());
+      mobilePointers.clear();
       draggingLook = false;
+    };
+    const contextLost = (event: Event) => {
+      event.preventDefault();
+      simulationPaused = true;
+      simulationAccumulator = 0;
+      inputController.reset(performance.now());
+      mobilePointers.clear();
+      void audioRef.current?.pause();
+      setRuntimeError("CONTEXTO WEBGL PERDIDO · esperando recuperación de la GPU");
+    };
+    const contextRestored = () => {
+      setRuntimeError(null);
+      simulationPaused = document.hidden;
+      simulationAccumulator = 0;
+      lastRenderTime = performance.now();
+      if (!document.hidden && phaseRef.current === "playing") {
+        void audioRef.current?.resume();
+      }
     };
 
     window.addEventListener("keydown", keyDown);
@@ -1616,14 +1828,20 @@ export default function WalkExe() {
     document.addEventListener("pointerlockerror", pointerLockError);
     renderer.domElement.addEventListener("click", canvasClick);
     renderer.domElement.addEventListener("pointerdown", pointerDown);
+    renderer.domElement.addEventListener("lostpointercapture", pointerUp);
     window.addEventListener("pointerup", pointerUp);
+    window.addEventListener("pointercancel", pointerUp);
+    renderer.domElement.addEventListener("webglcontextlost", contextLost);
+    renderer.domElement.addEventListener("webglcontextrestored", contextRestored);
 
     const fixedUpdate = (delta: number, tickNow: number) => {
       if (phaseRef.current !== "playing" || simulationPaused) return;
-
-      const active = (code: string) =>
-        Boolean(keysRef.current[code]) ||
-        (keyPulseUntil[code] ?? 0) > tickNow;
+      const inputSlices = inputController.consumeWindow(
+        tickNow - delta * 1000,
+        tickNow,
+      );
+      lastInputSlices = inputSlices;
+      const sampledInput = inputController.getSnapshot().sampled;
 
       if (activeLure && tickNow >= activeLure.expiresAt) {
         world.remove(activeLure.mesh);
@@ -1640,17 +1858,110 @@ export default function WalkExe() {
         setPrompt("La proyecciÃ³n se ha desvanecido.");
       }
 
+      noiseObjects.forEach((object) => {
+        if (object.mesh.visible && tickNow >= object.activeUntil) {
+          object.mesh.visible = false;
+        }
+      });
+
+      if (caughtSequence) {
+        const caughtTiming = sequenceProgress(
+          tickNow,
+          caughtSequence.startedAt,
+          780,
+        );
+        const progress = caughtTiming.progress;
+        const eased = 1 - Math.pow(1 - progress, 4);
+        const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+        const target = player.clone().addScaledVector(forward, 0.72).setY(0);
+        subject.position.lerpVectors(
+          caughtSequence.subjectStart,
+          target,
+          eased,
+        );
+        const targetYaw =
+          Math.atan2(
+            player.x - subject.position.x,
+            player.z - subject.position.z,
+          ) + Math.PI;
+        subject.rotation.y =
+          caughtSequence.subjectYaw +
+          Math.atan2(
+            Math.sin(targetYaw - caughtSequence.subjectYaw),
+            Math.cos(targetYaw - caughtSequence.subjectYaw),
+          ) *
+            eased;
+        playerMoving = false;
+        playerSprinting = false;
+        lastAppliedVelocity = { x: 0, z: 0 };
+        if (caughtTiming.done) {
+          caughtSequence = null;
+          setGamePhase("caught");
+        }
+        return;
+      }
+
+      if (escapeSequence) {
+        const escapeTiming = sequenceProgress(
+          tickNow,
+          escapeSequence.startedAt,
+          3200,
+        );
+        const progress = escapeTiming.progress;
+        const doorProgress = THREE.MathUtils.smoothstep(progress, 0.04, 0.55);
+        if (exitPanel) exitPanel.position.y = doorProgress * 3.15;
+        const passage = THREE.MathUtils.smoothstep(progress, 0.42, 0.94);
+        player.lerpVectors(
+          escapeSequence.playerStart,
+          escapeSequence.playerEnd,
+          passage,
+        );
+        yaw +=
+          Math.atan2(
+            Math.sin(exitOpening.yaw - yaw),
+            Math.cos(exitOpening.yaw - yaw),
+          ) * Math.min(1, delta * 2.8);
+        pitch += (0 - pitch) * Math.min(1, delta * 2.8);
+        playerMoving = passage > 0 && passage < 1;
+        playerSprinting = false;
+        playerCrouching = false;
+        lastAppliedVelocity = { x: 0, z: 0 };
+        if (escapeTiming.done) {
+          escapeSequence = null;
+          setGamePhase("escaped");
+          setMessage(
+            "La puerta se ha cerrado detrás de ti. El pasadizo sigue cambiando.",
+          );
+        }
+        return;
+      }
+
       if (!tabletRef.current) {
         if (ventTrip) {
-          const progress = Math.min(
+          let ventMoved = 0;
+          let terminalDirection = 0;
+          for (const slice of inputSlices) {
+            const ventAdvance = advanceVentTraversal(
+              ventTrip.distanceAlong,
+              ventTrip.totalDistance,
+              slice.forward,
+              slice.durationSeconds,
+            );
+            ventTrip.distanceAlong = ventAdvance.distance;
+            ventMoved += ventAdvance.moved;
+            if (slice.forward > 0 && ventAdvance.atDestination) {
+              terminalDirection = 1;
+            } else if (slice.forward < 0 && ventAdvance.atSource) {
+              terminalDirection = -1;
+            }
+          }
+          const distanceAlong = ventTrip.distanceAlong;
+          const progress = THREE.MathUtils.clamp(
+            distanceAlong / Math.max(0.0001, ventTrip.totalDistance),
+            0,
             1,
-            (tickNow - ventTrip.startedAt) / ventTrip.duration,
           );
-          const eased =
-            progress < 0.5
-              ? 2 * progress * progress
-              : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-          const distanceAlong = eased * ventTrip.totalDistance;
+          traveledDistance += ventMoved;
           let segment = 0;
           while (
             segment < ventTrip.cumulative.length - 2 &&
@@ -1668,7 +1979,7 @@ export default function WalkExe() {
             ventTrip.path[segment + 1],
             THREE.MathUtils.clamp(segmentProgress, 0, 1),
           );
-          player.y += Math.sin(progress * Math.PI * 18) * 0.025;
+          player.y += Math.sin(distanceAlong * 8) * 0.018;
           const travelDirection = ventTrip.path[segment + 1]
             .clone()
             .sub(ventTrip.path[segment]);
@@ -1681,48 +1992,90 @@ export default function WalkExe() {
                 Math.cos(ductYaw - yaw),
               ) * Math.min(1, delta * 2.6);
           }
-          playerMoving = true;
+          if (sampledInput.forward === 0) {
+            lastAppliedVelocity = { x: 0, z: 0 };
+          } else {
+            const horizontalLength = Math.hypot(
+              travelDirection.x,
+              travelDirection.z,
+            );
+            const directionScale =
+              (sampledInput.forward * 1.72) /
+              Math.max(0.0001, horizontalLength);
+            lastAppliedVelocity = {
+              x: travelDirection.x * directionScale,
+              z: travelDirection.z * directionScale,
+            };
+          }
+          playerMoving =
+            sampledInput.forward !== 0 && ventMoved > 0.0001;
           playerSprinting = false;
           playerCrouching = true;
-          if (progress >= 1) {
+          if (playerMoving) {
+            lastNoiseAt = tickNow;
+            lastNoiseCell =
+              progress < 0.5 ? ventTrip.sourceCell : ventTrip.destinationCell;
+            lastNoiseRadius = 13;
+          }
+          const leaveAtDestination =
+            progress >= 1 && terminalDirection > 0;
+          const leaveAtSource = progress <= 0 && terminalDirection < 0;
+          if (leaveAtDestination || leaveAtSource) {
+            const exitCellIndex = leaveAtDestination
+              ? ventTrip.destinationCell
+              : ventTrip.sourceCell;
             player.copy(ventTrip.to);
+            if (leaveAtSource) {
+              player.copy(cellCenter(ventTrip.sourceCell).setY(CROUCH_HEIGHT));
+            }
             player.y = CROUCH_HEIGHT;
+            capsuleState = createCapsuleState(
+              capsuleWorld,
+              { x: player.x, z: player.z },
+              true,
+            );
             if (ductRoutes[ventTrip.pairIndex]) {
               ductRoutes[ventTrip.pairIndex].visible = false;
             }
             ventTrip = null;
             setInVent(false);
-            setPrompt("Has salido al otro lado. Algo ha oÃ­do la rejilla.");
+            lastAppliedVelocity = { x: 0, z: 0 };
+            lastNoiseCell = exitCellIndex;
+            setPrompt(
+              leaveAtDestination
+                ? "Has salido al otro lado. Algo ha oído la rejilla."
+                : "Has retrocedido fuera del conducto.",
+            );
           }
         } else {
-          const forward =
-            Number(active("KeyW") || active("ArrowUp")) -
-            Number(active("KeyS") || active("ArrowDown"));
-          const strafe =
-            Number(active("KeyD") || active("ArrowRight")) -
-            Number(active("KeyA") || active("ArrowLeft"));
-          playerCrouching =
-            active("ControlLeft") || active("ControlRight");
+          let moved = 0;
+          for (const slice of inputSlices) {
+            const sliceSprinting =
+              !slice.crouch &&
+              slice.sprint &&
+              (slice.forward !== 0 || slice.strafe !== 0);
+            const movementSpeed = slice.crouch
+              ? 1.42
+              : sliceSprinting
+                ? 4.35
+                : 2.75;
+            const capsuleResult = applyPlayerMovement(
+              slice.forward,
+              slice.strafe,
+              movementSpeed,
+              slice.durationSeconds,
+              slice.crouch,
+            );
+            playerCrouching = capsuleResult.state.crouching;
+            moved += capsuleResult.moved;
+          }
+          playerMoving =
+            sampledInput.forward !== 0 || sampledInput.strafe !== 0;
           playerSprinting =
-            !playerCrouching &&
-            (active("ShiftLeft") || active("ShiftRight"));
-          playerMoving = forward !== 0 || strafe !== 0;
-          const movementSpeed = playerCrouching
-            ? 1.42
-            : playerSprinting
-              ? 4.35
-              : 2.75;
-          const moved = playerMoving
-            ? applyPlayerMovement(
-                forward,
-                strafe,
-                movementSpeed * delta,
-              )
-            : 0;
-          const targetHeight = playerCrouching
-            ? CROUCH_HEIGHT
-            : PLAYER_HEIGHT;
-          player.y += (targetHeight - player.y) * Math.min(1, delta * 13);
+            playerMoving && !sampledInput.crouch && sampledInput.sprint;
+          if (!playerMoving) {
+            lastAppliedVelocity = { x: 0, z: 0 };
+          }
           if (moved > 0.0001) {
             lastNoiseAt = tickNow;
             lastNoiseCell = positionCell(player);
@@ -1748,15 +2101,23 @@ export default function WalkExe() {
           dropQueuedRef.current = false;
           dropEcho(tickNow);
         }
+        if (objectQueuedRef.current) {
+          objectQueuedRef.current = false;
+          dropNoiseObject(tickNow);
+        }
         cctvExposureMs = Math.max(0, cctvExposureMs - delta * 650);
       } else {
+        playerMoving = false;
+        playerSprinting = false;
+        lastAppliedVelocity = { x: 0, z: 0 };
         cctvExposureMs += delta * 1000;
-        cctvPower = Math.max(0, cctvPower - delta);
+        const battery = drainCctvBattery(cctvPower, true, delta);
+        cctvPower = battery.power;
         if (Math.ceil(cctvPower) !== lastReportedPower) {
           lastReportedPower = Math.ceil(cctvPower);
           setPower(lastReportedPower);
         }
-        if (cctvPower <= 0) {
+        if (battery.depleted) {
           tabletRef.current = false;
           setTabletOpen(false);
           setPrompt("SIN ENERGÃA Â· red CCTV desconectada.");
@@ -1784,6 +2145,10 @@ export default function WalkExe() {
           : Number.POSITIVE_INFINITY;
       const heardNoise =
         tickNow - lastNoiseAt < 2300 && noiseDistance <= lastNoiseRadius;
+      const cctvSignalCell =
+        cctvCells[cctvIndexRef.current] ?? cctvCells[0] ?? 0;
+      const cctvSignalDistance =
+        mazePath(maze, enemyCell, cctvSignalCell).length - 1;
 
       const nextEnemyMode = decideEnemyState({
         distanceCells: currentRouteDistance,
@@ -1793,11 +2158,13 @@ export default function WalkExe() {
         playerInVent: Boolean(ventTrip),
         lastSeenAgeMs: tickNow - lastSeenAt,
         cctvExposureMs,
+        cctvSignalDistanceCells: cctvSignalDistance,
         lineOfSight,
       });
       if (nextEnemyMode !== currentEnemyMode) {
         currentEnemyMode = nextEnemyMode;
         setEnemyMode(nextEnemyMode);
+        transitionEnemyAnimation(nextEnemyMode);
       }
 
       const patrolCells = spread.length ? spread : [exitCell, 0];
@@ -1815,7 +2182,10 @@ export default function WalkExe() {
         currentEnemyMode === "listen" ||
         currentEnemyMode === "investigate"
       ) {
-        targetCell = lastNoiseCell;
+        targetCell =
+          currentEnemyMode === "investigate" && cctvExposureMs > 6000
+            ? cctvSignalCell
+            : lastNoiseCell;
       } else if (currentEnemyMode === "search") {
         targetCell = lastSeenCell;
       } else {
@@ -1873,7 +2243,7 @@ export default function WalkExe() {
         nextEnemyStep =
           tickNow + (currentEnemyMode === "chase" ? 330 : 610);
       }
-      if (currentPlayerDistance < 1.08) triggerCaught();
+      if (currentPlayerDistance < 1.08) triggerCaught(tickNow);
 
       currentBpm = Math.round(
         THREE.MathUtils.clamp(
@@ -1901,6 +2271,9 @@ export default function WalkExe() {
     const cctvFrustum = new THREE.Frustum();
     const cctvProjection = new THREE.Matrix4();
     const enemyProbe = new THREE.Vector3();
+    const audioForward = new THREE.Vector3();
+    const audioUp = new THREE.Vector3();
+    const enemyAudioForward = new THREE.Vector3();
     const frameTimes: number[] = [];
     let adaptivePixelRatio = Math.min(
       window.devicePixelRatio,
@@ -1915,6 +2288,7 @@ export default function WalkExe() {
     let wasPlaying = false;
     let lastQaUpdate = 0;
     let lastCctvFrame = Number.NEGATIVE_INFINITY;
+    let spatialSourcesStarted = false;
 
     const renderFrame = (now: number) => {
       animation = requestAnimationFrame(renderFrame);
@@ -1984,25 +2358,26 @@ export default function WalkExe() {
 
       runtimeEchoes.forEach((echo, index) => {
         if (echo.collected) return;
-        echo.mesh.position.y = Math.sin(now * 0.0015 + index) * 0.12;
-        echo.mesh.rotation.y += delta * 0.36;
+        echo.mesh.position.y = reducedMotion
+          ? 0
+          : Math.sin(now * 0.0015 + index) * 0.12;
+        if (!reducedMotion) echo.mesh.rotation.y += delta * 0.36;
       });
       if (activeLure) {
-        activeLure.mesh.position.y = Math.sin(now * 0.005) * 0.12;
-        activeLure.mesh.rotation.y += delta * 1.4;
+        activeLure.mesh.position.y = reducedMotion
+          ? 0
+          : Math.sin(now * 0.005) * 0.12;
+        if (!reducedMotion) activeLure.mesh.rotation.y += delta * 1.4;
       }
 
-      dust.rotation.y = Math.sin(now * 0.00004) * 0.08;
+      dust.rotation.y = reducedMotion ? 0 : Math.sin(now * 0.00004) * 0.08;
       if (playing) {
-        const gait = now * 0.0065 * (currentEnemySpeed / 1.15);
-        if (leftLeg) leftLeg.rotation.x = Math.sin(gait) * 0.38;
-        if (rightLeg) {
-          rightLeg.rotation.x = Math.sin(gait + Math.PI) * 0.38;
-        }
-        if (leftArm) {
-          leftArm.rotation.x = Math.sin(gait + Math.PI) * 0.24;
-        }
-        if (rightArm) rightArm.rotation.x = Math.sin(gait) * 0.24;
+        activeEnemyAction.timeScale = THREE.MathUtils.clamp(
+          currentEnemySpeed / 1.1,
+          0.28,
+          1.9,
+        ) * (reducedMotion ? 0.35 : 1);
+        enemyMixer.update(delta);
         if (head) {
           const threatTurn =
             currentEnemyMode === "chase" || currentEnemyMode === "ambush"
@@ -2081,6 +2456,13 @@ export default function WalkExe() {
 
           const selectedCamera =
             cctvCameras[cctvIndexRef.current] ?? cctvCameras[0];
+          const signalCycle =
+            (now + cctvIndexRef.current * 977) % 11700;
+          cctvSignalLost =
+            tabletRef.current &&
+            (signalCycle < 360 ||
+              (currentPlayerDistance < 9 && now % 920 < 150));
+          setSignalLost(cctvSignalLost);
           selectedCamera.updateWorldMatrix(true, false);
           cctvProjection.multiplyMatrices(
             selectedCamera.projectionMatrix,
@@ -2089,7 +2471,8 @@ export default function WalkExe() {
           cctvFrustum.setFromProjectionMatrix(cctvProjection);
           enemyProbe.copy(subject.position).setY(1.4);
           setMotionDetected(
-            cctvFrustum.containsPoint(enemyProbe) &&
+            !cctvSignalLost &&
+              cctvFrustum.containsPoint(enemyProbe) &&
               corridorLineOfSight(
                 maze,
                 cctvCells[cctvIndexRef.current] ?? cctvCells[0],
@@ -2121,17 +2504,64 @@ export default function WalkExe() {
       }
 
       {
-        const bob =
-          playing && playerMoving && !ventTrip
-            ? Math.sin(now * 0.011 * (playerSprinting ? 1.45 : 1)) *
-              (playerCrouching ? 0.012 : 0.035)
-            : 0;
-        camera.position.copy(player);
-        camera.position.y += bob;
-        camera.rotation.set(pitch, yaw, 0);
-        camera.fov = 74;
+        if (caughtSequence) {
+          const scareProgress = THREE.MathUtils.clamp(
+            (simulationTime - caughtSequence.startedAt) / 780,
+            0,
+            1,
+          );
+          camera.position.copy(player);
+          camera.lookAt(
+            subject.position.x,
+            2.25 + Math.sin(scareProgress * Math.PI * 8) * 0.08,
+            subject.position.z,
+          );
+          camera.fov = 74 + Math.sin(scareProgress * Math.PI) * 24;
+        } else {
+          const bob =
+            playing && playerMoving && !ventTrip && !reducedMotion
+              ? Math.sin(now * 0.011 * (playerSprinting ? 1.45 : 1)) *
+                (playerCrouching ? 0.012 : 0.035)
+              : 0;
+          camera.position.copy(player);
+          camera.position.y += bob;
+          camera.rotation.set(pitch, yaw, 0);
+          camera.fov = escapeSequence ? 80 : 74;
+        }
         camera.updateProjectionMatrix();
         flashlight.visible = flashlightEnabled;
+      }
+
+      const spatialAudio = audioRef.current;
+      if (spatialAudio?.isUnlocked) {
+        if (!spatialSourcesStarted) {
+          spatialAudio.startBeds();
+          ventMeshes.slice(0, 4).forEach((vent, index) => {
+            spatialAudio.startFan(`vent-fan-${index}`, vent.position, {
+              gain: 0.24,
+              playbackRate: 0.88 + index * 0.07,
+            });
+          });
+          spatialSourcesStarted = true;
+        }
+        camera.getWorldDirection(audioForward);
+        audioUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
+        subject.getWorldDirection(enemyAudioForward);
+        const subjectVisibleByRoute = corridorLineOfSight(
+          maze,
+          positionCell(player),
+          positionCell(subject.position),
+        );
+        spatialAudio.setListener({
+          position: camera.position,
+          forward: audioForward,
+          up: audioUp,
+        });
+        spatialAudio.updateEmitter("subject-m", {
+          position: subject.position,
+          orientation: enemyAudioForward,
+          occlusion: subjectVisibleByRoute ? 0 : 0.76,
+        });
       }
 
       if (!playing) {
@@ -2163,7 +2593,10 @@ export default function WalkExe() {
       if (tabletRef.current && playing) {
         const opticalCamera =
           cctvCameras[cctvIndexRef.current] ?? cctvCameras[0];
-        if (now - lastCctvFrame >= 1000 / graphics.cctvFps) {
+        if (
+          !cctvSignalLost &&
+          now - lastCctvFrame >= 1000 / graphics.cctvFps
+        ) {
           opticalCamera.aspect =
             cctvTarget.width / Math.max(1, cctvTarget.height);
           opticalCamera.updateProjectionMatrix();
@@ -2237,14 +2670,43 @@ export default function WalkExe() {
             crouching: playerCrouching,
             sprinting: playerSprinting,
           },
+          controller: {
+            capsuleHeight: capsuleState.height,
+            capsuleRadius: capsuleWorld.radius,
+            collided: lastCapsuleCollided,
+          },
+          vent: {
+            active: Boolean(ventTrip),
+            progress: ventTrip
+              ? ventTrip.distanceAlong /
+                Math.max(0.0001, ventTrip.totalDistance)
+              : 0,
+          },
+          sequences: {
+            escape: Boolean(escapeSequence),
+            caught: Boolean(caughtSequence),
+          },
+          noiseObjects: {
+            pooled: noiseObjects.length,
+            active: noiseObjects.filter((object) => object.mesh.visible).length,
+          },
           enemy: {
             x: subject.position.x,
             z: subject.position.z,
             cell: positionCell(subject.position),
             state: currentEnemyMode,
             routeDistance: currentRouteDistance,
+            animation: activeEnemyAction.getClip().name,
+            animationMixer: true,
+            gltfRigLoaded,
+            gltfRigFailed,
+            lodLevel: subject.getCurrentLevel(),
           },
-          input: { ...keysRef.current },
+          input: {
+            ...inputController.getSnapshot(),
+            appliedVelocity: { ...lastAppliedVelocity },
+            slices: lastInputSlices.map((slice) => ({ ...slice })),
+          },
           cctv: {
             open: tabletRef.current,
             index: cctvIndexRef.current,
@@ -2252,6 +2714,8 @@ export default function WalkExe() {
             width: cctvTarget.width,
             height: cctvTarget.height,
             fps: graphics.cctvFps,
+            signalLost: cctvSignalLost,
+            schematicSegments: schematic.length,
           },
           simulation: {
             fixedSteps,
@@ -2259,12 +2723,19 @@ export default function WalkExe() {
             accumulator: simulationAccumulator,
             paused: simulationPaused,
           },
+          audio: audioRef.current?.getQaCounters() ?? {
+            contextState: "uninitialized",
+            activeNodes: 0,
+            activeOneShots: 0,
+            activePersistentSources: 0,
+          },
           renderer: {
             calls: renderer.info.render.calls,
             triangles: renderer.info.render.triangles,
             geometries: renderer.info.memory.geometries,
             textures: renderer.info.memory.textures,
             pixelRatio: adaptivePixelRatio,
+            webgl2: renderer.capabilities.isWebGL2,
           },
           frames: {
             samples: sortedFrames.length,
@@ -2279,6 +2750,8 @@ export default function WalkExe() {
     renderFrame(performance.now());
 
     return () => {
+      inputController.reset(performance.now());
+      mobilePointers.clear();
       cancelAnimationFrame(animation);
       resizeObserver.disconnect();
       window.removeEventListener("keydown", keyDown);
@@ -2290,8 +2763,18 @@ export default function WalkExe() {
       document.removeEventListener("pointerlockerror", pointerLockError);
       renderer.domElement.removeEventListener("click", canvasClick);
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
+      renderer.domElement.removeEventListener("lostpointercapture", pointerUp);
       window.removeEventListener("pointerup", pointerUp);
+      window.removeEventListener("pointercancel", pointerUp);
+      renderer.domElement.removeEventListener("webglcontextlost", contextLost);
+      renderer.domElement.removeEventListener(
+        "webglcontextrestored",
+        contextRestored,
+      );
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock?.();
+      rigLoadCancelled = true;
+      enemyMixer.stopAllAction();
+      enemyMixer.uncacheRoot(subjectDetail);
       renderer.dispose();
       scene.traverse((object) => {
         if (
@@ -2319,31 +2802,16 @@ export default function WalkExe() {
       }
       delete mount.dataset.qa;
     };
-  }, [quality, seed, setGamePhase]);
+  }, [quality, requestControl, seed, setGamePhase]);
 
   useEffect(() => {
-    const system = audioRef.current;
-    if (!system) return;
-    const now = system.context.currentTime;
-    const update = (node: GainNode, value: number) => {
-      node.gain.cancelScheduledValues(now);
-      node.gain.setTargetAtTime(value, now, 0.045);
-    };
-    update(system.master, audioLevels.master);
-    update(system.ambience, audioLevels.ambience);
-    update(system.music, audioLevels.music);
-    update(system.sfx, audioLevels.sfx);
-    update(system.heartbeat, audioLevels.heartbeat);
-    update(system.jumpscare, audioLevels.jumpscare);
+    audioRef.current?.setLevels(audioLevels);
   }, [audioLevels]);
 
   useEffect(
     () => () => {
       if (!audioRef.current) return;
-      audioRef.current.hum.stop();
-      audioRef.current.drone.stop();
-      audioRef.current.lfo.stop();
-      void audioRef.current.context.close();
+      void audioRef.current.cleanup();
       audioRef.current = null;
     },
     [],
@@ -2352,10 +2820,65 @@ export default function WalkExe() {
   const chooseCamera = (index: number) => {
     cctvIndexRef.current = index;
     setCctvIndex(index);
+    audioRef.current?.playCctvStatic({ duration: 0.22, gain: 0.14 });
   };
 
-  const setKey = (code: string, active: boolean) => {
-    keysRef.current[code] = active;
+  const pointerInputTimestamp = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    const timestamp = event.timeStamp;
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
+      return performance.now();
+    }
+    return timestamp > performance.timeOrigin
+      ? timestamp - performance.timeOrigin
+      : timestamp;
+  };
+
+  const beginMobileAction = (
+    action: WalkInputAction,
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    if (phaseRef.current !== "playing" || tabletRef.current) return;
+    event.preventDefault();
+    const timestamp = pointerInputTimestamp(event);
+    const source = `touch:${event.pointerId}`;
+    const previous = mobilePointersRef.current.get(event.pointerId);
+    if (previous && previous.action !== action) {
+      inputControllerRef.current?.release(
+        previous.action,
+        previous.source,
+        timestamp,
+      );
+    }
+    mobilePointersRef.current.set(event.pointerId, { action, source });
+    inputControllerRef.current?.press(action, source, timestamp);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is optional; window cancellation still clears input.
+    }
+  };
+
+  const endMobileAction = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    const activePointer = mobilePointersRef.current.get(event.pointerId);
+    if (!activePointer) return;
+    event.preventDefault();
+    inputControllerRef.current?.release(
+      activePointer.action,
+      activePointer.source,
+      pointerInputTimestamp(event),
+    );
+    mobilePointersRef.current.delete(event.pointerId);
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // The browser may already have released a cancelled pointer.
+    }
   };
 
   const updateAudioLevel = (key: keyof AudioLevels, value: number) => {
@@ -2367,6 +2890,12 @@ export default function WalkExe() {
       <div ref={mountRef} className="walk-stage" aria-label="Laberinto tridimensional M00NW4LK.EXE" />
       <div className="walk-noise" aria-hidden="true" />
       <div className="walk-vignette" aria-hidden="true" />
+      {runtimeError && (
+        <div className="runtime-error" role="alert">
+          <strong>RECUPERANDO MOTOR 3D</strong>
+          <span>{runtimeError}</span>
+        </div>
+      )}
 
       <header className="walk-topbar">
         <Link href="/" className="walk-back">← PREMIERE 22</Link>
@@ -2415,6 +2944,7 @@ export default function WalkExe() {
             <span><b>CTRL</b> AGACHARSE</span>
             <span><b>E</b> INTERACTUAR</span>
             <span><b>G</b> SEÑUELO</span>
+            <span><b>Q</b> LANZAR PIEZA</span>
             <span><b>TAB</b> CÁMARAS</span>
             <span><b>F</b> LINTERNA</span>
           </div>
@@ -2438,15 +2968,24 @@ export default function WalkExe() {
             {Array.from({ length: 9 }, (_, index) => <i key={index} />)}
           </div>
           <strong>CONDUCTO DE MANTENIMIENTO</strong>
-          <span>ARRASTRÁNDOTE · NO HAGAS RUIDO</span>
+          <span>W AVANZA · S RETROCEDE · PUEDES DETENERTE</span>
         </div>
       )}
 
       {tabletOpen && phase === "playing" && (
         <section className="cctv-tablet" aria-label="Red de cámaras del laberinto">
           <div className="tablet-shell">
-            <div ref={cctvFeedRef} className="cctv-feed">
+            <div
+              ref={cctvFeedRef}
+              className={`cctv-feed${signalLost ? " signal-lost" : ""}`}
+            >
               <div className="cctv-scan" />
+              {signalLost && (
+                <div className="cctv-signal-loss">
+                  <strong>SIGNAL LOST</strong>
+                  <span>RENEGOCIANDO ENLACE...</span>
+                </div>
+              )}
               <div className="cctv-feed-top">
                 <span>● LIVE</span>
                 <strong>{cameraNames[cctvIndex]}</strong>
@@ -2455,7 +2994,9 @@ export default function WalkExe() {
               <div className="cctv-warning">
                 <span>SEÑAL DE MOVIMIENTO</span>
                 <b>
-                  {motionDetected
+                  {signalLost
+                    ? "SIN SEÑAL"
+                    : motionDetected
                     ? "OBJETO NO IDENTIFICADO"
                     : "SIN ACTIVIDAD"}
                 </b>
@@ -2463,6 +3004,22 @@ export default function WalkExe() {
             </div>
             <div className="cctv-panel">
               <div className="cctv-map">
+                <svg
+                  className="map-schematic"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  {mapSegments.map((segment, index) => (
+                    <line
+                      key={`${segment.x1}-${segment.y1}-${index}`}
+                      x1={segment.x1}
+                      y1={segment.y1}
+                      x2={segment.x2}
+                      y2={segment.y2}
+                    />
+                  ))}
+                </svg>
                 <span
                   className="map-office"
                   style={{
@@ -2486,9 +3043,6 @@ export default function WalkExe() {
                     C{index + 1}
                   </button>
                 ))}
-                <i className="map-route route-a" />
-                <i className="map-route route-b" />
-                <i className="map-route route-c" />
               </div>
               <div className="cctv-power">
                 <span>ENERGÍA DE RED</span>
@@ -2602,12 +3156,6 @@ export default function WalkExe() {
       {phase === "caught" && (
         <section className="game-overlay result caught">
           <span className="result-code">ERROR_CERVICAL_180</span>
-          <div className="caught-face" aria-hidden="true">
-            <i className="caught-hat" />
-            <i className="caught-eye left" />
-            <i className="caught-eye right" />
-            <b>22</b>
-          </div>
           <h2>TE HA<br />ENCONTRADO.</h2>
           <p>{message}</p>
           <button type="button" onClick={restart}>GENERAR OTRO LABERINTO</button>
@@ -2630,49 +3178,55 @@ export default function WalkExe() {
           <div className="mobile-pad">
             <button
               type="button"
-              onPointerDown={() => setKey("KeyW", true)}
-              onPointerUp={() => setKey("KeyW", false)}
-              onPointerCancel={() => setKey("KeyW", false)}
-              onPointerLeave={() => setKey("KeyW", false)}
+              onPointerDown={(event) => beginMobileAction("forward", event)}
+              onPointerUp={endMobileAction}
+              onPointerCancel={endMobileAction}
+              onPointerLeave={endMobileAction}
+              onLostPointerCapture={endMobileAction}
             >W</button>
             <button
               type="button"
-              onPointerDown={() => setKey("KeyA", true)}
-              onPointerUp={() => setKey("KeyA", false)}
-              onPointerCancel={() => setKey("KeyA", false)}
-              onPointerLeave={() => setKey("KeyA", false)}
+              onPointerDown={(event) => beginMobileAction("left", event)}
+              onPointerUp={endMobileAction}
+              onPointerCancel={endMobileAction}
+              onPointerLeave={endMobileAction}
+              onLostPointerCapture={endMobileAction}
             >A</button>
             <button
               type="button"
-              onPointerDown={() => setKey("KeyS", true)}
-              onPointerUp={() => setKey("KeyS", false)}
-              onPointerCancel={() => setKey("KeyS", false)}
-              onPointerLeave={() => setKey("KeyS", false)}
+              onPointerDown={(event) => beginMobileAction("backward", event)}
+              onPointerUp={endMobileAction}
+              onPointerCancel={endMobileAction}
+              onPointerLeave={endMobileAction}
+              onLostPointerCapture={endMobileAction}
             >S</button>
             <button
               type="button"
-              onPointerDown={() => setKey("KeyD", true)}
-              onPointerUp={() => setKey("KeyD", false)}
-              onPointerCancel={() => setKey("KeyD", false)}
-              onPointerLeave={() => setKey("KeyD", false)}
+              onPointerDown={(event) => beginMobileAction("right", event)}
+              onPointerUp={endMobileAction}
+              onPointerCancel={endMobileAction}
+              onPointerLeave={endMobileAction}
+              onLostPointerCapture={endMobileAction}
             >D</button>
           </div>
           <div className="mobile-actions">
             <button
               type="button"
-              onPointerDown={() => setKey("ShiftLeft", true)}
-              onPointerUp={() => setKey("ShiftLeft", false)}
-              onPointerCancel={() => setKey("ShiftLeft", false)}
-              onPointerLeave={() => setKey("ShiftLeft", false)}
+              onPointerDown={(event) => beginMobileAction("sprint", event)}
+              onPointerUp={endMobileAction}
+              onPointerCancel={endMobileAction}
+              onPointerLeave={endMobileAction}
+              onLostPointerCapture={endMobileAction}
             >
               RUN
             </button>
             <button
               type="button"
-              onPointerDown={() => setKey("ControlLeft", true)}
-              onPointerUp={() => setKey("ControlLeft", false)}
-              onPointerCancel={() => setKey("ControlLeft", false)}
-              onPointerLeave={() => setKey("ControlLeft", false)}
+              onPointerDown={(event) => beginMobileAction("crouch", event)}
+              onPointerUp={endMobileAction}
+              onPointerCancel={endMobileAction}
+              onPointerLeave={endMobileAction}
+              onLostPointerCapture={endMobileAction}
             >
               CTRL
             </button>
@@ -2681,7 +3235,10 @@ export default function WalkExe() {
               onClick={() => {
                 if (power <= 0) return;
                 tabletRef.current = !tabletRef.current;
+                inputControllerRef.current?.reset(performance.now());
+                mobilePointersRef.current.clear();
                 setTabletOpen(tabletRef.current);
+                if (tabletRef.current) audioRef.current?.playCctvStatic();
                 if (tabletRef.current) document.exitPointerLock?.();
               }}
             >
@@ -2702,6 +3259,14 @@ export default function WalkExe() {
               }}
             >
               G
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                objectQueuedRef.current = true;
+              }}
+            >
+              Q
             </button>
           </div>
         </div>

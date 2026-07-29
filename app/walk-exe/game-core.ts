@@ -42,6 +42,7 @@ export type EnemyStimulus = {
   playerInVent: boolean;
   lastSeenAgeMs: number;
   cctvExposureMs: number;
+  cctvSignalDistanceCells?: number;
   lineOfSight: boolean;
 };
 
@@ -516,7 +517,10 @@ export function decideEnemyState(stimulus: EnemyStimulus): EnemyState {
   if (stimulus.heardNoise && stimulus.noiseAgeMs < 2200) {
     return stimulus.distanceCells <= 7 ? "investigate" : "listen";
   }
-  if (stimulus.cctvExposureMs > 6000 && stimulus.distanceCells <= 9) {
+  if (
+    stimulus.cctvExposureMs > 6000 &&
+    (stimulus.cctvSignalDistanceCells ?? stimulus.distanceCells) <= 9
+  ) {
     return "investigate";
   }
   if (stimulus.lastSeenAgeMs < 4500) return "search";
