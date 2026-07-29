@@ -210,8 +210,9 @@ export default function Home() {
   const jumpscareAudioRef = useRef<HTMLAudioElement | null>(null);
   const audioRef = useRef<{
     context: AudioContext;
-    oscillators: OscillatorNode[];
     gain: GainNode;
+    timer: number;
+    sources: Set<AudioScheduledSourceNode>;
   } | null>(null);
 
   const playHee = useCallback(() => {
@@ -272,6 +273,19 @@ export default function Home() {
       heeBurstTimersRef.current.clear();
       jumpscareAudioRef.current?.pause();
       jumpscareAudioRef.current = null;
+      const soundtrack = audioRef.current;
+      if (soundtrack) {
+        window.clearInterval(soundtrack.timer);
+        soundtrack.sources.forEach((source) => {
+          try {
+            source.stop();
+          } catch {
+            // The source has already finished.
+          }
+        });
+        void soundtrack.context.close();
+        audioRef.current = null;
+      }
     };
   }, []);
 
@@ -364,14 +378,22 @@ export default function Home() {
 
   const toggleSound = () => {
     if (soundOn && audioRef.current) {
-      audioRef.current.gain.gain.exponentialRampToValueAtTime(
+      const soundtrack = audioRef.current;
+      audioRef.current = null;
+      window.clearInterval(soundtrack.timer);
+      soundtrack.gain.gain.exponentialRampToValueAtTime(
         0.0001,
-        audioRef.current.context.currentTime + 0.25,
+        soundtrack.context.currentTime + 0.25,
       );
       window.setTimeout(() => {
-        audioRef.current?.oscillators.forEach((osc) => osc.stop());
-        void audioRef.current?.context.close();
-        audioRef.current = null;
+        soundtrack.sources.forEach((source) => {
+          try {
+            source.stop();
+          } catch {
+            // The source has already finished.
+          }
+        });
+        void soundtrack.context.close();
       }, 280);
       setSoundOn(false);
       return;
@@ -379,21 +401,165 @@ export default function Home() {
 
     const context = new AudioContext();
     const gain = context.createGain();
-    gain.gain.value = 0.018;
-    gain.connect(context.destination);
-    const oscillators = [48, 52].map((frequency) => {
+    const compressor = context.createDynamicsCompressor();
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.075, context.currentTime + 0.18);
+    compressor.threshold.value = -18;
+    compressor.knee.value = 16;
+    compressor.ratio.value = 5;
+    compressor.attack.value = 0.004;
+    compressor.release.value = 0.16;
+    gain.connect(compressor);
+    compressor.connect(context.destination);
+
+    const sources = new Set<AudioScheduledSourceNode>();
+    const remember = <T extends AudioScheduledSourceNode>(source: T) => {
+      sources.add(source);
+      source.addEventListener("ended", () => sources.delete(source), {
+        once: true,
+      });
+      return source;
+    };
+
+    const noiseBuffer = context.createBuffer(
+      1,
+      Math.round(context.sampleRate * 0.18),
+      context.sampleRate,
+    );
+    const noise = noiseBuffer.getChannelData(0);
+    for (let index = 0; index < noise.length; index += 1) {
+      noise[index] = Math.random() * 2 - 1;
+    }
+
+    const kick = (time: number) => {
       const osc = context.createOscillator();
+      const envelope = context.createGain();
       osc.type = "sine";
-      osc.frequency.value = frequency;
-      osc.connect(gain);
-      osc.start();
-      return osc;
-    });
-    audioRef.current = { context, oscillators, gain };
+      osc.frequency.setValueAtTime(118, time);
+      osc.frequency.exponentialRampToValueAtTime(42, time + 0.12);
+      envelope.gain.setValueAtTime(0.72, time);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, time + 0.19);
+      osc.connect(envelope);
+      envelope.connect(gain);
+      remember(osc);
+      osc.start(time);
+      osc.stop(time + 0.2);
+    };
+
+    const snare = (time: number) => {
+      const source = remember(context.createBufferSource());
+      const filter = context.createBiquadFilter();
+      const envelope = context.createGain();
+      source.buffer = noiseBuffer;
+      filter.type = "highpass";
+      filter.frequency.value = 1250;
+      envelope.gain.setValueAtTime(0.28, time);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, time + 0.12);
+      source.connect(filter);
+      filter.connect(envelope);
+      envelope.connect(gain);
+      source.start(time);
+      source.stop(time + 0.13);
+    };
+
+    const hat = (time: number, open = false) => {
+      const source = remember(context.createBufferSource());
+      const filter = context.createBiquadFilter();
+      const envelope = context.createGain();
+      source.buffer = noiseBuffer;
+      filter.type = "highpass";
+      filter.frequency.value = 6800;
+      envelope.gain.setValueAtTime(open ? 0.12 : 0.075, time);
+      envelope.gain.exponentialRampToValueAtTime(
+        0.0001,
+        time + (open ? 0.14 : 0.035),
+      );
+      source.connect(filter);
+      filter.connect(envelope);
+      envelope.connect(gain);
+      source.start(time);
+      source.stop(time + (open ? 0.15 : 0.04));
+    };
+
+    const bass = (time: number, frequency: number, duration = 0.1) => {
+      const osc = remember(context.createOscillator());
+      const filter = context.createBiquadFilter();
+      const envelope = context.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(frequency, time);
+      filter.type = "lowpass";
+      filter.frequency.value = 310;
+      filter.Q.value = 4.2;
+      envelope.gain.setValueAtTime(0.16, time);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+      osc.connect(filter);
+      filter.connect(envelope);
+      envelope.connect(gain);
+      osc.start(time);
+      osc.stop(time + duration + 0.015);
+    };
+
+    const stab = (time: number) => {
+      [116.54, 174.61].forEach((frequency) => {
+        const osc = remember(context.createOscillator());
+        const filter = context.createBiquadFilter();
+        const envelope = context.createGain();
+        osc.type = "square";
+        osc.frequency.value = frequency;
+        filter.type = "bandpass";
+        filter.frequency.value = 740;
+        filter.Q.value = 1.8;
+        envelope.gain.setValueAtTime(0.035, time);
+        envelope.gain.exponentialRampToValueAtTime(0.0001, time + 0.075);
+        osc.connect(filter);
+        filter.connect(envelope);
+        envelope.connect(gain);
+        osc.start(time);
+        osc.stop(time + 0.085);
+      });
+    };
+
+    // Original 16-step dark-funk pattern at 118 BPM.
+    const kickSteps = new Set([0, 3, 8, 10, 14]);
+    const snareSteps = new Set([4, 12]);
+    const openHatSteps = new Set([7, 15]);
+    const bassNotes: Record<number, number> = {
+      0: 58.27,
+      3: 58.27,
+      6: 69.3,
+      8: 51.91,
+      10: 58.27,
+      14: 55,
+    };
+    const stabSteps = new Set([2, 9, 13]);
+    const secondsPerStep = 60 / 118 / 4;
+    let step = 0;
+    let nextStepAt = context.currentTime + 0.06;
+
+    const schedule = () => {
+      while (nextStepAt < context.currentTime + 0.12) {
+        if (kickSteps.has(step)) kick(nextStepAt);
+        if (snareSteps.has(step)) snare(nextStepAt);
+        if (step % 2 === 0 || openHatSteps.has(step)) {
+          hat(nextStepAt, openHatSteps.has(step));
+        }
+        const bassFrequency = bassNotes[step];
+        if (bassFrequency) bass(nextStepAt, bassFrequency, step === 6 ? 0.16 : 0.1);
+        if (stabSteps.has(step)) stab(nextStepAt);
+        step = (step + 1) % 16;
+        nextStepAt += secondsPerStep;
+      }
+    };
+
+    schedule();
+    const timer = window.setInterval(schedule, 25);
+    audioRef.current = { context, gain, timer, sources };
+    void context.resume();
     setSoundOn(true);
   };
 
   const begin = () => {
+    if (!soundOn) toggleSound();
     setStarted(true);
     window.setTimeout(() => {
       document.getElementById("premiere")?.scrollIntoView({ behavior: "smooth" });
@@ -496,7 +662,7 @@ export default function Home() {
           aria-pressed={soundOn}
         >
           <span className={soundOn ? "sound-dot live" : "sound-dot"} />
-          SONIDO {soundOn ? "ON" : "OFF"}
+          BANDA SONORA {soundOn ? "ON" : "OFF"}
         </button>
       </header>
 
