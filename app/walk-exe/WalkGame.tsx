@@ -516,10 +516,9 @@ export default function WalkExe() {
       antialias: true,
       powerPreference: "high-performance",
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.65));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = false;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.12;
@@ -649,7 +648,7 @@ export default function WalkExe() {
           2.1,
         );
         light.position.set(center.x, 3.5, center.z);
-        light.castShadow = index % 46 === 0;
+        light.castShadow = false;
         scene.add(light);
       }
     });
@@ -751,8 +750,7 @@ export default function WalkExe() {
       0.58,
       1.55,
     );
-    flashlight.castShadow = true;
-    flashlight.shadow.mapSize.set(512, 512);
+    flashlight.castShadow = false;
     camera.add(flashlight);
     flashlight.position.set(0, -0.1, 0);
     flashlight.target.position.set(0, -0.1, -1);
@@ -959,7 +957,7 @@ export default function WalkExe() {
                   : null;
         if (tap) {
           event.preventDefault();
-          applyPlayerMovement(tap[0], tap[1], 0.16);
+          applyPlayerMovement(tap[0], tap[1], 0.06);
         }
       }
       if (event.code === "KeyE") interactQueuedRef.current = true;
@@ -1051,14 +1049,15 @@ export default function WalkExe() {
       setPointerHelp(true);
       setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
     };
-    const clearInput = () => {
+    const clearHiddenInput = () => {
+      if (!document.hidden) return;
       keysRef.current = {};
       draggingLook = false;
     };
 
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
-    window.addEventListener("blur", clearInput);
+    document.addEventListener("visibilitychange", clearHiddenInput);
     document.addEventListener("mousemove", mouseMove);
     document.addEventListener("pointerlockchange", pointerLockChange);
     document.addEventListener("pointerlockerror", pointerLockError);
@@ -1081,7 +1080,9 @@ export default function WalkExe() {
 
     const renderFrame = (now: number) => {
       animation = requestAnimationFrame(renderFrame);
-      const delta = Math.min(clock.getDelta(), 0.035);
+      const elapsed = clock.getDelta();
+      const delta = Math.min(elapsed, 0.05);
+      const movementDelta = Math.min(elapsed, 0.2);
       const playing = phaseRef.current === "playing";
 
       runtimeEchoes.forEach((echo, index) => {
@@ -1122,9 +1123,9 @@ export default function WalkExe() {
             Number(keysRef.current.KeyA || keysRef.current.ArrowLeft);
           const moving = forward !== 0 || strafe !== 0;
           const sprinting = Boolean(keysRef.current.ShiftLeft || keysRef.current.ShiftRight);
-          const speed = sprinting ? 3.75 : 2.35;
+          const speed = sprinting ? 4.35 : 2.75;
           if (moving) {
-            applyPlayerMovement(forward, strafe, speed * delta);
+            applyPlayerMovement(forward, strafe, speed * movementDelta);
             player.y = PLAYER_HEIGHT + Math.sin(now * 0.011 * (sprinting ? 1.45 : 1)) * 0.035;
             if (now > nextFootstep) {
               playStep();
@@ -1161,13 +1162,16 @@ export default function WalkExe() {
         const speed = activeLure ? 1.58 : playerDistance < 12 ? 2.05 : 1.15;
         if (remaining > 0.09) {
           direction.normalize();
-          subject.position.addScaledVector(direction, Math.min(remaining, speed * delta));
+          subject.position.addScaledVector(
+            direction,
+            Math.min(remaining, speed * movementDelta),
+          );
           // The body faces away from its direction of travel: a mechanical moonwalk.
           const targetYaw = Math.atan2(direction.x, direction.z) + Math.PI;
           subject.rotation.y += Math.atan2(
             Math.sin(targetYaw - subject.rotation.y),
             Math.cos(targetYaw - subject.rotation.y),
-          ) * Math.min(1, delta * 4);
+          ) * Math.min(1, movementDelta * 4);
         }
 
         const gait = now * 0.0065 * (speed / 1.15);
@@ -1268,7 +1272,7 @@ export default function WalkExe() {
       resizeObserver.disconnect();
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
-      window.removeEventListener("blur", clearInput);
+      document.removeEventListener("visibilitychange", clearHiddenInput);
       document.removeEventListener("mousemove", mouseMove);
       document.removeEventListener("pointerlockchange", pointerLockChange);
       document.removeEventListener("pointerlockerror", pointerLockError);
