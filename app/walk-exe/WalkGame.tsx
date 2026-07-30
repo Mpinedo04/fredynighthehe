@@ -341,20 +341,109 @@ function createSubjectM() {
 function createSubjectMProxy() {
   const proxy = new THREE.Group();
   proxy.name = "SUJETO_M_PROXY";
-  const dark = material(0x0a0b0c, 0.62, 0.4);
+  const dark = material(0x060709, 0.48, 0.46);
+  const ivory = material(0xb8b4aa, 0.76, 0.06);
   const metal = material(0x555b5d, 0.34, 0.8);
+  const glove = material(0xdedbd1, 0.3, 0.22);
   const eye = new THREE.MeshStandardMaterial({
     color: 0x220000,
     emissive: 0xe30d0d,
     emissiveIntensity: 2.5,
   });
-  addMesh(proxy, new THREE.CapsuleGeometry(0.42, 1.5, 4, 8), dark, [0, 1.55, 0]);
-  addMesh(proxy, new THREE.SphereGeometry(0.35, 10, 8), metal, [0, 2.75, 0]);
-  addMesh(proxy, new THREE.CylinderGeometry(0.48, 0.48, 0.06, 12), dark, [0, 3.14, 0]);
-  addMesh(proxy, new THREE.CylinderGeometry(0.3, 0.35, 0.3, 10), dark, [0, 3.28, 0]);
-  addMesh(proxy, new THREE.SphereGeometry(0.055, 8, 6), eye, [-0.12, 2.8, -0.3]);
-  addMesh(proxy, new THREE.SphereGeometry(0.055, 8, 6), eye, [0.12, 2.8, -0.3]);
-  proxy.scale.setScalar(1.08);
+  addMesh(
+    proxy,
+    new THREE.BoxGeometry(0.86, 1.16, 0.42),
+    ivory,
+    [0, 2.02, 0],
+  );
+  addMesh(
+    proxy,
+    new THREE.BoxGeometry(0.26, 1.02, 0.045),
+    dark,
+    [0, 2.03, -0.235],
+  );
+  addMesh(
+    proxy,
+    new THREE.CapsuleGeometry(0.15, 0.73, 4, 8),
+    dark,
+    [-0.24, 0.93, 0],
+  );
+  addMesh(
+    proxy,
+    new THREE.CapsuleGeometry(0.15, 0.73, 4, 8),
+    dark,
+    [0.24, 0.93, 0],
+  );
+  addMesh(
+    proxy,
+    new THREE.BoxGeometry(0.34, 0.18, 0.62),
+    dark,
+    [-0.24, 0.24, -0.15],
+  );
+  addMesh(
+    proxy,
+    new THREE.BoxGeometry(0.34, 0.18, 0.62),
+    dark,
+    [0.24, 0.24, -0.15],
+  );
+  addMesh(
+    proxy,
+    new THREE.CapsuleGeometry(0.12, 0.9, 4, 8),
+    ivory,
+    [-0.57, 1.8, 0],
+  );
+  addMesh(
+    proxy,
+    new THREE.CapsuleGeometry(0.1, 0.96, 4, 8),
+    metal,
+    [0.57, 1.77, 0],
+  );
+  addMesh(
+    proxy,
+    new THREE.SphereGeometry(0.15, 9, 7),
+    glove,
+    [-0.57, 1.14, 0],
+  );
+  addMesh(
+    proxy,
+    new THREE.SphereGeometry(0.34, 14, 10),
+    metal,
+    [0, 2.86, 0],
+    [0, 0, 0],
+  ).scale.set(0.82, 1.08, 0.9);
+  addMesh(
+    proxy,
+    new THREE.SphereGeometry(0.33, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+    ivory,
+    [0, 2.88, -0.03],
+  ).scale.set(0.82, 1.08, 0.92);
+  addMesh(
+    proxy,
+    new THREE.CylinderGeometry(0.48, 0.48, 0.055, 16),
+    dark,
+    [0, 3.22, 0],
+    [0.04, 0, -0.08],
+  );
+  addMesh(
+    proxy,
+    new THREE.CylinderGeometry(0.29, 0.35, 0.34, 14),
+    dark,
+    [0, 3.39, 0],
+    [0.04, 0, -0.08],
+  );
+  addMesh(
+    proxy,
+    new THREE.SphereGeometry(0.05, 8, 6),
+    eye,
+    [-0.12, 2.9, -0.3],
+  );
+  addMesh(
+    proxy,
+    new THREE.SphereGeometry(0.05, 8, 6),
+    eye,
+    [0.12, 2.9, -0.3],
+  );
+  proxy.scale.setScalar(0.92);
   return proxy;
 }
 
@@ -800,6 +889,8 @@ export default function WalkExe() {
     let playerMoving = false;
     let playerSprinting = false;
     let playerCrouching = false;
+    let modelPreviewUntil = 0;
+    let modelPreviewState: EnemyState = "listen";
     let nextObjectDropAt = 0;
     let lastAppliedVelocity = { x: 0, z: 0 };
     let lastInputSlices: InputSlice[] = [];
@@ -1322,25 +1413,81 @@ export default function WalkExe() {
       ductRoutes[pairIndex] = duct;
     });
 
-    const subjectDetail = createSubjectM();
+    const subjectDetailSlot = new THREE.Group();
+    subjectDetailSlot.name = "SUJETO_M22_DETAIL_SLOT";
+    const subjectFallback = createSubjectM();
+    subjectDetailSlot.add(subjectFallback);
+    let subjectDetail = subjectFallback;
     const subject = new THREE.LOD();
     subject.name = "SUJETO_M_LOD";
-    subject.addLevel(subjectDetail, 0);
+    subject.addLevel(subjectDetailSlot, 0);
     subject.addLevel(createSubjectMProxy(), 24);
     const enemyPosition = cellCenter(enemyStart);
     subject.position.set(enemyPosition.x, 0, enemyPosition.z);
     world.add(subject);
-    const head = subjectDetail.getObjectByName("head");
-    const jaw = subjectDetail.getObjectByName("jaw");
-    const subjectHat = subjectDetail.getObjectByName("hat");
-    const enemyMixer = new THREE.AnimationMixer(subjectDetail);
-    const enemyClips = createSubjectMotionClips();
-    const enemyActions = {
-      idle: enemyMixer.clipAction(enemyClips.idle),
-      moonwalk: enemyMixer.clipAction(enemyClips.moonwalk),
-      investigate: enemyMixer.clipAction(enemyClips.investigate),
-      chase: enemyMixer.clipAction(enemyClips.chase),
+    let head = subjectDetail.getObjectByName("head");
+    let jaw = subjectDetail.getObjectByName("jaw");
+    let subjectHat = subjectDetail.getObjectByName("hat");
+    let subjectHatBaseY = subjectHat?.position.y ?? 0.77;
+    let facePlateLeft = subjectDetail.getObjectByName("facePlateLeft");
+    let facePlateRight = subjectDetail.getObjectByName("facePlateRight");
+    let chestCore = subjectDetail.getObjectByName("chestCore");
+    let eyeGlowLeft = subjectDetail.getObjectByName(
+      "eyeGlowLeft",
+    ) as THREE.PointLight | undefined;
+    let eyeGlowRight = subjectDetail.getObjectByName(
+      "eyeGlowRight",
+    ) as THREE.PointLight | undefined;
+    let faceDecalSurface: THREE.MeshBasicMaterial | null = null;
+    let faceDecalTexture: THREE.Texture | null = null;
+    let faceDecalLoaded = false;
+    let performanceSkinSurface: THREE.MeshBasicMaterial | null = null;
+    let performanceSkinTexture: THREE.Texture | null = null;
+    let performanceSkinLoaded = false;
+    let mechanicalDetailMeshes: THREE.Mesh[] = [];
+    let mechanicalOverlayHidden = false;
+    let outerShellMeshes: THREE.Mesh[] = [];
+    let outerShellRetracted = false;
+    let servoMaterials: THREE.MeshStandardMaterial[] = [];
+    const collectServoMaterials = () => {
+      const collected = new Set<THREE.MeshStandardMaterial>();
+      subjectDetail.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        const surfaces = Array.isArray(object.material)
+          ? object.material
+          : [object.material];
+        surfaces.forEach((surface) => {
+          if (
+            surface instanceof THREE.MeshStandardMaterial &&
+            surface.name === "RED_SERVO_EMISSION"
+          ) {
+            collected.add(surface);
+          }
+        });
+      });
+      servoMaterials = [...collected];
     };
+    collectServoMaterials();
+
+    let enemyMixer = new THREE.AnimationMixer(subjectDetail);
+    const enemyClips = createSubjectMotionClips();
+    const createEnemyActions = (
+      mixer: THREE.AnimationMixer,
+      clips: THREE.AnimationClip[],
+    ) => {
+      const byName = new Map(clips.map((clip) => [clip.name, clip]));
+      return {
+        idle: mixer.clipAction(byName.get("idle") ?? enemyClips.idle),
+        moonwalk: mixer.clipAction(
+          byName.get("moonwalk") ?? enemyClips.moonwalk,
+        ),
+        investigate: mixer.clipAction(
+          byName.get("investigate") ?? enemyClips.investigate,
+        ),
+        chase: mixer.clipAction(byName.get("chase") ?? enemyClips.chase),
+      };
+    };
+    let enemyActions = createEnemyActions(enemyMixer, Object.values(enemyClips));
     Object.values(enemyActions).forEach((action) => {
       action.enabled = true;
       action.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
@@ -1350,8 +1497,7 @@ export default function WalkExe() {
     let rigLoadCancelled = false;
     let gltfRigLoaded = false;
     let gltfRigFailed = false;
-    const transitionEnemyAnimation = (state: EnemyState) => {
-      const nextAction =
+    const actionForEnemyState = (state: EnemyState) =>
         state === "chase" || state === "ambush"
           ? enemyActions.chase
           : state === "investigate" ||
@@ -1362,34 +1508,196 @@ export default function WalkExe() {
             : state === "listen" || state === "recover"
               ? enemyActions.idle
               : enemyActions.moonwalk;
+    const transitionEnemyAnimation = (state: EnemyState) => {
+      const nextAction = actionForEnemyState(state);
       if (nextAction === activeEnemyAction) return;
       nextAction.reset().play();
       nextAction.crossFadeFrom(activeEnemyAction, 0.26, true);
       activeEnemyAction = nextAction;
     };
     new GLTFLoader().load(
-      "/models/subject-m-rig.gltf",
+      "/models/subject-m22.glb",
       (gltf) => {
         if (rigLoadCancelled) return;
-        const importedMoonwalk = gltf.animations.find(
-          (clip) => clip.name === "moonwalk",
+        const importedModel = gltf.scene;
+        const requiredNodes = [
+          "hips",
+          "head",
+          "jaw",
+          "hat",
+          "armLeft",
+          "armRight",
+          "legLeft",
+          "legRight",
+        ];
+        const hasRig = requiredNodes.every((name) =>
+          importedModel.getObjectByName(name),
         );
-        if (!importedMoonwalk) {
+        const importedClipNames = new Set(
+          gltf.animations.map((clip) => clip.name),
+        );
+        const hasStateAnimations = [
+          "idle",
+          "moonwalk",
+          "investigate",
+          "chase",
+        ].every((name) => importedClipNames.has(name));
+        if (!hasRig || !hasStateAnimations) {
           gltfRigFailed = true;
           return;
         }
-        const previousMoonwalk = enemyActions.moonwalk;
-        const importedAction = enemyMixer.clipAction(importedMoonwalk);
-        importedAction.enabled = true;
-        importedAction.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
-        enemyActions.moonwalk = importedAction;
-        if (activeEnemyAction === previousMoonwalk) {
-          importedAction.reset().play();
-          importedAction.crossFadeFrom(previousMoonwalk, 0.32, true);
-          activeEnemyAction = importedAction;
+
+        importedModel.name = "SUJETO_M22_ASSET";
+        let detailedMeshCount = 0;
+        const importedMechanicalMeshes: THREE.Mesh[] = [];
+        const importedOuterShellMeshes: THREE.Mesh[] = [];
+        importedModel.traverse((object) => {
+          if (!(object instanceof THREE.Mesh)) return;
+          detailedMeshCount += 1;
+          object.castShadow = true;
+          object.receiveShadow = true;
+          if (
+            object.name !== "performanceSkin" &&
+            object.name !== "faceDecal"
+          ) {
+            importedMechanicalMeshes.push(object);
+            const surfaces = Array.isArray(object.material)
+              ? object.material
+              : [object.material];
+            if (
+              surfaces.some((surface) =>
+                [
+                  "AGED_IVORY_SUIT",
+                  "IVORY_WORN_EDGES",
+                  "CRACKED_SILICONE_MASK",
+                  "CRYSTAL_PERFORMANCE_GLOVE",
+                ].includes(surface.name),
+              )
+            ) {
+              importedOuterShellMeshes.push(object);
+            }
+          }
+        });
+
+        enemyMixer.stopAllAction();
+        enemyMixer.uncacheRoot(subjectDetail);
+        subjectFallback.visible = false;
+        subjectDetailSlot.add(importedModel);
+        subjectDetail = importedModel;
+        mechanicalDetailMeshes = importedMechanicalMeshes;
+        outerShellMeshes = importedOuterShellMeshes;
+        head = subjectDetail.getObjectByName("head");
+        jaw = subjectDetail.getObjectByName("jaw");
+        subjectHat = subjectDetail.getObjectByName("hat");
+        subjectHatBaseY = subjectHat?.position.y ?? 0.75;
+        facePlateLeft = subjectDetail.getObjectByName("facePlateLeft");
+        facePlateRight = subjectDetail.getObjectByName("facePlateRight");
+        chestCore = subjectDetail.getObjectByName("chestCore");
+        eyeGlowLeft = subjectDetail.getObjectByName(
+          "eyeGlowLeft",
+        ) as THREE.PointLight | undefined;
+        eyeGlowRight = subjectDetail.getObjectByName(
+          "eyeGlowRight",
+        ) as THREE.PointLight | undefined;
+        collectServoMaterials();
+        const faceDecal = subjectDetail.getObjectByName(
+          "faceDecal",
+        ) as THREE.Mesh | undefined;
+        if (faceDecal) {
+          new THREE.TextureLoader().load(
+            "/models/subject-m22-face-v2.png",
+            (texture) => {
+              if (rigLoadCancelled) {
+                texture.dispose();
+                return;
+              }
+              texture.colorSpace = THREE.SRGBColorSpace;
+              texture.anisotropy = Math.min(
+                8,
+                renderer.capabilities.getMaxAnisotropy(),
+              );
+              const decalMaterial = new THREE.MeshBasicMaterial({
+                name: "SUBJECT_M22_FACE_DECAL",
+                map: texture,
+                color: 0xb8b8b8,
+                transparent: true,
+                opacity: 1,
+                alphaTest: 0.018,
+                depthWrite: true,
+                side: THREE.DoubleSide,
+                toneMapped: true,
+              });
+              const previousSurfaces = Array.isArray(faceDecal.material)
+                ? faceDecal.material
+                : [faceDecal.material];
+              previousSurfaces.forEach((surface) => surface.dispose());
+              faceDecal.material = decalMaterial;
+              faceDecalSurface = decalMaterial;
+              faceDecalTexture = texture;
+              faceDecalLoaded = true;
+            },
+            undefined,
+            () => {
+              subject.userData.faceDecalFailed = true;
+            },
+          );
         }
+        const performanceSkin = subjectDetail.getObjectByName(
+          "performanceSkin",
+        ) as THREE.Mesh | undefined;
+        if (performanceSkin) {
+          new THREE.TextureLoader().load(
+            "/models/subject-m22-performance-skin.png",
+            (texture) => {
+              if (rigLoadCancelled) {
+                texture.dispose();
+                return;
+              }
+              texture.colorSpace = THREE.SRGBColorSpace;
+              texture.anisotropy = Math.min(
+                8,
+                renderer.capabilities.getMaxAnisotropy(),
+              );
+              const skinMaterial = new THREE.MeshBasicMaterial({
+                name: "SUBJECT_M22_PERFORMANCE_SKIN",
+                map: texture,
+                color: 0xc5c5c5,
+                transparent: true,
+                opacity: 0.94,
+                alphaTest: 0.03,
+                depthWrite: true,
+                side: THREE.FrontSide,
+                toneMapped: true,
+              });
+              const previousSurfaces = Array.isArray(performanceSkin.material)
+                ? performanceSkin.material
+                : [performanceSkin.material];
+              previousSurfaces.forEach((surface) => surface.dispose());
+              performanceSkin.material = skinMaterial;
+              performanceSkinSurface = skinMaterial;
+              performanceSkinTexture = texture;
+              performanceSkinLoaded = true;
+            },
+            undefined,
+            () => {
+              subject.userData.performanceSkinFailed = true;
+            },
+          );
+        }
+
+        enemyMixer = new THREE.AnimationMixer(subjectDetail);
+        enemyActions = createEnemyActions(enemyMixer, gltf.animations);
+        Object.values(enemyActions).forEach((action) => {
+          action.enabled = true;
+          action.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
+        });
+        activeEnemyAction = actionForEnemyState(currentEnemyMode);
+        activeEnemyAction.reset().play();
+
         gltfRigLoaded = true;
         subject.userData.gltfRigLoaded = true;
+        subject.userData.model = "subject-m22.glb";
+        subject.userData.meshes = detailedMeshCount;
       },
       undefined,
       () => {
@@ -2170,17 +2478,20 @@ export default function WalkExe() {
       const cctvSignalDistance =
         mazePath(maze, enemyCell, cctvSignalCell).length - 1;
 
-      const nextEnemyMode = decideEnemyState({
-        distanceCells: currentRouteDistance,
-        hasLure: Boolean(activeLure),
-        heardNoise,
-        noiseAgeMs: tickNow - lastNoiseAt,
-        playerInVent: Boolean(ventTrip),
-        lastSeenAgeMs: tickNow - lastSeenAt,
-        cctvExposureMs,
-        cctvSignalDistanceCells: cctvSignalDistance,
-        lineOfSight,
-      });
+      const modelPreviewActive = tickNow < modelPreviewUntil;
+      const nextEnemyMode = modelPreviewActive
+        ? modelPreviewState
+        : decideEnemyState({
+            distanceCells: currentRouteDistance,
+            hasLure: Boolean(activeLure),
+            heardNoise,
+            noiseAgeMs: tickNow - lastNoiseAt,
+            playerInVent: Boolean(ventTrip),
+            lastSeenAgeMs: tickNow - lastSeenAt,
+            cctvExposureMs,
+            cctvSignalDistanceCells: cctvSignalDistance,
+            lineOfSight,
+          });
       if (nextEnemyMode !== currentEnemyMode) {
         currentEnemyMode = nextEnemyMode;
         setEnemyMode(nextEnemyMode);
@@ -2240,7 +2551,7 @@ export default function WalkExe() {
         recover: 0.78,
       };
       currentEnemySpeed = speeds[currentEnemyMode];
-      if (remaining > 0.09) {
+      if (!modelPreviewActive && remaining > 0.09) {
         direction.normalize();
         subject.position.addScaledVector(
           direction,
@@ -2290,6 +2601,8 @@ export default function WalkExe() {
     const cctvFrustum = new THREE.Frustum();
     const cctvProjection = new THREE.Matrix4();
     const enemyProbe = new THREE.Vector3();
+    const enemyFacingProbe = new THREE.Vector3();
+    const enemyToPlayerProbe = new THREE.Vector3();
     const audioForward = new THREE.Vector3();
     const audioUp = new THREE.Vector3();
     const enemyAudioForward = new THREE.Vector3();
@@ -2413,8 +2726,14 @@ export default function WalkExe() {
         ) * (reducedMotion ? 0.35 : 1);
         enemyMixer.update(delta);
         if (head) {
+          const neutralModelPreview =
+            simulationTime < modelPreviewUntil &&
+            modelPreviewState === "listen";
           const threatTurn =
-            currentEnemyMode === "chase" || currentEnemyMode === "ambush"
+            neutralModelPreview
+              ? 0
+              : currentEnemyMode === "chase" ||
+                  currentEnemyMode === "ambush"
               ? 1
               : currentEnemyMode === "listen"
                 ? 0.45
@@ -2431,8 +2750,9 @@ export default function WalkExe() {
         }
         if (jaw) {
           const jawTarget =
-            currentEnemyMode === "chase"
-              ? 0.42 + Math.sin(now * 0.018) * 0.12
+            currentEnemyMode === "chase" ||
+            currentEnemyMode === "ambush"
+              ? 0.5 + Math.sin(now * 0.018) * 0.14
               : currentEnemyMode === "listen"
                 ? 0.12
                 : 0.02;
@@ -2447,11 +2767,103 @@ export default function WalkExe() {
                 ? 0.08
                 : 0;
           subjectHat.position.y +=
-            (0.77 + hatLift - subjectHat.position.y) *
+            (subjectHatBaseY + hatLift - subjectHat.position.y) *
             Math.min(1, delta * 5);
           subjectHat.rotation.z =
             Math.sin(now * 0.0014) *
             (currentEnemyMode === "ambush" ? 0.24 : 0.025);
+        }
+        const faceThreat =
+          currentEnemyMode === "ambush"
+            ? 1
+            : currentEnemyMode === "chase"
+              ? THREE.MathUtils.clamp(
+                  1.15 - currentPlayerDistance / 8,
+                  0.42,
+                  0.92,
+                )
+              : currentEnemyMode === "listen"
+                ? 0.12
+                : 0;
+        subject.getWorldDirection(enemyFacingProbe).multiplyScalar(-1);
+        enemyToPlayerProbe
+          .copy(player)
+          .setY(subject.position.y)
+          .sub(subject.position);
+        const frontAlignment =
+          enemyToPlayerProbe.lengthSq() > 0.0001
+            ? THREE.MathUtils.clamp(
+                (enemyFacingProbe.dot(enemyToPlayerProbe.normalize()) - 0.2) /
+                  0.55,
+                0,
+                1,
+              )
+            : 0;
+        mechanicalOverlayHidden =
+          performanceSkinLoaded &&
+          frontAlignment > 0.72 &&
+          faceThreat < 0.35;
+        mechanicalDetailMeshes.forEach((part) => {
+          part.visible = !mechanicalOverlayHidden;
+        });
+        outerShellRetracted = faceThreat > 0.58;
+        outerShellMeshes.forEach((part) => {
+          part.visible = !mechanicalOverlayHidden && !outerShellRetracted;
+        });
+        if (facePlateLeft && facePlateRight) {
+          facePlateLeft.rotation.y +=
+            (-faceThreat * 0.68 - facePlateLeft.rotation.y) *
+            Math.min(1, delta * 8);
+          facePlateRight.rotation.y +=
+            (faceThreat * 0.68 - facePlateRight.rotation.y) *
+            Math.min(1, delta * 8);
+          facePlateLeft.rotation.z =
+            -faceThreat * 0.12 + Math.sin(now * 0.006) * faceThreat * 0.025;
+          facePlateRight.rotation.z =
+            faceThreat * 0.12 - Math.sin(now * 0.006) * faceThreat * 0.025;
+        }
+        if (faceDecalSurface) {
+          const facialReveal = THREE.MathUtils.smoothstep(
+            faceThreat,
+            0.28,
+            0.82,
+          );
+          faceDecalSurface.opacity = THREE.MathUtils.clamp(
+            1 - facialReveal * 0.94,
+            0.06,
+            1,
+          );
+        }
+        if (performanceSkinSurface) {
+          const mechanicalReveal = THREE.MathUtils.smoothstep(
+            faceThreat,
+            0.28,
+            0.82,
+          );
+          performanceSkinSurface.opacity = THREE.MathUtils.clamp(
+            1 - mechanicalReveal * 0.94,
+            0.06,
+            1,
+          );
+        }
+        const servoIntensity =
+          2.8 +
+          faceThreat * 6.2 +
+          Math.max(0, Math.sin(now * 0.012)) * (0.6 + faceThreat * 2.4);
+        servoMaterials.forEach((surface) => {
+          surface.emissiveIntensity = servoIntensity;
+        });
+        if (eyeGlowLeft && eyeGlowRight) {
+          const eyeLightIntensity = 0.24 + faceThreat * 1.65;
+          eyeGlowLeft.intensity = eyeLightIntensity;
+          eyeGlowRight.intensity = eyeLightIntensity;
+        }
+        if (chestCore) {
+          const reactorPulse =
+            1 +
+            Math.sin(now * (currentEnemyMode === "chase" ? 0.018 : 0.007)) *
+              (currentEnemyMode === "chase" ? 0.055 : 0.02);
+          chestCore.scale.setScalar(reactorPulse);
         }
 
         if (now - lastHudUpdate > 160) {
@@ -2678,9 +3090,35 @@ export default function WalkExe() {
     const walkWindow = window as Window & {
       __M00NQA__?: {
         snapshot: () => Record<string, unknown>;
+        stageEnemy: (distance?: number, state?: EnemyState) => boolean;
       };
     };
     const qaBridge = {
+      stageEnemy: (distance = 4.6, state: EnemyState = "listen") => {
+        if (!new URLSearchParams(window.location.search).has("qa")) {
+          return false;
+        }
+        const stagedDistance = THREE.MathUtils.clamp(distance, 3.2, 8);
+        const viewDirection = new THREE.Vector3(0, 0, -1).applyAxisAngle(
+          new THREE.Vector3(0, 1, 0),
+          yaw,
+        );
+        subject.position
+          .copy(player)
+          .setY(0)
+          .addScaledVector(viewDirection, stagedDistance);
+        const towardPlayer = player.clone().setY(0).sub(subject.position);
+        subject.rotation.y =
+          Math.atan2(towardPlayer.x, towardPlayer.z) + Math.PI;
+        currentPlayerDistance = stagedDistance;
+        currentRouteDistance = 1;
+        modelPreviewUntil = simulationTime + 6_000;
+        modelPreviewState = state;
+        currentEnemyMode = state;
+        setEnemyMode(state);
+        transitionEnemyAnimation(state);
+        return true;
+      },
       snapshot: () => {
         const sortedFrames = [...frameTimes].sort(
           (first, second) => first - second,
@@ -2735,6 +3173,13 @@ export default function WalkExe() {
             gltfRigLoaded,
             gltfRigFailed,
             lodLevel: subject.getCurrentLevel(),
+            model: subject.userData.model ?? "procedural-fallback",
+            detailMeshes: subject.userData.meshes ?? 0,
+            faceMechanics: Boolean(facePlateLeft && facePlateRight),
+            faceDecalLoaded,
+            performanceSkinLoaded,
+            mechanicalOverlayHidden,
+            outerShellRetracted,
           },
           input: {
             ...inputController.getSnapshot(),
@@ -2816,6 +3261,8 @@ export default function WalkExe() {
       rigLoadCancelled = true;
       enemyMixer.stopAllAction();
       enemyMixer.uncacheRoot(subjectDetail);
+      faceDecalTexture?.dispose();
+      performanceSkinTexture?.dispose();
       renderer.dispose();
       scene.traverse((object) => {
         if (

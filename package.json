@@ -9,7 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/input-controller.test.mjs tests/capsule-controller.test.mjs tests/maze-core.test.mjs tests/runtime-core.test.mjs tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test tests/input-controller.test.mjs tests/capsule-controller.test.mjs tests/maze-core.test.mjs tests/runtime-core.test.mjs tests/rendered-html.test.mjs tests/subject-model.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
