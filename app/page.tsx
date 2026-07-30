@@ -2341,7 +2341,7 @@ export default function Home() {
                 </div>
 
                 <div className="trailer-cut-stack">
-                  {activeTrailerScene.cutImages.map((image) => (
+                  {activeTrailerScene.cutImages.map((image, index) => (
                     <figure key={image.src}>
                       <img src={image.src} alt={image.alt} />
                       <figcaption>

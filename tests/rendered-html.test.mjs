@@ -37,6 +37,17 @@ test("server-renders the Premiere 22 home route", async () => {
   assert.doesNotMatch(html, /Your site is taking shape/i);
 });
 
+test("interactive montage defines the inset index used by every cut label", async () => {
+  const pageSource = await readFile(
+    new URL("../app/page.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    pageSource,
+    /cutImages\.map\(\(image,\s*index\)\s*=>[\s\S]*?String\.fromCharCode\(65\s*\+\s*index\)/,
+  );
+});
+
 test("server-renders the M00NW4LK.EXE route and loading shell", async () => {
   const response = await render("/walk-exe");
   assert.equal(response.status, 200);
