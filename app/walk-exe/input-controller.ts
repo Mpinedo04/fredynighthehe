@@ -21,6 +21,9 @@ export type InputControllerSnapshot = InputAxesSnapshot & {
   activeSources: string[];
   pendingTransitions: number;
   lastTransitionAt: number | null;
+  lastConsumedTransitionAt: number | null;
+  lastConsumedLatencyMs: number;
+  maxConsumedLatencyMs: number;
 };
 
 type InputTransition = {
@@ -125,6 +128,9 @@ export class WalkInputController {
   private nextSequence = 1;
   private consumedUntilMs: number | null = null;
   private lastTransitionAt: number | null = null;
+  private lastConsumedTransitionAt: number | null = null;
+  private lastConsumedLatencyMs = 0;
+  private maxConsumedLatencyMs = 0;
 
   press(
     action: WalkInputAction,
@@ -200,6 +206,7 @@ export class WalkInputController {
       );
       this.pushSlice(slices, cursor, transitionAt);
       applyTransition(this.sampledSources, transition);
+      this.recordConsumedTransition(transition, end);
       cursor = transitionAt;
       processed += 1;
     }
@@ -233,6 +240,9 @@ export class WalkInputController {
       activeSources,
       pendingTransitions: this.transitions.length,
       lastTransitionAt: this.lastTransitionAt,
+      lastConsumedTransitionAt: this.lastConsumedTransitionAt,
+      lastConsumedLatencyMs: this.lastConsumedLatencyMs,
+      maxConsumedLatencyMs: this.maxConsumedLatencyMs,
     };
   }
 
@@ -283,6 +293,7 @@ export class WalkInputController {
       const transition = this.transitions[processed];
       if (transition.timestampMs > timestampMs + EPSILON_MS) break;
       applyTransition(this.sampledSources, transition);
+      this.recordConsumedTransition(transition, timestampMs);
       processed += 1;
     }
     if (processed > 0) {
@@ -304,5 +315,18 @@ export class WalkInputController {
       return;
     }
     slices.push({ durationSeconds, ...axes });
+  }
+
+  private recordConsumedTransition(
+    transition: InputTransition,
+    consumedAtMs: number,
+  ) {
+    const latencyMs = Math.max(0, consumedAtMs - transition.timestampMs);
+    this.lastConsumedTransitionAt = transition.timestampMs;
+    this.lastConsumedLatencyMs = latencyMs;
+    this.maxConsumedLatencyMs = Math.max(
+      this.maxConsumedLatencyMs,
+      latencyMs,
+    );
   }
 }

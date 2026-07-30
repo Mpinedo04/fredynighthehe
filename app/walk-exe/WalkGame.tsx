@@ -42,6 +42,7 @@ import { SpatialAudioEngine } from "./spatial-audio";
 import {
   advanceVentTraversal,
   drainCctvBattery,
+  resynchronizeFixedClock,
   sequenceProgress,
 } from "./runtime-core";
 import {
@@ -775,9 +776,14 @@ export default function WalkExe() {
     let dragLastY = 0;
     let pointerWasLocked = false;
     let simulationPaused = document.hidden;
+    const FIXED_DELTA = 1 / 60;
+    const MAX_FRAME_DELTA = 0.25;
+    const MAX_CATCH_UP_STEPS = 15;
     let simulationTime = performance.now();
     let simulationAccumulator = 0;
     let lastRenderTime = performance.now();
+    let clockResyncs = 0;
+    let lastClockLagBeforeResyncMs = 0;
     let currentEnemyMode: EnemyState = "patrol";
     let currentEnemySpeed = 1.05;
     let currentPlayerDistance = 99;
@@ -1782,13 +1788,26 @@ export default function WalkExe() {
       setPointerHelp(true);
       setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
     };
+    const hardResyncSimulationClock = (now: number) => {
+      const synchronization = resynchronizeFixedClock(
+        now,
+        simulationTime,
+        0,
+        FIXED_DELTA,
+      );
+      simulationTime = synchronization.simulationTimeMs;
+      simulationAccumulator = synchronization.accumulatorSeconds;
+      lastRenderTime = now;
+      lastClockLagBeforeResyncMs = synchronization.lagBeforeResyncMs;
+      clockResyncs += 1;
+    };
     const clearHiddenInput = () => {
-      inputController.reset(performance.now());
+      const now = performance.now();
+      inputController.reset(now);
       mobilePointers.clear();
       draggingLook = false;
       simulationPaused = document.hidden;
-      simulationAccumulator = 0;
-      lastRenderTime = performance.now();
+      hardResyncSimulationClock(now);
       if (document.hidden) {
         void audioRef.current?.pause();
       } else if (phaseRef.current === "playing") {
@@ -1802,18 +1821,19 @@ export default function WalkExe() {
     };
     const contextLost = (event: Event) => {
       event.preventDefault();
+      const now = performance.now();
       simulationPaused = true;
-      simulationAccumulator = 0;
-      inputController.reset(performance.now());
+      inputController.reset(now);
       mobilePointers.clear();
+      hardResyncSimulationClock(now);
       void audioRef.current?.pause();
       setRuntimeError("CONTEXTO WEBGL PERDIDO · esperando recuperación de la GPU");
     };
     const contextRestored = () => {
+      const now = performance.now();
       setRuntimeError(null);
       simulationPaused = document.hidden;
-      simulationAccumulator = 0;
-      lastRenderTime = performance.now();
+      hardResyncSimulationClock(now);
       if (!document.hidden && phaseRef.current === "playing") {
         void audioRef.current?.resume();
       }
@@ -2267,7 +2287,6 @@ export default function WalkExe() {
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(mount);
 
-    const FIXED_DELTA = 1 / 60;
     const cctvFrustum = new THREE.Frustum();
     const cctvProjection = new THREE.Matrix4();
     const enemyProbe = new THREE.Vector3();
@@ -2292,7 +2311,9 @@ export default function WalkExe() {
 
     const renderFrame = (now: number) => {
       animation = requestAnimationFrame(renderFrame);
-      const delta = Math.min((now - lastRenderTime) / 1000, 0.25);
+      const rawDelta = Math.max(0, (now - lastRenderTime) / 1000);
+      const frameWasClamped = rawDelta > MAX_FRAME_DELTA;
+      const delta = Math.min(rawDelta, MAX_FRAME_DELTA);
       const playing = phaseRef.current === "playing";
       frameTimes.push(delta * 1000);
       if (frameTimes.length > 180) frameTimes.shift();
@@ -2338,7 +2359,7 @@ export default function WalkExe() {
         let catchUpSteps = 0;
         while (
           simulationAccumulator >= FIXED_DELTA &&
-          catchUpSteps < 15
+          catchUpSteps < MAX_CATCH_UP_STEPS
         ) {
           simulationTime += FIXED_DELTA * 1000;
           fixedUpdate(FIXED_DELTA, simulationTime);
@@ -2346,8 +2367,21 @@ export default function WalkExe() {
           catchUpSteps += 1;
           fixedSteps += 1;
         }
-        if (catchUpSteps === 15) {
-          simulationAccumulator = 0;
+        const catchUpWasCapped =
+          catchUpSteps === MAX_CATCH_UP_STEPS &&
+          simulationAccumulator >= FIXED_DELTA;
+        if (frameWasClamped || catchUpWasCapped) {
+          const synchronization = resynchronizeFixedClock(
+            now,
+            simulationTime,
+            simulationAccumulator,
+            FIXED_DELTA,
+          );
+          simulationTime = synchronization.simulationTimeMs;
+          simulationAccumulator = synchronization.accumulatorSeconds;
+          lastClockLagBeforeResyncMs =
+            synchronization.lagBeforeResyncMs;
+          clockResyncs += 1;
           droppedCatchUps += 1;
         }
       }
@@ -2722,6 +2756,13 @@ export default function WalkExe() {
             droppedCatchUps,
             accumulator: simulationAccumulator,
             paused: simulationPaused,
+            clockResyncs,
+            lastClockLagBeforeResyncMs,
+            clockOffsetMs: Math.max(
+              0,
+              lastRenderTime -
+                (simulationTime + simulationAccumulator * 1000),
+            ),
           },
           audio: audioRef.current?.getQaCounters() ?? {
             contextState: "uninitialized",

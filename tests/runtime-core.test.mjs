@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   advanceVentTraversal,
   drainCctvBattery,
+  resynchronizeFixedClock,
   sequenceProgress,
 } from "../app/walk-exe/runtime-core.ts";
 
@@ -64,4 +65,33 @@ test("timed sequences are bounded, monotonic and complete exactly once", () => {
   assert.equal(middle.smooth, 0.5);
   assert.deepEqual(end, { progress: 1, smooth: 1, done: true });
   assert.deepEqual(after, end);
+});
+
+test("fixed clock resynchronizes after a hidden tab or clamped frame", () => {
+  const fixedDelta = 1 / 60;
+  const hiddenTab = resynchronizeFixedClock(
+    6_000,
+    1_000,
+    0,
+    fixedDelta,
+  );
+  assert.equal(hiddenTab.simulationTimeMs, 6_000);
+  assert.equal(hiddenTab.accumulatorSeconds, 0);
+  assert.equal(hiddenTab.lagBeforeResyncMs, 5_000);
+
+  const clampedFrame = resynchronizeFixedClock(
+    2_000,
+    1_250,
+    0.008,
+    fixedDelta,
+  );
+  assert.ok(
+    Math.abs(
+      clampedFrame.simulationTimeMs +
+        clampedFrame.accumulatorSeconds * 1000 -
+        2_000,
+    ) < 1e-9,
+  );
+  assert.ok(clampedFrame.accumulatorSeconds < fixedDelta);
+  assert.ok(clampedFrame.lagBeforeResyncMs > 700);
 });

@@ -184,3 +184,15 @@ test("vent traversal consumes input duration and remains still after keyup", () 
   }
   assert.ok(Math.abs(distance - 0.172) < 1e-9);
 });
+
+test("a clock jump applies current held input immediately after resync", () => {
+  const input = new WalkInputController();
+  input.consumeWindow(1_000, 1_000 + FIXED_MS);
+  input.press("forward", "keyboard:KeyW", 5_000);
+  const slices = input.consumeWindow(5_000, 5_000 + FIXED_MS);
+  assert.ok(Math.abs(integratedAxis(slices, "forward") - 1 / 60) < 1e-9);
+  const snapshot = input.getSnapshot();
+  assert.equal(snapshot.sampled.forward, 1);
+  assert.equal(snapshot.pendingTransitions, 0);
+  assert.ok(snapshot.lastConsumedLatencyMs <= FIXED_MS + 1e-9);
+});

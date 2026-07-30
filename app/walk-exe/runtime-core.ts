@@ -11,6 +11,12 @@ export type BatteryResult = {
   depleted: boolean;
 };
 
+export type FixedClockResync = {
+  simulationTimeMs: number;
+  accumulatorSeconds: number;
+  lagBeforeResyncMs: number;
+};
+
 function finite(value: number, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
@@ -80,5 +86,24 @@ export function sequenceProgress(
     progress,
     smooth: progress * progress * (3 - 2 * progress),
     done: progress >= 1,
+  };
+}
+
+export function resynchronizeFixedClock(
+  nowMs: number,
+  simulationTimeMs: number,
+  accumulatorSeconds: number,
+  fixedDeltaSeconds: number,
+): FixedClockResync {
+  const now = finite(nowMs);
+  const simulationTime = finite(simulationTimeMs);
+  const fixedDelta = Math.max(0.000001, finite(fixedDeltaSeconds));
+  const accumulator = Math.max(0, finite(accumulatorSeconds));
+  const remainder = accumulator % fixedDelta;
+  const representedNow = simulationTime + accumulator * 1000;
+  return {
+    simulationTimeMs: now - remainder * 1000,
+    accumulatorSeconds: remainder,
+    lagBeforeResyncMs: Math.max(0, now - representedNow),
   };
 }
