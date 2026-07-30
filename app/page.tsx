@@ -194,11 +194,107 @@ const dossier = [
 ];
 
 const trailerScenes = [
-  ["01", "PRIMERO: EL ARCHIVO REAL DE RAÚL"],
-  ["02", "DESPUÉS: LAS OBSESIONES CAMBIAN EL MONTAJE"],
-  ["03", "ENTONCES LA CÁMARA 05 RECUPERÓ ALGO"],
-  ["22", "LEE EL MATERIAL ANTES DE EJECUTARLO"],
-];
+  {
+    number: "01",
+    theme: "archive",
+    eyebrow: "ARCHIVO REAL · 7 PRODUCCIONES",
+    title: "DE LA CÁMARA AL CORTE",
+    body:
+      "Rodajes, parodias y cortometrajes pasan por la mesa de montaje. Cada imagen es una pieza real del recorrido de Raúl.",
+    mainImage: "/youtube/imagenes-ocultas.jpg",
+    mainAlt: "Fotograma del cortometraje Imágenes Ocultas",
+    cutImages: [
+      {
+        src: "/archive/dossier-camera.webp",
+        alt: "Raúl trabajando detrás de una cámara",
+        label: "RODAJE",
+      },
+      {
+        src: "/youtube/davinci.jpg",
+        alt: "Miniatura del videoclip DaVinci",
+        label: "MONTAJE",
+      },
+    ],
+    timecode: "00:00:01:22",
+    camera: "A-CAM · 35 MM",
+    note: "SELECCIÓN OFICIAL · 48H",
+  },
+  {
+    number: "02",
+    theme: "rhythm",
+    eyebrow: "RITMO · CINE · MICROTONAL · TERROR",
+    title: "LAS OBSESIONES CAMBIAN EL MONTAJE",
+    body:
+      "Michael Jackson marca el pulso; Nolan rompe el tiempo; la música microtonal abre notas nuevas y los animatrónicos invaden el fuera de campo.",
+    mainImage: "/michael/michael-jackson-1988.jpg",
+    mainAlt: "Michael Jackson actuando en directo en 1988",
+    cutImages: [
+      {
+        src: "/michael/michael-jackson-publicity-1984.jpg",
+        alt: "Retrato promocional de Michael Jackson",
+        label: "RITMO",
+      },
+      {
+        src: "/archive/hero-stage.webp",
+        alt: "Raúl actuando sobre un escenario",
+        label: "ESCENA",
+      },
+    ],
+    timecode: "00:00:08:08",
+    camera: "B-CAM · 50 MM",
+    note: "CORTE AL COMPÁS · 24 TET",
+  },
+  {
+    number: "03",
+    theme: "signal",
+    eyebrow: "SEÑAL RECUPERADA · CÁMARA 05",
+    title: "EL ARCHIVO DEVUELVE LA MIRADA",
+    body:
+      "La imagen se degrada, aparecen cuatro unidades fuera de su zona y el montaje deja de documentar la historia: ahora intenta advertirte.",
+    mainImage: "/animatronics/ursus-9.webp",
+    mainAlt: "Animatrónico Ursus 9 observado por una cámara de seguridad",
+    cutImages: [
+      {
+        src: "/animatronics/vulpes-x.webp",
+        alt: "Animatrónico Vulpes X",
+        label: "CAM 03",
+      },
+      {
+        src: "/animatronics/avis-3.webp",
+        alt: "Animatrónico Avis 3",
+        label: "CAM 05",
+      },
+    ],
+    timecode: "00:00:15:05",
+    camera: "CCTV · IR NIGHT",
+    note: "MOVIMIENTO DETECTADO",
+  },
+  {
+    number: "22",
+    theme: "executable",
+    eyebrow: "ÚLTIMO CORTE · ACCESO RESTRINGIDO",
+    title: "M00NW4LK.EXE ESPERA AL OTRO LADO",
+    body:
+      "El sombrero cae. El cuerpo sigue de espaldas. La cabeza gira demasiado. Lee el material recuperado antes de abrir el pasadizo.",
+    mainImage: "/animatronics/velvet-r.webp",
+    mainAlt: "Animatrónico Velvet R emergiendo de la oscuridad",
+    cutImages: [
+      {
+        src: "/models/subject-m22-face-v2.png",
+        alt: "Archivo facial de la unidad M22",
+        label: "SUJETO M22",
+      },
+      {
+        src: "/archive/trailer-shoot.webp",
+        alt: "Equipo rodando una escena",
+        label: "ÚLTIMA TOMA",
+      },
+    ],
+    timecode: "00:00:22:00",
+    camera: "SIN SEÑAL · ?? MM",
+    note: "NO EJECUTAR SIN LEER",
+  },
+] as const;
 
 const cameraFeeds = [
   {
@@ -488,6 +584,7 @@ export default function Home() {
   const [materialRead, setMaterialRead] = useState(false);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [trailerScene, setTrailerScene] = useState(0);
+  const [trailerPaused, setTrailerPaused] = useState(false);
   const [activeVideo, setActiveVideo] = useState<number | null>(null);
   const [cameraFeed, setCameraFeed] = useState(0);
   const [microActive, setMicroActive] = useState<number | null>(null);
@@ -646,13 +743,36 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!trailerOpen) return;
-    const timer = window.setInterval(() => {
+    if (!trailerOpen || trailerPaused) return;
+    const timer = window.setTimeout(() => {
       setTrailerScene((value) =>
         value >= trailerScenes.length - 1 ? 0 : value + 1,
       );
-    }, 2300);
-    return () => window.clearInterval(timer);
+    }, 5600);
+    return () => window.clearTimeout(timer);
+  }, [trailerOpen, trailerPaused, trailerScene]);
+
+  useEffect(() => {
+    if (!trailerOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleTrailerKeys = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTrailerOpen(false);
+      } else if (event.key === "ArrowRight") {
+        setTrailerScene((value) => (value + 1) % trailerScenes.length);
+      } else if (event.key === "ArrowLeft") {
+        setTrailerScene(
+          (value) => (value - 1 + trailerScenes.length) % trailerScenes.length,
+        );
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleTrailerKeys);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleTrailerKeys);
+    };
   }, [trailerOpen]);
 
   useEffect(() => {
@@ -1072,6 +1192,8 @@ export default function Home() {
     playHee();
     setMuteAttempts((attempt) => attempt + 1);
   };
+
+  const activeTrailerScene = trailerScenes[trailerScene];
 
   return (
     <main className={started ? "experience started" : "experience"}>
@@ -1848,6 +1970,7 @@ export default function Home() {
               type="button"
               onClick={() => {
                 setTrailerScene(0);
+                setTrailerPaused(false);
                 setTrailerOpen(true);
               }}
             >
@@ -2156,7 +2279,12 @@ export default function Home() {
       )}
 
       {trailerOpen && (
-        <div className="trailer-modal" role="dialog" aria-modal="true" aria-label="Montaje interactivo de la escena 22">
+        <div
+          className={`trailer-modal trailer-theme-${activeTrailerScene.theme} ${trailerPaused ? "is-paused" : ""}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Montaje interactivo de la escena 22"
+        >
           <button
             className="modal-close"
             type="button"
@@ -2165,28 +2293,152 @@ export default function Home() {
           >
             CERRAR ×
           </button>
-          <div className="trailer-screen">
-            <span className="trailer-scene-number">
-              {trailerScenes[trailerScene][0]}
-            </span>
-            <p>{trailerScenes[trailerScene][1]}</p>
-            <div className="trailer-progress">
-              {trailerScenes.map((_, index) => (
-                <i key={index} className={index === trailerScene ? "active" : ""} />
+
+          <div className="trailer-edit-suite">
+            <header className="trailer-suite-header">
+              <div>
+                <i aria-hidden="true" />
+                <span>REC · MONTAJE EN DIRECTO</span>
+              </div>
+              <strong>CORTE 22 / RAÚL GARCÍA</strong>
+              <span>{activeTrailerScene.timecode}</span>
+            </header>
+
+            <div className="trailer-master-progress" aria-label={`Capítulo ${trailerScene + 1} de ${trailerScenes.length}`}>
+              {trailerScenes.map((scene, index) => (
+                <i
+                  key={scene.number}
+                  className={
+                    index < trailerScene
+                      ? "complete"
+                      : index === trailerScene
+                        ? "active"
+                        : ""
+                  }
+                >
+                  {index === trailerScene && <b key={trailerScene} />}
+                </i>
               ))}
             </div>
+
+            <div className="trailer-screen">
+              <div className="trailer-film-frame" key={trailerScene}>
+                <img
+                  className="trailer-main-image"
+                  src={activeTrailerScene.mainImage}
+                  alt={activeTrailerScene.mainAlt}
+                />
+                <div className="trailer-image-wash" aria-hidden="true" />
+                <div className="trailer-film-noise" aria-hidden="true" />
+                <div className="trailer-gate-flash" aria-hidden="true" />
+                <span className="trailer-scene-number" aria-hidden="true">
+                  {activeTrailerScene.number}
+                </span>
+
+                <div className="trailer-frame-meta trailer-frame-meta-top">
+                  <span>{activeTrailerScene.camera}</span>
+                  <span>ISO 800 · 24 FPS</span>
+                </div>
+
+                <div className="trailer-cut-stack">
+                  {activeTrailerScene.cutImages.map((image) => (
+                    <figure key={image.src}>
+                      <img src={image.src} alt={image.alt} />
+                      <figcaption>
+                        <span>0{trailerScene + 1}{String.fromCharCode(65 + index)}</span>
+                        {image.label}
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+
+                <div className="trailer-scene-copy" aria-live="polite">
+                  <p>{activeTrailerScene.eyebrow}</p>
+                  <h2>{activeTrailerScene.title}</h2>
+                  <div>
+                    <span />
+                    <p>{activeTrailerScene.body}</p>
+                  </div>
+                </div>
+
+                <div className="trailer-frame-meta trailer-frame-meta-bottom">
+                  <span>{activeTrailerScene.note}</span>
+                  <span>{activeTrailerScene.timecode}</span>
+                </div>
+              </div>
+
+              <button
+                className="trailer-step trailer-step-prev"
+                type="button"
+                onClick={() =>
+                  setTrailerScene(
+                    (value) =>
+                      (value - 1 + trailerScenes.length) % trailerScenes.length,
+                  )
+                }
+                aria-label="Ver corte anterior"
+              >
+                ←
+              </button>
+              <button
+                className="trailer-step trailer-step-next"
+                type="button"
+                onClick={() =>
+                  setTrailerScene((value) => (value + 1) % trailerScenes.length)
+                }
+                aria-label="Ver corte siguiente"
+              >
+                →
+              </button>
+            </div>
+
+            <div className="trailer-control-deck">
+              <button
+                className="trailer-play-control"
+                type="button"
+                onClick={() => setTrailerPaused((value) => !value)}
+                aria-pressed={trailerPaused}
+              >
+                <span aria-hidden="true">{trailerPaused ? "▶" : "Ⅱ"}</span>
+                {trailerPaused ? "REANUDAR MONTAJE" : "PAUSAR MONTAJE"}
+              </button>
+
+              <nav className="trailer-chapters" aria-label="Capítulos del montaje">
+                {trailerScenes.map((scene, index) => (
+                  <button
+                    type="button"
+                    key={scene.number}
+                    className={index === trailerScene ? "active" : ""}
+                    onClick={() => setTrailerScene(index)}
+                    aria-current={index === trailerScene ? "step" : undefined}
+                  >
+                    <span className="trailer-chapter-image">
+                      <img src={scene.mainImage} alt="" />
+                      <b>{scene.number}</b>
+                    </span>
+                    <span>
+                      <small>CORTE 0{index + 1}</small>
+                      <strong>{scene.title}</strong>
+                    </span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            <footer className="trailer-suite-footer">
+              <p>
+                CUATRO CAPAS, ARCHIVO REAL Y UNA SEÑAL QUE NO DEBERÍA ESTAR AQUÍ.
+                <span> Usa ← → para montar a mano.</span>
+              </p>
+              <button
+                className="trailer-route-button"
+                type="button"
+                onClick={focusRecoveredMaterial}
+              >
+                IR AL MATERIAL RECUPERADO <span>→</span>
+              </button>
+            </footer>
           </div>
-          <p className="trailer-note">
-            Un puente narrativo, no un reproductor de pega. La última marca te
-            lleva al material que desbloquea el juego.
-          </p>
-          <button
-            className="trailer-route-button"
-            type="button"
-            onClick={focusRecoveredMaterial}
-          >
-            IR AL MATERIAL RECUPERADO <span>→</span>
-          </button>
         </div>
       )}
 
