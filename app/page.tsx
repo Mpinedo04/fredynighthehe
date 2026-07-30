@@ -248,14 +248,120 @@ const recoveredFragments = [
 ] as const;
 
 const animatronicArchive = [
-  ["FREDDY", "FZ-01", 0.82],
-  ["BONNIE", "BN-02", 0.92],
-  ["CHICA", "CH-03", 1],
-  ["FOXY", "FX-04", 1.12],
-  ["GOLDEN FREDDY", "GF-05", 0.68],
-  ["SPRINGTRAP", "ST-06", 0.76],
-  ["PUPPET", "PP-07", 1.24],
-  ["MANGLE", "MG-08", 1.35],
+  {
+    name: "FREDDY",
+    code: "FZ-01",
+    source: "SPECIAL DELIVERY",
+    audio: "/audio/fnaf-authentic/freddy.ogg",
+  },
+  {
+    name: "BONNIE",
+    code: "BN-02",
+    source: "SPECIAL DELIVERY",
+    audio: "/audio/fnaf-authentic/bonnie.ogg",
+  },
+  {
+    name: "CHICA",
+    code: "CH-03",
+    source: "SPECIAL DELIVERY",
+    audio: "/audio/fnaf-authentic/chica.ogg",
+  },
+  {
+    name: "FOXY",
+    code: "FX-04",
+    source: "SPECIAL DELIVERY",
+    audio: "/audio/fnaf-authentic/foxy.ogg",
+  },
+  {
+    name: "GOLDEN FREDDY",
+    code: "GF-05",
+    source: "FNAF 1",
+    audio: "/audio/fnaf-authentic/golden-freddy.ogg",
+  },
+  {
+    name: "SPRINGTRAP",
+    code: "ST-06",
+    source: "FNAF 3",
+    audio: "/audio/fnaf-authentic/springtrap.ogg",
+  },
+  {
+    name: "PUPPET",
+    code: "PP-07",
+    source: "FNAF 2 · MUSIC BOX",
+    audio: "/audio/fnaf-authentic/fnaf2-scream.ogg",
+    intro: "/audio/fnaf-authentic/puppet-music-box.ogg",
+    introDelayMs: 620,
+  },
+  {
+    name: "MANGLE",
+    code: "MG-08",
+    source: "FNAF 2 · RADIO",
+    audio: "/audio/fnaf-authentic/fnaf2-scream.ogg",
+    intro: "/audio/fnaf-authentic/mangle-static.ogg",
+    introDelayMs: 760,
+  },
+] as const;
+
+const michaelEras = [
+  {
+    name: "OFF THE WALL",
+    year: "1979",
+    cue: "GROOVE",
+    detail:
+      "El cuerpo manda: bajo, síncopa y una puesta en escena que parece espontánea porque está medida al milímetro.",
+  },
+  {
+    name: "THRILLER",
+    year: "1982",
+    cue: "CORTOMETRAJE",
+    detail:
+      "La canción se convierte en cine. Personaje, coreografía, maquillaje y montaje trabajan como una sola máquina.",
+  },
+  {
+    name: "BAD",
+    year: "1987",
+    cue: "SILUETA",
+    detail:
+      "Negro, metal y contraluz: una identidad visual reconocible incluso cuando el artista es apenas una sombra.",
+  },
+  {
+    name: "DANGEROUS",
+    year: "1991",
+    cue: "PRECISIÓN",
+    detail:
+      "Ritmos más duros, escenarios monumentales y coreografías que usan cada golpe como un corte de edición.",
+  },
+  {
+    name: "HIStory",
+    year: "1995",
+    cue: "ESCALA",
+    detail:
+      "El videoclip como manifiesto: iconografía gigantesca, tensión industrial y espectáculo pensado para una pantalla enorme.",
+  },
+] as const;
+
+const nolanFilms = [
+  { year: "1998", title: "FOLLOWING", device: "ORDEN FRAGMENTADO", format: "16 MM" },
+  { year: "2000", title: "MEMENTO", device: "MEMORIA INVERSA", format: "35 MM" },
+  { year: "2002", title: "INSOMNIA", device: "TIEMPO SUBJETIVO", format: "35 MM" },
+  { year: "2005", title: "BATMAN BEGINS", device: "ORIGEN Y MIEDO", format: "35 MM" },
+  { year: "2006", title: "THE PRESTIGE", device: "TRES ACTOS / TRUCO", format: "35 MM" },
+  { year: "2008", title: "THE DARK KNIGHT", device: "ESCALADA PARALELA", format: "IMAX + 35 MM" },
+  { year: "2010", title: "INCEPTION", device: "CAPAS DE SUEÑO", format: "65 + 35 MM" },
+  { year: "2012", title: "THE DARK KNIGHT RISES", device: "ESCALA CRUZADA", format: "IMAX + 35 MM" },
+  { year: "2014", title: "INTERSTELLAR", device: "RELATIVIDAD", format: "IMAX 65 MM" },
+  { year: "2017", title: "DUNKIRK", device: "SEMANA / DÍA / HORA", format: "IMAX 65 MM" },
+  { year: "2020", title: "TENET", device: "INVERSIÓN", format: "IMAX 65 MM" },
+  { year: "2023", title: "OPPENHEIMER", device: "FISIÓN / FUSIÓN", format: "IMAX B&N + COLOR" },
+  { year: "2026", title: "THE ODYSSEY", device: "REGRESO ÉPICO", format: "100% IMAX FILM" },
+] as const;
+
+const nolanMethod = [
+  ["01", "REGLA", "Una idea temporal clara gobierna la película."],
+  ["02", "PELÍCULA", "Gran formato fotoquímico para conservar textura y escala."],
+  ["03", "REALIDAD", "Localizaciones, vehículos y efectos prácticos siempre que es posible."],
+  ["04", "MONTAJE", "Líneas simultáneas se tensan mediante montaje paralelo."],
+  ["05", "SALA", "Imagen y sonido se diseñan para sentirse físicamente."],
 ] as const;
 
 const heeButtonLabels = [
@@ -289,7 +395,9 @@ export default function Home() {
   const [soundOn, setSoundOn] = useState(false);
   const [selectedProject, setSelectedProject] = useState(4);
   const [mjAnswer, setMjAnswer] = useState(false);
+  const [mjEra, setMjEra] = useState(2);
   const [countdown, setCountdown] = useState(10);
+  const [nolanFilm, setNolanFilm] = useState(nolanFilms.length - 1);
   const [recovered, setRecovered] = useState(false);
   const [recoveredStep, setRecoveredStep] = useState(0);
   const [materialRead, setMaterialRead] = useState(false);
@@ -313,6 +421,8 @@ export default function Home() {
   const heeAudioRef = useRef<Set<HTMLAudioElement>>(new Set());
   const heeBurstTimersRef = useRef<Set<number>>(new Set());
   const jumpscareAudioRef = useRef<HTMLAudioElement | null>(null);
+  const signatureAudioRef = useRef<HTMLAudioElement | null>(null);
+  const jumpscareTimerRef = useRef<number | null>(null);
   const audioRef = useRef<{
     context: AudioContext;
     gain: GainNode;
@@ -378,6 +488,12 @@ export default function Home() {
       heeBurstTimersRef.current.clear();
       jumpscareAudioRef.current?.pause();
       jumpscareAudioRef.current = null;
+      signatureAudioRef.current?.pause();
+      signatureAudioRef.current = null;
+      if (jumpscareTimerRef.current !== null) {
+        window.clearTimeout(jumpscareTimerRef.current);
+        jumpscareTimerRef.current = null;
+      }
       const soundtrack = audioRef.current;
       if (soundtrack) {
         window.clearInterval(soundtrack.timer);
@@ -549,86 +665,142 @@ export default function Home() {
       const envelope = context.createGain();
       source.buffer = noiseBuffer;
       filter.type = "highpass";
-      filter.frequency.value = 1250;
-      envelope.gain.setValueAtTime(0.28, time);
-      envelope.gain.exponentialRampToValueAtTime(0.0001, time + 0.12);
+      filter.frequency.value = 1450;
+      envelope.gain.setValueAtTime(0.24, time);
+      envelope.gain.exponentialRampToValueAtTime(0.0001, time + 0.11);
       source.connect(filter);
       filter.connect(envelope);
       envelope.connect(gain);
       source.start(time);
-      source.stop(time + 0.13);
+      source.stop(time + 0.12);
+
+      // A second, tiny burst gives the backbeat a dry hand-clap character.
+      const clap = remember(context.createBufferSource());
+      const clapFilter = context.createBiquadFilter();
+      const clapEnvelope = context.createGain();
+      clap.buffer = noiseBuffer;
+      clapFilter.type = "bandpass";
+      clapFilter.frequency.value = 2300;
+      clapFilter.Q.value = 0.65;
+      clapEnvelope.gain.setValueAtTime(0.11, time + 0.012);
+      clapEnvelope.gain.exponentialRampToValueAtTime(
+        0.0001,
+        time + 0.095,
+      );
+      clap.connect(clapFilter);
+      clapFilter.connect(clapEnvelope);
+      clapEnvelope.connect(gain);
+      clap.start(time + 0.012);
+      clap.stop(time + 0.1);
     };
 
-    const hat = (time: number, open = false) => {
+    const hat = (time: number, open = false, accent = 1) => {
       const source = remember(context.createBufferSource());
       const filter = context.createBiquadFilter();
       const envelope = context.createGain();
       source.buffer = noiseBuffer;
       filter.type = "highpass";
-      filter.frequency.value = 6800;
-      envelope.gain.setValueAtTime(open ? 0.12 : 0.075, time);
+      filter.frequency.value = open ? 6100 : 7600;
+      envelope.gain.setValueAtTime((open ? 0.095 : 0.045) * accent, time);
       envelope.gain.exponentialRampToValueAtTime(
         0.0001,
-        time + (open ? 0.14 : 0.035),
+        time + (open ? 0.16 : 0.028),
       );
       source.connect(filter);
       filter.connect(envelope);
       envelope.connect(gain);
       source.start(time);
-      source.stop(time + (open ? 0.15 : 0.04));
+      source.stop(time + (open ? 0.17 : 0.035));
     };
 
     const bass = (time: number, frequency: number, duration = 0.1) => {
-      const osc = remember(context.createOscillator());
       const filter = context.createBiquadFilter();
       const envelope = context.createGain();
-      osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(frequency, time);
       filter.type = "lowpass";
-      filter.frequency.value = 310;
-      filter.Q.value = 4.2;
-      envelope.gain.setValueAtTime(0.16, time);
+      filter.frequency.setValueAtTime(430, time);
+      filter.frequency.exponentialRampToValueAtTime(170, time + duration);
+      filter.Q.value = 3.4;
+      envelope.gain.setValueAtTime(0.2, time);
       envelope.gain.exponentialRampToValueAtTime(0.0001, time + duration);
-      osc.connect(filter);
+
+      const body = remember(context.createOscillator());
+      const edge = remember(context.createOscillator());
+      body.type = "triangle";
+      edge.type = "sawtooth";
+      body.frequency.setValueAtTime(frequency, time);
+      edge.frequency.setValueAtTime(frequency * 2, time);
+      edge.detune.value = -7;
+      const edgeGain = context.createGain();
+      edgeGain.gain.value = 0.24;
+      body.connect(filter);
+      edge.connect(edgeGain);
+      edgeGain.connect(filter);
       filter.connect(envelope);
       envelope.connect(gain);
-      osc.start(time);
-      osc.stop(time + duration + 0.015);
+      body.start(time);
+      edge.start(time);
+      body.stop(time + duration + 0.018);
+      edge.stop(time + duration + 0.018);
     };
 
-    const stab = (time: number) => {
-      [116.54, 174.61].forEach((frequency) => {
+    const guitarChank = (time: number, root: number) => {
+      [1, 1.5, 2].forEach((ratio, voice) => {
         const osc = remember(context.createOscillator());
         const filter = context.createBiquadFilter();
         const envelope = context.createGain();
-        osc.type = "square";
-        osc.frequency.value = frequency;
+        osc.type = voice === 0 ? "sawtooth" : "square";
+        osc.frequency.value = root * ratio;
         filter.type = "bandpass";
-        filter.frequency.value = 740;
-        filter.Q.value = 1.8;
-        envelope.gain.setValueAtTime(0.035, time);
-        envelope.gain.exponentialRampToValueAtTime(0.0001, time + 0.075);
+        filter.frequency.value = 1250;
+        filter.Q.value = 1.25;
+        envelope.gain.setValueAtTime(voice === 0 ? 0.025 : 0.013, time);
+        envelope.gain.exponentialRampToValueAtTime(0.0001, time + 0.052);
         osc.connect(filter);
         filter.connect(envelope);
         envelope.connect(gain);
         osc.start(time);
-        osc.stop(time + 0.085);
+        osc.stop(time + 0.06);
       });
     };
 
-    // Original 16-step dark-funk pattern at 118 BPM.
-    const kickSteps = new Set([0, 3, 8, 10, 14]);
+    const brassHit = (time: number) => {
+      [146.83, 174.61, 220].forEach((frequency, voice) => {
+        const osc = remember(context.createOscillator());
+        const filter = context.createBiquadFilter();
+        const envelope = context.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(frequency, time);
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(1200, time);
+        filter.frequency.exponentialRampToValueAtTime(460, time + 0.12);
+        envelope.gain.setValueAtTime(0.025 - voice * 0.004, time);
+        envelope.gain.exponentialRampToValueAtTime(0.0001, time + 0.14);
+        osc.connect(filter);
+        filter.connect(envelope);
+        envelope.connect(gain);
+        osc.start(time);
+        osc.stop(time + 0.15);
+      });
+    };
+
+    // Original 16-step funk-noir cue: 118 BPM, syncopated bass,
+    // dry backbeat, muted guitar and brass. It evokes the era without
+    // reproducing the melody or master recording of a copyrighted song.
+    const kickSteps = new Set([0, 3, 6, 8, 11, 14]);
     const snareSteps = new Set([4, 12]);
     const openHatSteps = new Set([7, 15]);
     const bassNotes: Record<number, number> = {
-      0: 58.27,
-      3: 58.27,
-      6: 69.3,
-      8: 51.91,
-      10: 58.27,
-      14: 55,
+      0: 55,
+      2: 55,
+      5: 65.41,
+      7: 61.74,
+      8: 55,
+      11: 73.42,
+      13: 65.41,
+      15: 51.91,
     };
-    const stabSteps = new Set([2, 9, 13]);
+    const guitarSteps = new Set([1, 3, 6, 9, 11, 14]);
+    const brassSteps = new Set([6, 15]);
     const secondsPerStep = 60 / 118 / 4;
     let step = 0;
     let nextStepAt = context.currentTime + 0.06;
@@ -637,12 +809,19 @@ export default function Home() {
       while (nextStepAt < context.currentTime + 0.12) {
         if (kickSteps.has(step)) kick(nextStepAt);
         if (snareSteps.has(step)) snare(nextStepAt);
-        if (step % 2 === 0 || openHatSteps.has(step)) {
-          hat(nextStepAt, openHatSteps.has(step));
-        }
+        hat(nextStepAt, openHatSteps.has(step), step % 4 === 0 ? 1.22 : 0.78);
         const bassFrequency = bassNotes[step];
-        if (bassFrequency) bass(nextStepAt, bassFrequency, step === 6 ? 0.16 : 0.1);
-        if (stabSteps.has(step)) stab(nextStepAt);
+        if (bassFrequency) {
+          bass(
+            nextStepAt,
+            bassFrequency,
+            step === 7 || step === 15 ? 0.16 : 0.095,
+          );
+        }
+        if (guitarSteps.has(step)) {
+          guitarChank(nextStepAt + secondsPerStep * 0.08, step < 8 ? 220 : 196);
+        }
+        if (brassSteps.has(step)) brassHit(nextStepAt);
         step = (step + 1) % 16;
         nextStepAt += secondsPerStep;
       }
@@ -685,11 +864,31 @@ export default function Home() {
 
   const playJumpscare = (index: number) => {
     jumpscareAudioRef.current?.pause();
-    const sample = new Audio("/audio/fnaf-jumpscare-scream.mp3");
+    signatureAudioRef.current?.pause();
+    if (jumpscareTimerRef.current !== null) {
+      window.clearTimeout(jumpscareTimerRef.current);
+      jumpscareTimerRef.current = null;
+    }
+
+    const profile = animatronicArchive[index];
+    const sample = new Audio(profile.audio);
+    sample.preload = "auto";
     sample.volume = 0.42;
-    sample.playbackRate = animatronicArchive[index][2];
     jumpscareAudioRef.current = sample;
     setScreamActive(index);
+
+    const playPrimary = () => {
+      jumpscareTimerRef.current = null;
+      if (profile.name === "MANGLE") {
+        signatureAudioRef.current?.pause();
+        signatureAudioRef.current = null;
+      }
+      void sample.play().catch(() => {
+        setScreamActive(null);
+        jumpscareAudioRef.current = null;
+      });
+    };
+
     sample.addEventListener(
       "ended",
       () => {
@@ -698,7 +897,28 @@ export default function Home() {
       },
       { once: true },
     );
-    void sample.play().catch(() => setScreamActive(null));
+
+    if ("intro" in profile) {
+      const signature = new Audio(profile.intro);
+      signature.preload = "auto";
+      signature.volume = profile.name === "MANGLE" ? 0.34 : 0.26;
+      signatureAudioRef.current = signature;
+      signature.addEventListener(
+        "ended",
+        () => {
+          signatureAudioRef.current = null;
+        },
+        { once: true },
+      );
+      void signature.play().catch(() => undefined);
+      jumpscareTimerRef.current = window.setTimeout(
+        playPrimary,
+        profile.introDelayMs,
+      );
+      return;
+    }
+
+    playPrimary();
   };
 
   const openRecoveredMaterial = () => {
@@ -1059,27 +1279,34 @@ export default function Home() {
         </div>
 
         <div className="idol-worlds">
-          <article className="idol-card mj-world">
+          <article className={`idol-card mj-world ${mjAnswer ? "performance-on" : ""}`}>
             <div className="idol-label">
               <span>REFERENTE 01</span>
-              <strong>THE KING OF POP</strong>
+              <strong>SHOW CONTROL · MODO ESCENARIO</strong>
             </div>
             <figure className="mj-stage">
               <img
-                src="/michael/michael-jackson-1988.jpg"
-                alt="Michael Jackson actuando durante la gira Bad en 1988"
+                src="/michael/michael-jackson-publicity-1984.jpg"
+                alt="Retrato promocional de cuerpo entero de Michael Jackson en 1984"
               />
               <i className="spotlight left" />
               <i className="spotlight right" />
+              <div className="mj-stage-pulse" aria-hidden="true">
+                {Array.from({ length: 16 }, (_, index) => <i key={index} />)}
+              </div>
+              <div className="mj-moonwalk-track" aria-hidden="true">
+                <span>01</span><span>02</span><span>03</span><span>04</span>
+                <b>MOONWALK</b>
+              </div>
               <div className="mj-photo-scan" aria-hidden="true" />
               <figcaption>
-                <span>BAD WORLD TOUR · 1988</span>
+                <span>STUDIO PORTRAIT · 1984</span>
                 <a
-                  href="https://commons.wikimedia.org/wiki/File:Michael_Jackson_in_1988.jpg"
+                  href="https://commons.wikimedia.org/wiki/File:Michael_Jackson_publicity_photo_1984.jpg"
                   target="_blank"
                   rel="noreferrer"
                 >
-                  FOTO REAL · ZORAN VESELINOVIC · CC BY-SA 2.0 ↗
+                  FOTO REAL · MATTHEW ROLSTON / EPIC · DOMINIO PÚBLICO ↗
                 </a>
               </figcaption>
             </figure>
@@ -1091,14 +1318,39 @@ export default function Home() {
                 concepto, personaje, coreografía, luz y una silueta imposible
                 de confundir.
               </p>
-              <div className="era-tapes" aria-label="Eras musicales">
-                <span>THRILLER</span><span>BAD</span><span>DANGEROUS</span><span>HISTORY</span>
+              <div className="mj-era-selector" role="tablist" aria-label="Eras creativas de Michael Jackson">
+                {michaelEras.map((era, index) => (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={mjEra === index}
+                    className={mjEra === index ? "active" : ""}
+                    key={era.name}
+                    onClick={() => setMjEra(index)}
+                  >
+                    <span>{era.year}</span>
+                    <strong>{era.name}</strong>
+                  </button>
+                ))}
               </div>
-              <button type="button" onClick={() => setMjAnswer(!mjAnswer)}>
-                RAÚL, ARE YOU OK? <span>→</span>
+              <div className="mj-era-console" role="tabpanel" aria-live="polite">
+                <span>SECUENCIA {String(mjEra + 1).padStart(2, "0")} / 05</span>
+                <strong>{michaelEras[mjEra].cue}</strong>
+                <p>{michaelEras[mjEra].detail}</p>
+                <div aria-hidden="true">
+                  {Array.from({ length: 8 }, (_, index) => <i key={index} />)}
+                </div>
+              </div>
+              <button
+                className="mj-sequence-trigger"
+                type="button"
+                onClick={() => setMjAnswer(!mjAnswer)}
+              >
+                {mjAnswer ? "DETENER SECUENCIA" : "RAÚL, ARE YOU OK?"}
+                <span>{mjAnswer ? "■" : "▶"}</span>
               </button>
               <p className={mjAnswer ? "room-answer visible" : "room-answer"}>
-                Está más que OK. Acaba de empezar la escena 22.
+                LUCES 100% · BEAT 118 BPM · MOONWALK AUTORIZADO · ESCENA 22
               </p>
             </div>
           </article>
@@ -1106,28 +1358,55 @@ export default function Home() {
           <article className="idol-card nolan-world">
             <div className="idol-label">
               <span>REFERENTE 02</span>
-              <strong>TIEMPO / ESCALA / CINE</strong>
+              <strong>13 LARGOMETRAJES · 1998—2026</strong>
             </div>
             <div className="nolan-clock" aria-live="polite">
               <div className="clock-ring ring-one" />
               <div className="clock-ring ring-two" />
               <div className="clock-ring ring-three" />
-              <span>00:{String(countdown).padStart(2, "0")}</span>
-              <small>T– ESCENA 22</small>
+              <span>{nolanFilms[nolanFilm].year}</span>
+              <strong>{nolanFilms[nolanFilm].title}</strong>
+              <small>
+                T–00:{String(countdown).padStart(2, "0")} · {nolanFilms[nolanFilm].format}
+              </small>
             </div>
             <div className="idol-copy">
-              <p className="eyebrow">CRONOLOGÍA NO LINEAL</p>
+              <p className="eyebrow">TIEMPO · REALIDAD FÍSICA · GRAN FORMATO</p>
               <h3>CHRISTOPHER<br />NOLAN</h3>
               <p>
-                Relojes, estructuras dentro de estructuras, espectáculo a gran
-                escala y la sospecha permanente de que falta una capa más.
+                Cada película parte de una regla formal y la convierte en
+                espectáculo tangible: relojes, estructuras anidadas, película
+                fotoquímica, efectos reales y montaje paralelo.
               </p>
-              <blockquote>
-                “No intentes entender la cronología. Es una producción de Raúl.”
-              </blockquote>
-              <div className="time-layers">
-                <span>REALIDAD</span><span>RODAJE</span><span>MONTAJE</span>
+              <div className="nolan-film-strip" role="list" aria-label="Filmografía completa de Christopher Nolan">
+                {nolanFilms.map((film, index) => (
+                  <button
+                    type="button"
+                    role="listitem"
+                    aria-pressed={nolanFilm === index}
+                    className={nolanFilm === index ? "active" : ""}
+                    onClick={() => setNolanFilm(index)}
+                    key={film.title}
+                  >
+                    <span>{film.year}</span>
+                    <strong>{film.title}</strong>
+                  </button>
+                ))}
               </div>
+              <div className="nolan-film-readout" aria-live="polite">
+                <span>DISPOSITIVO NARRATIVO</span>
+                <strong>{nolanFilms[nolanFilm].device}</strong>
+                <small>{nolanFilms[nolanFilm].format}</small>
+              </div>
+              <ol className="nolan-method" aria-label="Método de trabajo de Christopher Nolan">
+                {nolanMethod.map(([number, label, detail]) => (
+                  <li key={number}>
+                    <span>{number}</span>
+                    <strong>{label}</strong>
+                    <p>{detail}</p>
+                  </li>
+                ))}
+              </ol>
             </div>
           </article>
 
@@ -1227,20 +1506,21 @@ export default function Home() {
                 <small>VOLUMEN DE SEGURIDAD · 42%</small>
               </div>
               <div className="scream-grid">
-                {animatronicArchive.map(([name, code], index) => (
+                {animatronicArchive.map((profile, index) => (
                   <button
                     type="button"
-                    key={name}
+                    key={profile.name}
                     className={screamActive === index ? "active" : ""}
                     onClick={() => playJumpscare(index)}
-                    aria-label={`Reproducir grito de ${name}`}
+                    aria-label={`Reproducir sonido auténtico de ${profile.name}`}
                   >
                     <span className="scream-face" aria-hidden="true">
-                      <i /><i /><b>{name.slice(0, 1)}</b>
+                      <i /><i /><b>{profile.name.slice(0, 1)}</b>
                     </span>
                     <span>
-                      <small>{code}</small>
-                      <strong>{name}</strong>
+                      <small>{profile.code}</small>
+                      <strong>{profile.name}</strong>
+                      <em className="scream-source">{profile.source}</em>
                     </span>
                     <em>{screamActive === index ? "SONANDO" : "▶ GRITO"}</em>
                   </button>
@@ -1783,6 +2063,19 @@ export default function Home() {
               <span>CAM 05 · CONDUCTOS · 02:22:17</span>
             </div>
             <div className="recovered-fragments" aria-live="polite">
+              <div
+                className={recoveredStep === 0 ? "recovered-empty-state visible" : "recovered-empty-state"}
+                aria-hidden={recoveredStep !== 0}
+              >
+                <span>CANAL 02 · SEÑAL BLOQUEADA</span>
+                <div aria-hidden="true"><i /><i /><i /><i /><i /></div>
+                <strong>0 / 5</strong>
+                <p>
+                  El archivo no está vacío. Los fragmentos permanecen ocultos
+                  hasta que interceptes la primera transmisión.
+                </p>
+                <small>ESPERANDO AUTORIZACIÓN DEL OPERADOR_</small>
+              </div>
               {recoveredFragments.map((fragment, index) => (
                 <article
                   key={fragment.code}

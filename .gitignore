@@ -40,3 +40,6 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# Local visual reference library (kept out of builds and source pushes)
+/design/stock/
