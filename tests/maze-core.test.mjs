@@ -7,12 +7,15 @@ import {
   WALL_THICKNESS,
   chooseSpreadCells,
   corridorLineOfSight,
+  createAcousticEvent,
   createMaze,
   decideEnemyState,
+  extrapolateAcousticTrailCell,
   farthestCell,
   mazeDistances,
   mazePath,
   openingDirection,
+  selectAcousticTarget,
   resolveGridMovement,
   uniqueReachableCells,
   validateMaze,
@@ -216,5 +219,105 @@ test("enemy state machine responds to sight, sound, vents, lures and CCTV", () =
   assert.equal(
     decideEnemyState({ ...base, lastSeenAgeMs: 6000 }),
     "recover",
+  );
+  assert.equal(
+    decideEnemyState({
+      ...base,
+      currentState: "chase",
+      lastSeenAgeMs: 2400,
+    }),
+    "chase",
+  );
+  assert.equal(
+    decideEnemyState({
+      ...base,
+      heardNoise: true,
+      noiseAgeMs: 350,
+      noiseDistanceCells: 14,
+      noiseConfidence: 0.92,
+    }),
+    "investigate",
+  );
+  assert.equal(
+    decideEnemyState({
+      ...base,
+      heardNoise: true,
+      noiseAgeMs: 350,
+      noiseDistanceCells: 14,
+      noiseConfidence: 0.3,
+    }),
+    "listen",
+  );
+});
+
+test("sprinting is audible across the maze while crouching remains local", () => {
+  const now = 10_000;
+  const sprint = createAcousticEvent("sprint-step", 22, now - 180);
+  const walk = createAcousticEvent("walk-step", 22, now - 180);
+  const crouch = createAcousticEvent("crouch-step", 22, now - 180);
+
+  assert.equal(
+    selectAcousticTarget(
+      [{ ...sprint, routeDistanceCells: 15 }],
+      now,
+    )?.event.kind,
+    "sprint-step",
+  );
+  assert.equal(
+    selectAcousticTarget([{ ...walk, routeDistanceCells: 15 }], now),
+    null,
+  );
+  assert.equal(
+    selectAcousticTarget([{ ...crouch, routeDistanceCells: 4 }], now),
+    null,
+  );
+  assert.equal(
+    selectAcousticTarget(
+      [{ ...sprint, routeDistanceCells: 8 }],
+      now + sprint.memoryMs + 1,
+    ),
+    null,
+  );
+});
+
+test("the hearing model prioritizes loud footfalls and predicts a straight sprint", () => {
+  const now = 20_000;
+  const sprint = createAcousticEvent("sprint-step", 12, now - 220);
+  const crouch = createAcousticEvent("crouch-step", 4, now - 40);
+  const perception = selectAcousticTarget(
+    [
+      { ...crouch, routeDistanceCells: 1 },
+      { ...sprint, routeDistanceCells: 10 },
+    ],
+    now,
+  );
+  assert.equal(perception?.event.kind, "sprint-step");
+
+  const maze = createMaze(220722);
+  let prediction = null;
+  for (let previous = 0; previous < maze.length && prediction === null; previous += 1) {
+    const candidates = [
+      ["n", previous - MAZE_SIZE],
+      ["e", previous + 1],
+      ["s", previous + MAZE_SIZE],
+      ["w", previous - 1],
+    ];
+    for (const [direction, current] of candidates) {
+      if (!maze[previous]?.[direction] || !maze[current]?.[direction]) continue;
+      const expected =
+        current + (current - previous);
+      if (expected < 0 || expected >= maze.length) continue;
+      prediction = { previous, current, expected };
+      break;
+    }
+  }
+  assert.ok(prediction, "expected at least one straight two-cell passage");
+  assert.equal(
+    extrapolateAcousticTrailCell(
+      maze,
+      prediction.previous,
+      prediction.current,
+    ),
+    prediction.expected,
   );
 });

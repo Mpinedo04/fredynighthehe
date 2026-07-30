@@ -34,16 +34,195 @@ export type EnemyState =
   | "ambush"
   | "recover";
 
+export type NoiseKind =
+  | "crouch-step"
+  | "walk-step"
+  | "sprint-step"
+  | "vent-rattle"
+  | "metal-impact"
+  | "exit-alarm";
+
+export type AcousticEvent = Readonly<{
+  kind: NoiseKind;
+  cell: number;
+  emittedAt: number;
+  loudness: number;
+  maxDistanceCells: number;
+  memoryMs: number;
+}>;
+
+export type AcousticCandidate = AcousticEvent &
+  Readonly<{
+    routeDistanceCells: number;
+  }>;
+
+export type AcousticPerception = Readonly<{
+  event: AcousticEvent;
+  routeDistanceCells: number;
+  ageMs: number;
+  confidence: number;
+  audibleDistanceCells: number;
+}>;
+
+export const ACOUSTIC_PROFILES: Readonly<
+  Record<
+    NoiseKind,
+    Readonly<{
+      loudness: number;
+      maxDistanceCells: number;
+      memoryMs: number;
+    }>
+  >
+> = {
+  "crouch-step": {
+    loudness: 0.12,
+    maxDistanceCells: 2.4,
+    memoryMs: 650,
+  },
+  "walk-step": {
+    loudness: 0.48,
+    maxDistanceCells: 8.5,
+    memoryMs: 1900,
+  },
+  "sprint-step": {
+    loudness: 1,
+    maxDistanceCells: 20,
+    memoryMs: 4600,
+  },
+  "vent-rattle": {
+    loudness: 0.88,
+    maxDistanceCells: 16,
+    memoryMs: 3900,
+  },
+  "metal-impact": {
+    loudness: 1.08,
+    maxDistanceCells: 19,
+    memoryMs: 5200,
+  },
+  "exit-alarm": {
+    loudness: 1.25,
+    maxDistanceCells: 25,
+    memoryMs: 6200,
+  },
+};
+
+export function createAcousticEvent(
+  kind: NoiseKind,
+  cell: number,
+  emittedAt: number,
+): AcousticEvent {
+  const profile = ACOUSTIC_PROFILES[kind];
+  return {
+    kind,
+    cell: Math.max(0, Math.trunc(cell)),
+    emittedAt,
+    ...profile,
+  };
+}
+
+export function pruneAcousticEvents(
+  events: readonly AcousticEvent[],
+  now: number,
+  maximumEvents = 24,
+) {
+  return events
+    .filter(
+      (event) =>
+        Number.isFinite(event.emittedAt) &&
+        now >= event.emittedAt &&
+        now - event.emittedAt <= event.memoryMs,
+    )
+    .slice(-Math.max(1, Math.trunc(maximumEvents)));
+}
+
+export function selectAcousticTarget(
+  candidates: readonly AcousticCandidate[],
+  now: number,
+): AcousticPerception | null {
+  let best: AcousticPerception | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const candidate of candidates) {
+    const ageMs = Math.max(0, now - candidate.emittedAt);
+    if (ageMs > candidate.memoryMs) continue;
+    const freshness = 1 - ageMs / Math.max(1, candidate.memoryMs);
+    const audibleDistanceCells =
+      candidate.maxDistanceCells * (0.58 + freshness * 0.42);
+    if (
+      candidate.routeDistanceCells < 0 ||
+      candidate.routeDistanceCells > audibleDistanceCells
+    ) {
+      continue;
+    }
+    const reach =
+      1 -
+      candidate.routeDistanceCells / Math.max(0.001, audibleDistanceCells);
+    const confidence = Math.min(
+      1,
+      Math.max(
+        0,
+        candidate.loudness * 0.52 + freshness * 0.27 + reach * 0.31,
+      ),
+    );
+    const score =
+      candidate.loudness * 1.45 + freshness * 0.72 + reach * 0.58;
+    if (score <= bestScore) continue;
+    bestScore = score;
+    best = {
+      event: {
+        kind: candidate.kind,
+        cell: candidate.cell,
+        emittedAt: candidate.emittedAt,
+        loudness: candidate.loudness,
+        maxDistanceCells: candidate.maxDistanceCells,
+        memoryMs: candidate.memoryMs,
+      },
+      routeDistanceCells: candidate.routeDistanceCells,
+      ageMs,
+      confidence,
+      audibleDistanceCells,
+    };
+  }
+
+  return best;
+}
+
+export function extrapolateAcousticTrailCell(
+  cells: readonly MazeCell[],
+  previousCell: number,
+  currentCell: number,
+  size = MAZE_SIZE,
+) {
+  const delta = currentCell - previousCell;
+  const direction =
+    delta === -size
+      ? "n"
+      : delta === 1 && Math.floor(previousCell / size) === Math.floor(currentCell / size)
+        ? "e"
+        : delta === size
+          ? "s"
+          : delta === -1 &&
+              Math.floor(previousCell / size) === Math.floor(currentCell / size)
+            ? "w"
+            : null;
+  if (!direction || !cells[currentCell]?.[direction]) return currentCell;
+  const candidate = currentCell + delta;
+  return candidate >= 0 && candidate < cells.length ? candidate : currentCell;
+}
+
 export type EnemyStimulus = {
   distanceCells: number;
   hasLure: boolean;
   heardNoise: boolean;
   noiseAgeMs: number;
+  noiseDistanceCells?: number;
+  noiseConfidence?: number;
   playerInVent: boolean;
   lastSeenAgeMs: number;
   cctvExposureMs: number;
   cctvSignalDistanceCells?: number;
   lineOfSight: boolean;
+  currentState?: EnemyState;
 };
 
 export type MazeValidation = {
@@ -514,8 +693,25 @@ export function decideEnemyState(stimulus: EnemyStimulus): EnemyState {
     return stimulus.distanceCells <= 2 ? "ambush" : "vent-watch";
   }
   if (stimulus.lineOfSight) return "chase";
+  if (
+    stimulus.currentState === "chase" &&
+    stimulus.lastSeenAgeMs < 3200
+  ) {
+    return "chase";
+  }
   if (stimulus.heardNoise && stimulus.noiseAgeMs < 2200) {
-    return stimulus.distanceCells <= 7 ? "investigate" : "listen";
+    const noiseDistance =
+      stimulus.noiseDistanceCells ?? stimulus.distanceCells;
+    const confidence = stimulus.noiseConfidence ?? 0.5;
+    const preciseRange = confidence >= 0.68 ? 15 : 7;
+    return noiseDistance <= preciseRange ? "investigate" : "listen";
+  }
+  if (
+    (stimulus.currentState === "investigate" ||
+      stimulus.currentState === "listen") &&
+    stimulus.noiseAgeMs < 5200
+  ) {
+    return "search";
   }
   if (
     stimulus.cctvExposureMs > 6000 &&
@@ -524,6 +720,7 @@ export function decideEnemyState(stimulus: EnemyStimulus): EnemyState {
     return "investigate";
   }
   if (stimulus.lastSeenAgeMs < 4500) return "search";
+  if (stimulus.noiseAgeMs < 8200) return "recover";
   if (stimulus.lastSeenAgeMs < 9000) return "recover";
   return "patrol";
 }

@@ -19,18 +19,26 @@ import {
   WALL_THICKNESS,
   chooseSpreadCells,
   corridorLineOfSight,
+  createAcousticEvent,
   createMaze,
   createZoneMap,
   decideEnemyState,
+  extrapolateAcousticTrailCell,
   farthestCell,
+  mazeDistances,
   mazePath,
   openingDirection,
   positionCell2D,
+  pruneAcousticEvents,
   resolveGridMovement,
+  selectAcousticTarget,
   seededRandom,
   uniqueReachableCells,
   validateMaze,
+  type AcousticEvent,
+  type AcousticPerception,
   type EnemyState,
+  type NoiseKind,
 } from "./game-core";
 import {
   capsuleVelocityFromInput,
@@ -890,9 +898,16 @@ export default function WalkExe() {
     let currentPlayerDistance = 99;
     let currentRouteDistance = 99;
     let currentBpm = 42;
-    let lastNoiseAt = Number.NEGATIVE_INFINITY;
-    let lastNoiseCell = 0;
-    let lastNoiseRadius = 0;
+    let acousticEvents: AcousticEvent[] = [];
+    let acousticPerception: AcousticPerception | null = null;
+    let lastHeardAt = Number.NEGATIVE_INFINITY;
+    let lastHeardCell = 0;
+    let lastHeardKind: NoiseKind | null = null;
+    let predictedHeardCell = 0;
+    let lastNoiseDistance = Number.POSITIVE_INFINITY;
+    let nextNoisePulseAt = 0;
+    let previousSprintCell: number | null = null;
+    let latestSprintCell: number | null = null;
     let lastSeenAt = Number.NEGATIVE_INFINITY;
     let lastSeenCell = 0;
     let cctvExposureMs = 0;
@@ -906,6 +921,13 @@ export default function WalkExe() {
     let nextObjectDropAt = 0;
     let lastAppliedVelocity = { x: 0, z: 0 };
     let lastInputSlices: InputSlice[] = [];
+
+    const emitNoise = (kind: NoiseKind, cell: number, now: number) => {
+      acousticEvents = pruneAcousticEvents(
+        [...acousticEvents, createAcousticEvent(kind, cell, now)],
+        now,
+      );
+    };
 
     const world = new THREE.Group();
     scene.add(world);
@@ -1878,9 +1900,7 @@ export default function WalkExe() {
       reusable.mesh.rotation.y = random() * Math.PI;
       reusable.mesh.visible = true;
       reusable.activeUntil = now + 11500;
-      lastNoiseAt = now;
-      lastNoiseCell = positionCell(reusable.mesh.position);
-      lastNoiseRadius = 10;
+      emitNoise("metal-impact", positionCell(reusable.mesh.position), now);
       nextObjectDropAt = now + 1600;
       playClank(reusable.mesh.position);
       setPrompt("Pieza metálica lanzada. Algo está investigando el golpe.");
@@ -1945,9 +1965,7 @@ export default function WalkExe() {
           totalDistance,
           distanceAlong: 0,
         };
-        lastNoiseAt = now;
-        lastNoiseCell = currentCell;
-        lastNoiseRadius = 13;
+        emitNoise("vent-rattle", currentCell, now);
         setInVent(true);
         setPrompt("Conducto activo: W avanza · S retrocede · puedes detenerte.");
         return;
@@ -1971,9 +1989,7 @@ export default function WalkExe() {
         inputController.reset(now);
         mobilePointers.clear();
         lastAppliedVelocity = { x: 0, z: 0 };
-        lastNoiseAt = now;
-        lastNoiseCell = exitCell;
-        lastNoiseRadius = 16;
+        emitNoise("exit-alarm", exitCell, now);
         playClank(exitPosition);
         document.exitPointerLock?.();
         setPrompt("APERTURA DE EMERGENCIA · mecanismo en movimiento");
@@ -2360,11 +2376,17 @@ export default function WalkExe() {
             sampledInput.forward !== 0 && ventMoved > 0.0001;
           playerSprinting = false;
           playerCrouching = true;
-          if (playerMoving) {
-            lastNoiseAt = tickNow;
-            lastNoiseCell =
-              progress < 0.5 ? ventTrip.sourceCell : ventTrip.destinationCell;
-            lastNoiseRadius = 13;
+          previousSprintCell = null;
+          latestSprintCell = null;
+          if (playerMoving && tickNow >= nextNoisePulseAt) {
+            emitNoise(
+              "vent-rattle",
+              progress < 0.5
+                ? ventTrip.sourceCell
+                : ventTrip.destinationCell,
+              tickNow,
+            );
+            nextNoisePulseAt = tickNow + 560;
           }
           const leaveAtDestination =
             progress >= 1 && terminalDirection > 0;
@@ -2389,7 +2411,7 @@ export default function WalkExe() {
             ventTrip = null;
             setInVent(false);
             lastAppliedVelocity = { x: 0, z: 0 };
-            lastNoiseCell = exitCellIndex;
+            emitNoise("vent-rattle", exitCellIndex, tickNow);
             setPrompt(
               leaveAtDestination
                 ? "Has salido al otro lado. Algo ha oído la rejilla."
@@ -2424,15 +2446,31 @@ export default function WalkExe() {
             playerMoving && !sampledInput.crouch && sampledInput.sprint;
           if (!playerMoving) {
             lastAppliedVelocity = { x: 0, z: 0 };
+            previousSprintCell = null;
+            latestSprintCell = null;
           }
           if (moved > 0.0001) {
-            lastNoiseAt = tickNow;
-            lastNoiseCell = positionCell(player);
-            lastNoiseRadius = playerCrouching
-              ? 3
-              : playerSprinting
-                ? 12
-                : 6;
+            const movementCell = positionCell(player);
+            if (tickNow >= nextNoisePulseAt) {
+              const noiseKind: NoiseKind = playerCrouching
+                ? "crouch-step"
+                : playerSprinting
+                  ? "sprint-step"
+                  : "walk-step";
+              emitNoise(noiseKind, movementCell, tickNow);
+              nextNoisePulseAt =
+                tickNow +
+                (playerCrouching ? 760 : playerSprinting ? 245 : 430);
+              if (playerSprinting) {
+                if (latestSprintCell !== movementCell) {
+                  previousSprintCell = latestSprintCell;
+                  latestSprintCell = movementCell;
+                }
+              } else {
+                previousSprintCell = null;
+                latestSprintCell = null;
+              }
+            }
             if (tickNow >= nextFootstep) {
               playStep();
               nextFootstep =
@@ -2458,6 +2496,8 @@ export default function WalkExe() {
       } else {
         playerMoving = false;
         playerSprinting = false;
+        previousSprintCell = null;
+        latestSprintCell = null;
         lastAppliedVelocity = { x: 0, z: 0 };
         cctvExposureMs += delta * 1000;
         const battery = drainCctvBattery(cctvPower, true, delta);
@@ -2488,12 +2528,37 @@ export default function WalkExe() {
         lastSeenAt = tickNow;
         lastSeenCell = playerCell;
       }
+      acousticEvents = pruneAcousticEvents(acousticEvents, tickNow);
+      const acousticDistances = mazeDistances(maze, enemyCell);
+      acousticPerception = selectAcousticTarget(
+        acousticEvents.map((event) => ({
+          ...event,
+          routeDistanceCells:
+            acousticDistances[event.cell] ?? Number.POSITIVE_INFINITY,
+        })),
+        tickNow,
+      );
+      if (acousticPerception) {
+        lastHeardAt = acousticPerception.event.emittedAt;
+        lastHeardCell = acousticPerception.event.cell;
+        lastHeardKind = acousticPerception.event.kind;
+      }
+      const heardNoise = Boolean(acousticPerception);
       const noiseDistance =
-        lastNoiseAt > Number.NEGATIVE_INFINITY
-          ? mazePath(maze, enemyCell, lastNoiseCell).length - 1
-          : Number.POSITIVE_INFINITY;
-      const heardNoise =
-        tickNow - lastNoiseAt < 2300 && noiseDistance <= lastNoiseRadius;
+        acousticPerception?.routeDistanceCells ?? Number.POSITIVE_INFINITY;
+      const predictedSprintTarget =
+        lastHeardKind === "sprint-step" &&
+        previousSprintCell !== null &&
+        latestSprintCell !== null &&
+        latestSprintCell === lastHeardCell
+          ? extrapolateAcousticTrailCell(
+              maze,
+              previousSprintCell,
+              latestSprintCell,
+            )
+          : lastHeardCell;
+      predictedHeardCell = predictedSprintTarget;
+      lastNoiseDistance = noiseDistance;
       const cctvSignalCell =
         cctvCells[cctvIndexRef.current] ?? cctvCells[0] ?? 0;
       const cctvSignalDistance =
@@ -2506,17 +2571,26 @@ export default function WalkExe() {
             distanceCells: currentRouteDistance,
             hasLure: Boolean(activeLure),
             heardNoise,
-            noiseAgeMs: tickNow - lastNoiseAt,
+            noiseAgeMs: tickNow - lastHeardAt,
+            noiseDistanceCells: noiseDistance,
+            noiseConfidence: acousticPerception?.confidence ?? 0,
             playerInVent: Boolean(ventTrip),
             lastSeenAgeMs: tickNow - lastSeenAt,
             cctvExposureMs,
             cctvSignalDistanceCells: cctvSignalDistance,
             lineOfSight,
+            currentState: currentEnemyMode,
           });
       if (nextEnemyMode !== currentEnemyMode) {
         currentEnemyMode = nextEnemyMode;
         setEnemyMode(nextEnemyMode);
         transitionEnemyAnimation(nextEnemyMode);
+        if (
+          nextEnemyMode === "investigate" &&
+          lastHeardKind === "sprint-step"
+        ) {
+          setPrompt("TE HA OÍDO CORRER · está anticipando tu siguiente cruce");
+        }
       }
 
       const patrolCells = spread.length ? spread : [exitCell, 0];
@@ -2524,7 +2598,11 @@ export default function WalkExe() {
       if (activeLure) {
         targetCell = activeLure.cell;
       } else if (currentEnemyMode === "chase") {
-        targetCell = playerCell;
+        targetCell = lineOfSight
+          ? playerCell
+          : lastHeardAt > lastSeenAt
+            ? predictedSprintTarget
+            : lastSeenCell;
       } else if (
         currentEnemyMode === "vent-watch" ||
         currentEnemyMode === "ambush"
@@ -2535,11 +2613,14 @@ export default function WalkExe() {
         currentEnemyMode === "investigate"
       ) {
         targetCell =
-          currentEnemyMode === "investigate" && cctvExposureMs > 6000
+          currentEnemyMode === "investigate" &&
+          cctvExposureMs > 6000 &&
+          !acousticPerception
             ? cctvSignalCell
-            : lastNoiseCell;
+            : predictedSprintTarget;
       } else if (currentEnemyMode === "search") {
-        targetCell = lastSeenCell;
+        targetCell =
+          lastHeardAt > lastSeenAt ? predictedSprintTarget : lastSeenCell;
       } else {
         targetCell = patrolCells[patrolCursor % patrolCells.length];
         if (enemyCell === targetCell) {
@@ -2571,7 +2652,13 @@ export default function WalkExe() {
         ambush: 1.92,
         recover: 0.78,
       };
-      currentEnemySpeed = speeds[currentEnemyMode];
+      const sprintPressure =
+        lastHeardKind === "sprint-step" && tickNow - lastHeardAt < 2600
+          ? currentEnemyMode === "chase"
+            ? 0.24
+            : 0.16
+          : 0;
+      currentEnemySpeed = speeds[currentEnemyMode] + sprintPressure;
       if (!modelPreviewActive && remaining > 0.09) {
         direction.normalize();
         subject.position.addScaledVector(
@@ -3203,6 +3290,19 @@ export default function WalkExe() {
             mechanicalOverlayHidden,
             outerShellRetracted,
           },
+          hearing: {
+            queuedEvents: acousticEvents.length,
+            heard: Boolean(acousticPerception),
+            kind: lastHeardKind,
+            sourceCell: lastHeardCell,
+            predictedCell: predictedHeardCell,
+            routeDistance: lastNoiseDistance,
+            ageMs:
+              lastHeardAt > Number.NEGATIVE_INFINITY
+                ? Math.max(0, simulationTime - lastHeardAt)
+                : null,
+            confidence: acousticPerception?.confidence ?? 0,
+          },
           input: {
             ...inputController.getSnapshot(),
             appliedVelocity: { ...lastAppliedVelocity },
@@ -3471,7 +3571,7 @@ export default function WalkExe() {
 
           <div className="controls-hint">
             <span><b>WASD</b> MOVER</span>
-            <span><b>SHIFT</b> CORRER</span>
+            <span><b>SHIFT</b> CORRER (RUIDO)</span>
             <span><b>CTRL</b> AGACHARSE</span>
             <span><b>E</b> INTERACTUAR</span>
             <span><b>G</b> SEÑUELO</span>
@@ -3623,7 +3723,7 @@ export default function WalkExe() {
             <div>
               <span>ENTIDAD</span>
               <strong>ANIMATRÓNICO M-22</strong>
-              <small>Movimiento inverso · giro cervical · oído sensible</small>
+              <small>Memoria acústica · predice pasos · sprint audible</small>
             </div>
             <div>
               <span>RECURSO</span>
