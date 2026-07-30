@@ -51,6 +51,12 @@ import {
   type InputSlice,
   type WalkInputAction,
 } from "./input-controller";
+import {
+  SCARE_ROSTER,
+  mascotForCamera,
+  mascotForCatch,
+  type ScareMascot,
+} from "./scare-roster";
 
 type GamePhase = "briefing" | "playing" | "caught" | "escaped";
 type QualityProfile = "low" | "medium" | "high" | "ultra";
@@ -102,6 +108,8 @@ type CaughtSequence = {
   subjectStart: THREE.Vector3;
   subjectYaw: number;
 };
+
+const JUMPSCARE_DURATION_MS = 1120;
 
 const cameraNames = [
   "CAM 01 · GALERÍA OESTE",
@@ -583,6 +591,8 @@ export default function WalkExe() {
   const [quality, setQuality] = useState<QualityProfile>("high");
   const [motionDetected, setMotionDetected] = useState(false);
   const [signalLost, setSignalLost] = useState(false);
+  const [activeJumpscare, setActiveJumpscare] =
+    useState<ScareMascot | null>(null);
   const [mapPlayer, setMapPlayer] = useState({ left: 3, top: 3 });
   const [cameraMapPositions, setCameraMapPositions] = useState<
     Array<{ left: number; top: number }>
@@ -670,6 +680,7 @@ export default function WalkExe() {
   const beginGame = useCallback(() => {
     startAudio();
     setGamePhase("playing");
+    setActiveJumpscare(null);
     setPointerHelp(false);
     setPrompt("Sigue las marcas del suelo. WASD mueve; arrastra para mirar.");
     setMessage("Encuentra la puerta de emergencia. TAB abre la red CCTV.");
@@ -687,6 +698,7 @@ export default function WalkExe() {
     setTraveled(0);
     setPower(96);
     setTabletOpen(false);
+    setActiveJumpscare(null);
     tabletRef.current = false;
     setSeed(Math.floor(100000 + Math.random() * 899999));
     setGamePhase("briefing");
@@ -1764,12 +1776,17 @@ export default function WalkExe() {
       });
     };
 
-    const playMechanicalScream = () => {
-      audioRef.current?.playJumpscare(1);
+    const playMechanicalScream = (mascot: ScareMascot) => {
+      audioRef.current?.playJumpscare(1, mascot.screamVariant);
     };
 
     const triggerCaught = (now: number) => {
       if (caught || escaped) return;
+      const mascot = mascotForCatch(
+        seed,
+        cctvIndexRef.current,
+        cctvExposureMs,
+      );
       caught = true;
       caughtSequence = {
         startedAt: now,
@@ -1780,9 +1797,12 @@ export default function WalkExe() {
       mobilePointers.clear();
       lastAppliedVelocity = { x: 0, z: 0 };
       document.exitPointerLock?.();
-      setMessage("SUJETO M ha interceptado la señal.");
-      setPrompt("INTERFERENCIA CERVICAL · SEÑAL PERDIDA");
-      playMechanicalScream();
+      setActiveJumpscare(mascot);
+      setMessage(
+        `${mascot.name} ha invadido la señal mientras SUJETO M cerraba el paso.`,
+      );
+      setPrompt(`${mascot.cameraCode} · ${mascot.signal}`);
+      playMechanicalScream(mascot);
     };
 
     const applyPlayerMovement = (
@@ -2196,7 +2216,7 @@ export default function WalkExe() {
         const caughtTiming = sequenceProgress(
           tickNow,
           caughtSequence.startedAt,
-          780,
+          JUMPSCARE_DURATION_MS,
         );
         const progress = caughtTiming.progress;
         const eased = 1 - Math.pow(1 - progress, 4);
@@ -2224,6 +2244,7 @@ export default function WalkExe() {
         lastAppliedVelocity = { x: 0, z: 0 };
         if (caughtTiming.done) {
           caughtSequence = null;
+          setActiveJumpscare(null);
           setGamePhase("caught");
         }
         return;
@@ -2952,7 +2973,8 @@ export default function WalkExe() {
       {
         if (caughtSequence) {
           const scareProgress = THREE.MathUtils.clamp(
-            (simulationTime - caughtSequence.startedAt) / 780,
+            (simulationTime - caughtSequence.startedAt) /
+              JUMPSCARE_DURATION_MS,
             0,
             1,
           );
@@ -3306,9 +3328,12 @@ export default function WalkExe() {
   );
 
   const chooseCamera = (index: number) => {
+    const mascot = mascotForCamera(seed, index);
     cctvIndexRef.current = index;
     setCctvIndex(index);
     audioRef.current?.playCctvStatic({ duration: 0.22, gain: 0.14 });
+    audioRef.current?.playJumpscare(0.12, mascot.screamVariant);
+    setPrompt(`${mascot.cameraCode} · ${mascot.signal}`);
   };
 
   const pointerInputTimestamp = (
@@ -3373,11 +3398,29 @@ export default function WalkExe() {
     setAudioLevels((levels) => ({ ...levels, [key]: value }));
   };
 
+  const cameraMascot = mascotForCamera(seed, cctvIndex);
+
   return (
     <main className={`walk-game phase-${phase} enemy-${enemyMode}`}>
       <div ref={mountRef} className="walk-stage" aria-label="Laberinto tridimensional M00NW4LK.EXE" />
       <div className="walk-noise" aria-hidden="true" />
       <div className="walk-vignette" aria-hidden="true" />
+      {activeJumpscare && (
+        <div
+          className={`mascot-jumpscare mascot-${activeJumpscare.id}`}
+          aria-hidden="true"
+        >
+          <div
+            className="mascot-jumpscare-face"
+            style={{ backgroundImage: `url(${activeJumpscare.image})` }}
+          />
+          <div className="mascot-jumpscare-id">
+            <span>ARCHIVO PARASITO · SCREAM FEED</span>
+            <strong>{activeJumpscare.name}</strong>
+            <small>{activeJumpscare.signal}</small>
+          </div>
+        </div>
+      )}
       {runtimeError && (
         <div className="runtime-error" role="alert">
           <strong>RECUPERANDO MOTOR 3D</strong>
@@ -3468,6 +3511,17 @@ export default function WalkExe() {
               className={`cctv-feed${signalLost ? " signal-lost" : ""}`}
             >
               <div className="cctv-scan" />
+              {!signalLost && (
+                <div
+                  className={`cctv-intruder${motionDetected ? " detected" : ""}`}
+                  style={{ backgroundImage: `url(${cameraMascot.image})` }}
+                  aria-hidden="true"
+                >
+                  <span>{cameraMascot.cameraCode}</span>
+                  <strong>{cameraMascot.name}</strong>
+                  <small>{cameraMascot.role}</small>
+                </div>
+              )}
               {signalLost && (
                 <div className="cctv-signal-loss">
                   <strong>SIGNAL LOST</strong>
@@ -3580,6 +3634,26 @@ export default function WalkExe() {
               <span>RUTA</span>
               <strong>GENERACIÓN ÚNICA</strong>
               <small>Pasillos, cruces, cámaras y conductos variables</small>
+            </div>
+          </div>
+          <div className="briefing-roster" aria-label="Archivo de animatrónicos">
+            <span className="briefing-roster-title">
+              RED MASCOTA CORRUPTA · 4 SCREAMS PROCEDURALES
+            </span>
+            <div>
+              {SCARE_ROSTER.map((mascot) => (
+                <article key={mascot.id}>
+                  <i
+                    className="briefing-mascot-image"
+                    style={{ backgroundImage: `url(${mascot.image})` }}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    <strong>{mascot.name}</strong>
+                    <small>{mascot.role}</small>
+                  </span>
+                </article>
+              ))}
             </div>
           </div>
           <div className="quality-picker" aria-label="Calidad gráfica">

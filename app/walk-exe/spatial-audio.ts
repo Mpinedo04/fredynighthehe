@@ -70,7 +70,7 @@ type ProceduralBuffers = {
   tensionBed: AudioBuffer;
   cctvStatic: AudioBuffer;
   heartbeat: AudioBuffer;
-  jumpscare: AudioBuffer;
+  jumpscares: AudioBuffer[];
 };
 
 type PersistentSource = {
@@ -209,16 +209,60 @@ function buildProceduralBuffers(context: BaseAudioContext, seed: number): Proced
     return thump(0, 58, 25) * 0.82 + thump(0.135, 46, 30) * 0.52;
   });
 
-  const jumpscare = createMonoBuffer(context, 0.92, (_sample, time) => {
-    const attack = clamp(time / 0.012);
-    const release = Math.exp(-Math.max(0, time - 0.18) * 3.6);
-    const pitch = 1880 * Math.exp(-time * 2.15) + 82;
-    const scream =
-      Math.sin(Math.PI * 2 * pitch * time + Math.sin(time * 113) * 2.7) * 0.25 +
-      Math.sin(Math.PI * 2 * pitch * 0.51 * time) * 0.2;
-    const teeth = (screamRandom() * 2 - 1) * (0.32 + Math.sin(time * 91) * 0.08);
-    const sub = Math.sin(Math.PI * 2 * (83 * time - 29 * time * time)) * 0.34;
-    return (scream + teeth + sub) * attack * release;
+  const ursusScream = createMonoBuffer(context, 1.08, (_sample, time) => {
+    const attack = clamp(time / 0.008);
+    const release = Math.exp(-Math.max(0, time - 0.28) * 3.15);
+    const throatPitch = 118 - time * 43;
+    const throat =
+      Math.sin(Math.PI * 2 * throatPitch * time + Math.sin(time * 47) * 1.9) *
+      0.42;
+    const jawPulse = Math.max(0, Math.sin(time * 112)) * 0.22;
+    const jaw =
+      (screamRandom() * 2 - 1) *
+      (0.18 + jawPulse) *
+      Math.exp(-Math.max(0, time - 0.48) * 2.4);
+    const cabinet = Math.sin(Math.PI * 2 * 54 * time) * 0.32;
+    return (throat + jaw + cabinet) * attack * release;
+  });
+
+  const velvetScream = createMonoBuffer(context, 0.94, (_sample, time) => {
+    const attack = clamp(time / 0.003);
+    const release = Math.exp(-Math.max(0, time - 0.2) * 4.2);
+    const pitch = 2640 * Math.exp(-time * 1.62) + 210;
+    const servo =
+      Math.sin(Math.PI * 2 * pitch * time + Math.sin(time * 173) * 4.1) * 0.31 +
+      Math.sin(Math.PI * 2 * pitch * 0.483 * time) * 0.21;
+    const teethGate = Math.sin(time * 198) > 0.2 ? 1 : 0.22;
+    const teeth = (screamRandom() * 2 - 1) * teethGate * 0.28;
+    return (servo + teeth) * attack * release;
+  });
+
+  const avisScream = createMonoBuffer(context, 1.04, (_sample, time) => {
+    const attack = clamp(time / 0.006);
+    const release = Math.exp(-Math.max(0, time - 0.24) * 3.55);
+    const speakerTremolo = 0.56 + Math.sin(Math.PI * 2 * 23 * time) * 0.44;
+    const carrier = 960 + Math.sin(time * 28) * 240 + Math.sin(time * 71) * 90;
+    const choir =
+      Math.sin(Math.PI * 2 * carrier * time + Math.sin(time * 61) * 3.3) * 0.3 +
+      Math.sin(Math.PI * 2 * carrier * 1.51 * time) * 0.13;
+    const blownSpeaker =
+      Math.tanh((screamRandom() * 2 - 1) * 2.8) *
+      (0.16 + speakerTremolo * 0.18);
+    return (choir * speakerTremolo + blownSpeaker) * attack * release;
+  });
+
+  const vulpesScream = createMonoBuffer(context, 0.98, (_sample, time) => {
+    const attack = clamp(time / 0.004);
+    const release = Math.exp(-Math.max(0, time - 0.22) * 3.9);
+    const howlPitch = 640 + Math.sin(time * 18) * 170 - time * 260;
+    const howl =
+      Math.sin(Math.PI * 2 * howlPitch * time + Math.sin(time * 83) * 2.4) *
+      0.32;
+    const motorGate = 0.35 + Math.max(0, Math.sin(time * 156)) * 0.65;
+    const motor =
+      (screamRandom() * 2 - 1) * motorGate * 0.31 +
+      Math.sin(Math.PI * 2 * (174 + time * 64) * time) * 0.18;
+    return (howl + motor) * attack * release;
   });
 
   return {
@@ -229,7 +273,7 @@ function buildProceduralBuffers(context: BaseAudioContext, seed: number): Proced
     tensionBed,
     cctvStatic,
     heartbeat,
-    jumpscare,
+    jumpscares: [ursusScream, velvetScream, avisScream, vulpesScream],
   };
 }
 
@@ -585,12 +629,16 @@ export class SpatialAudioEngine {
     });
   }
 
-  playJumpscare(strength = 1) {
+  playJumpscare(strength = 1, variant = 0) {
     const bus = this.buses.get("jumpscare");
     if (!bus || this.context?.state !== "running") return false;
-    return this.playBuffer(this.requireBuffers().jumpscare, bus, {
+    const jumpscares = this.requireBuffers().jumpscares;
+    const selected =
+      jumpscares[((Math.trunc(variant) % jumpscares.length) + jumpscares.length) %
+        jumpscares.length];
+    return this.playBuffer(selected, bus, {
       gain: clamp(strength, 0, 1.5) * 0.82,
-      playbackRate: 0.96 + this.random() * 0.07,
+      playbackRate: 0.965 + this.random() * 0.055,
     });
   }
 
