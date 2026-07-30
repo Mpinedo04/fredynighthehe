@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 const credits = [
   "Dirección",
@@ -103,46 +109,143 @@ const dossier = [
 ];
 
 const trailerScenes = [
-  ["01", "TODO EMPEZÓ CON UNA IDEA"],
-  ["02", "LUEGO LLEGARON LA CÁMARA, LAS LUCES Y EL SONIDO"],
-  ["03", "Y UNA GENTE DISPUESTA A VIVIRLO A SU LADO"],
-  ["22", "ESTO NO ES UN RESUMEN. ES UN TRÁILER."],
+  ["01", "PRIMERO: EL ARCHIVO REAL DE RAÚL"],
+  ["02", "DESPUÉS: LAS OBSESIONES CAMBIAN EL MONTAJE"],
+  ["03", "ENTONCES LA CÁMARA 05 RECUPERÓ ALGO"],
+  ["22", "LEE EL MATERIAL ANTES DE EJECUTARLO"],
 ];
 
 const cameraFeeds = [
-  ["CAM 01", "ESCENARIO", "Tres siluetas en escena. Una ya no mira al público."],
-  ["CAM 02", "COMEDOR", "Las mesas están vacías. Hay un plato recién movido."],
-  ["CAM 03", "PASILLO OESTE", "Movimiento detectado a 4,2 metros de la oficina."],
-  ["CAM 04", "SERVICIO", "Unidad animatrónica fuera de su punto de carga."],
-  ["CAM 05", "CONDUCTOS", "Ruido metálico avanzando por la ventilación."],
-  ["CAM 06", "OFICINA 22", "Energía estable. Puertas sin bloquear."],
+  {
+    camera: "CAM 01",
+    room: "ESCENARIO",
+    description: "Tres siluetas en escena. Una ya no mira al público.",
+    evidence: "FOTOGRAMA 001 · SOMBRERO DETECTADO",
+    threat: "BAJA",
+  },
+  {
+    camera: "CAM 02",
+    room: "COMEDOR",
+    description: "Las mesas están vacías. Hay un plato recién movido.",
+    evidence: "FOTOGRAMA 017 · OBJETO DESPLAZADO",
+    threat: "MEDIA",
+  },
+  {
+    camera: "CAM 03",
+    room: "PASILLO OESTE",
+    description: "Movimiento detectado a 4,2 metros de la oficina.",
+    evidence: "FOTOGRAMA 022 · ROSTRO SIN CLASIFICAR",
+    threat: "CRÍTICA",
+  },
+  {
+    camera: "CAM 04",
+    room: "SERVICIO",
+    description: "Unidad animatrónica fuera de su punto de carga.",
+    evidence: "FOTOGRAMA 031 · CARGADOR VACÍO",
+    threat: "ALTA",
+  },
+  {
+    camera: "CAM 05",
+    room: "CONDUCTOS",
+    description: "Ruido metálico avanzando por la ventilación.",
+    evidence: "AUDIO 05-B · 148 PULSOS/MIN",
+    threat: "CRÍTICA",
+  },
+  {
+    camera: "CAM 06",
+    room: "OFICINA 22",
+    description: "Energía estable. Puertas sin bloquear.",
+    evidence: "SEÑAL LOCAL · NO ESTÁS SOLO",
+    threat: "DENTRO",
+  },
 ];
 
-const microSteps = Array.from({ length: 22 }, (_, index) => ({
+const microSteps = Array.from({ length: 24 }, (_, index) => ({
   number: String(index + 1).padStart(2, "0"),
-  cents: Math.round((1200 / 22) * index),
+  cents: Math.round((1200 / 24) * index),
 }));
 
 const microtonalTracks = [
   {
-    title: "RATTLESNAKE",
-    subtitle: "Official Video · Flying Microtonal Banana",
-    videoId: "Q-i1XZc8ZwA",
-    tuning: "24-TET / MICROTONAL GUITARS",
+    title: "FULL PERFORMANCE",
+    subtitle: "Live on KEXP · Trans Musicales 2025",
+    videoId: "0Ssi-9wS1so",
+    tuning: "27:53 · SESIÓN COMPLETA",
   },
   {
-    title: "NUCLEAR FUSION",
-    subtitle: "Official Audio · Flying Microtonal Banana",
-    videoId: "4MFVhqcRpN4",
-    tuning: "CUSTOM MICROTONAL FRETS",
+    title: "SARNIEZZ",
+    subtitle: "Live on KEXP · vídeo individual",
+    videoId: "t7OIc-DBRXM",
+    tuning: "MICROTONAL · LIVE",
   },
   {
-    title: "SLEEP DRIFTER",
-    subtitle: "Official Audio · Flying Microtonal Banana",
-    videoId: "8XW8yofuGao",
-    tuning: "PSYCHEDELIC MICROTONAL",
+    title: "MATA ZYKLEK",
+    subtitle: "Live on KEXP · vídeo individual",
+    videoId: "Te1HkBx7rDw",
+    tuning: "MICROTONAL · LIVE",
   },
 ];
+
+const behindFrames = [
+  {
+    code: "01A",
+    title: "GRABANDO",
+    caption: "Imágenes Ocultas · rodaje contrarreloj",
+    image: "/youtube/imagenes-ocultas.jpg",
+  },
+  {
+    code: "02B",
+    title: "EN CABINA",
+    caption: "WTF El Documental · control y entrevistas",
+    image: "/youtube/wtf-documental.jpg",
+  },
+  {
+    code: "03C",
+    title: "CON SU GENTE",
+    caption: "Corazón Intacto · reparto y equipo",
+    image: "/youtube/corazon-intacto.jpg",
+  },
+  {
+    code: "04D",
+    title: "TOMA FALSA",
+    caption: "El pan ta’ duro · el caos también se monta",
+    image: "/youtube/el-pan-ta-duro.jpg",
+  },
+  {
+    code: "05E",
+    title: "MONTANDO",
+    caption: "Catarsis · la historia termina en la mesa",
+    image: "/youtube/catarsis.jpg",
+  },
+];
+
+const recoveredFragments = [
+  {
+    code: "REC-00",
+    title: "INFORME DE INCIDENCIA",
+    body: "A las 02:22 la cámara del conducto registró pasos que no coincidían con ningún empleado.",
+  },
+  {
+    code: "REC-01",
+    title: "FOTOGRAMA CORRUPTO",
+    body: "La figura avanza de espaldas. El reflejo, sin embargo, está mirando directamente al objetivo.",
+  },
+  {
+    code: "REC-02",
+    title: "TRANSCRIPCIÓN DE AUDIO",
+    body: "Tres golpes, un arrastre metálico y una respiración que se sincroniza con el operador de cámara.",
+  },
+  {
+    code: "REC-03",
+    title: "RUTA NO AUTORIZADA",
+    body: "El plano conduce a M00NW4LK.EXE. Los pasillos cambian cada vez que alguien abre el archivo.",
+  },
+  {
+    code: "REC-04",
+    title: "ADVERTENCIA FINAL",
+    body: "Si el sombrero cae al suelo, no esperes a que la cabeza termine de girar. Corre.",
+  },
+] as const;
 
 const animatronicArchive = [
   ["FREDDY", "FZ-01", 0.82],
@@ -188,6 +291,8 @@ export default function Home() {
   const [mjAnswer, setMjAnswer] = useState(false);
   const [countdown, setCountdown] = useState(10);
   const [recovered, setRecovered] = useState(false);
+  const [recoveredStep, setRecoveredStep] = useState(0);
+  const [materialRead, setMaterialRead] = useState(false);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [trailerScene, setTrailerScene] = useState(0);
   const [activeVideo, setActiveVideo] = useState<number | null>(null);
@@ -341,7 +446,6 @@ export default function Home() {
 
   useEffect(() => {
     if (!trailerOpen) return;
-    setTrailerScene(0);
     const timer = window.setInterval(() => {
       setTrailerScene((value) =>
         value >= trailerScenes.length - 1 ? 0 : value + 1,
@@ -351,14 +455,7 @@ export default function Home() {
   }, [trailerOpen]);
 
   useEffect(() => {
-    if (!recovered) return;
-    const timer = window.setTimeout(() => setRecovered(false), 1700);
-    return () => window.clearTimeout(timer);
-  }, [recovered]);
-
-  useEffect(() => {
     if (!chaseOpen) return;
-    setChasePhase(0);
     const timers = [
       window.setTimeout(() => setChasePhase(1), 700),
       window.setTimeout(() => setChasePhase(2), 3300),
@@ -570,7 +667,7 @@ export default function Home() {
     const context = new AudioContext();
     const oscillator = context.createOscillator();
     const gain = context.createGain();
-    const frequency = 110 * Math.pow(2, index / 22);
+    const frequency = 110 * Math.pow(2, index / 24);
 
     oscillator.type = index % 2 === 0 ? "sine" : "triangle";
     oscillator.frequency.value = frequency;
@@ -602,6 +699,41 @@ export default function Home() {
       { once: true },
     );
     void sample.play().catch(() => setScreamActive(null));
+  };
+
+  const openRecoveredMaterial = () => {
+    jumpscareAudioRef.current?.pause();
+    const sample = new Audio("/audio/fnaf-jumpscare-scream.mp3");
+    sample.volume = 0.5;
+    sample.playbackRate = 0.78;
+    jumpscareAudioRef.current = sample;
+    setRecoveredStep(0);
+    setRecovered(true);
+    void sample.play().catch(() => undefined);
+  };
+
+  const revealRecoveredFragment = () => {
+    setRecoveredStep((current) => {
+      const next = Math.min(recoveredFragments.length, current + 1);
+      if (next === recoveredFragments.length) {
+        setMaterialRead(true);
+      } else if (next === 3) {
+        const warning = new Audio("/audio/fnaf-jumpscare-scream.mp3");
+        warning.volume = 0.18;
+        warning.playbackRate = 1.32;
+        void warning.play().catch(() => undefined);
+      }
+      return next;
+    });
+  };
+
+  const focusRecoveredMaterial = () => {
+    setTrailerOpen(false);
+    window.setTimeout(() => {
+      document
+        .getElementById("material-recuperado")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
   };
 
   const closeChase = () => {
@@ -849,26 +981,26 @@ export default function Home() {
           </p>
         </div>
         <div className="contact-sheet">
-          {[
-            ["01A", "GRABANDO", "La mirada detrás del objetivo"],
-            ["02B", "EN CABINA", "Donde cada detalle cuenta"],
-            ["03C", "CON SU GENTE", "El reparto que nunca falla"],
-            ["04D", "TOMA FALSA", "La mejor parte del rodaje"],
-            ["05E", "MONTANDO", "FINAL_v7_ahora_si"],
-          ].map(([code, title, caption], index) => (
-            <figure key={code} className={`photo-placeholder photo-${index + 1}`}>
-              <div>
-                <span>FOTO {code}</span>
-                <b>{title}</b>
+          {behindFrames.map((frame, index) => (
+            <figure
+              key={frame.code}
+              className={`photo-placeholder photo-${index + 1}`}
+            >
+              <div className="production-frame">
+                <img src={frame.image} alt={`Fotograma de ${frame.caption}`} />
+                <span>FOTOGRAMA {frame.code}</span>
+                <b>{frame.title}</b>
+                <em>PRODUCCIÓN REAL · ARCHIVO RAAULINHOO</em>
               </div>
-              <figcaption>{caption}</figcaption>
+              <figcaption>{frame.caption}</figcaption>
             </figure>
           ))}
           <div className="tape-note">
             <span>NOTA DE MONTAJE</span>
             <p>
-              Sustituir estos fotogramas por las fotos que solo su gente puede
-              explicar.
+              Ya hay imágenes reales de sus producciones. Cuando aparezcan las
+              fotos privadas del rodaje, cada fotograma se puede sustituir sin
+              rehacer esta mesa.
             </p>
           </div>
         </div>
@@ -1014,7 +1146,9 @@ export default function Home() {
                 </div>
                 <div className="monitor-topline">
                   <span>● REC</span>
-                  <strong>{cameraFeeds[cameraFeed][0]} · {cameraFeeds[cameraFeed][1]}</strong>
+                  <strong>
+                    {cameraFeeds[cameraFeed].camera} · {cameraFeeds[cameraFeed].room}
+                  </strong>
                   <span>12:0{cameraFeed + 1} AM</span>
                 </div>
                 <div className="camera-room" aria-hidden="true">
@@ -1040,6 +1174,12 @@ export default function Home() {
                   </div>
                   <div className="stage-curtain curtain-left" />
                   <div className="stage-curtain curtain-right" />
+                  <div className="party-pennants">
+                    {Array.from({ length: 7 }, (_, index) => <i key={index} />)}
+                  </div>
+                  <div className="service-lockers"><i /><i /><i /></div>
+                  <div className="floor-cable" />
+                  <span className="room-sign">CELEBRATE · STAY IN YOUR SEAT</span>
                 </div>
                 <div className="animatronic-silhouette" aria-hidden="true">
                   <i className="ear left" /><i className="ear right" />
@@ -1048,22 +1188,26 @@ export default function Home() {
                   <i className="torso" /><i className="arm left" /><i className="arm right" />
                   <i className="hand left" /><i className="hand right" />
                 </div>
-                <p>{cameraFeeds[cameraFeed][2]}</p>
+                <div className="camera-evidence-strip">
+                  <span>{cameraFeeds[cameraFeed].evidence}</span>
+                  <b>RIESGO · {cameraFeeds[cameraFeed].threat}</b>
+                </div>
+                <p>{cameraFeeds[cameraFeed].description}</p>
               </div>
               <div className="camera-console">
                 <div className="camera-map">
                   <span className="map-you">YOU</span>
                   <i className="map-wire wire-one" />
                   <i className="map-wire wire-two" />
-                  {cameraFeeds.map(([camera, room], index) => (
+                  {cameraFeeds.map((feed, index) => (
                     <button
                       type="button"
-                      key={camera}
+                      key={feed.camera}
                       className={cameraFeed === index ? "active" : ""}
                       onClick={() => setCameraFeed(index)}
                     >
-                      <span>{camera}</span>
-                      <small>{room}</small>
+                      <span>{feed.camera}</span>
+                      <small>{feed.room}</small>
                     </button>
                   ))}
                 </div>
@@ -1110,37 +1254,60 @@ export default function Home() {
                 Cámaras, estática, diseño sonoro, pistas escondidas y el tipo de
                 tensión que convierte un pasillo vacío en una historia entera.
               </p>
-              <a className="fnaf-game-link" href="/walk-exe">
-                ENTRAR AL PASADIZO M00NW4LK.EXE <span>→</span>
-              </a>
-              <button type="button" onClick={() => setRecovered(true)}>
-                LEER TARJETA “MATERIAL RECUPERADO” <span>↗</span>
+              <button
+                id="material-recuperado"
+                className="material-card-primary"
+                type="button"
+                onClick={openRecoveredMaterial}
+              >
+                <small>PASO 01 · OBLIGATORIO</small>
+                LEER TARJETA “MATERIAL RECUPERADO”
+                <span>↗</span>
               </button>
+              {materialRead ? (
+                <a className="fnaf-game-link unlocked" href="/walk-exe">
+                  <small>PASO 02 · ACCESO AUTORIZADO</small>
+                  ENTRAR AL PASADIZO M00NW4LK.EXE <span>→</span>
+                </a>
+              ) : (
+                <button className="fnaf-game-locked" type="button" disabled>
+                  <small>PASO 02 · BLOQUEADO</small>
+                  LEE PRIMERO EL MATERIAL RECUPERADO <span>⌁</span>
+                </button>
+              )}
             </div>
           </article>
 
           <article className="idol-card micro-world">
             <div className="idol-label">
               <span>OBSESIÓN SONORA 04</span>
-              <strong>SISTEMA DE AFINACIÓN 22-EDO</strong>
+              <strong>ANGINE DE POITRINE · 24 DIVISIONES</strong>
+            </div>
+            <div className="poitrine-constellation" aria-hidden="true">
+              {Array.from({ length: 36 }, (_, index) => (
+                <i key={index} style={{ "--dot": index } as CSSProperties} />
+              ))}
+              <span className="poitrine-head head-khn"><b /></span>
+              <span className="poitrine-head head-klek"><b /></span>
+              <strong>MICRO<br /><em>TONAL</em></strong>
             </div>
             <div className="micro-copy">
-              <p className="eyebrow">MÚSICA MICROTONAL</p>
-              <h3>ENTRE DOS NOTAS<br />HAY OTRO UNIVERSO.</h3>
+              <p className="eyebrow">ANGINE DE POITRINE / DADA MICROTONAL</p>
+              <h3>ENTRE DOS NOTAS<br />VIVEN MÁS NOTAS.</h3>
               <p>
-                La octava no tiene por qué dividirse en doce. Aquí se reparte
-                en veintidós pasos: pulsa cualquiera para escuchar los matices
-                que viven entre las teclas conocidas.
+                Su guitarra divide la octava en veinticuatro pasos. Los lunares,
+                las máscaras y la geometría no decoran esta sala: se comportan
+                como otra capa del ritmo.
               </p>
               <div className="tuning-readout">
                 <span>BASE</span><b>110.00 Hz</b>
-                <span>DIVISIÓN</span><b>22 EDO</b>
-                <span>PASO</span><b>54.55 ¢</b>
+                <span>DIVISIÓN</span><b>24 TET</b>
+                <span>PASO</span><b>50.00 ¢</b>
               </div>
             </div>
-            <div className="micro-sequencer" aria-label="Teclado microtonal de veintidós pasos">
+            <div className="micro-sequencer" aria-label="Teclado microtonal de veinticuatro pasos">
               <div className="waveform" aria-hidden="true">
-                {Array.from({ length: 44 }, (_, index) => (
+                {Array.from({ length: 48 }, (_, index) => (
                   <i key={index} style={{ height: `${18 + ((index * 17) % 72)}%` }} />
                 ))}
               </div>
@@ -1158,25 +1325,25 @@ export default function Home() {
                   </button>
                 ))}
               </div>
-              <p>PULSA LOS PASOS · EL SONIDO SOLO SE ACTIVA AL INTERACTUAR</p>
+              <p>LABORATORIO · PULSA LOS 24 CUARTOS DE TONO</p>
             </div>
             <div className="microtonal-jukebox">
               <div className="micro-player">
                 <iframe
                   key={microtonalTracks[microTrack].videoId}
                   src={`https://www.youtube-nocookie.com/embed/${microtonalTracks[microTrack].videoId}?rel=0`}
-                  title={`${microtonalTracks[microTrack].title} de King Gizzard & the Lizard Wizard`}
+                  title={`${microtonalTracks[microTrack].title} de Angine de Poitrine`}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
                 />
               </div>
               <div className="micro-tracklist">
                 <div>
-                  <span>FLYING MICROTONAL BANANA</span>
-                  <strong>KING GIZZARD &amp; THE LIZARD WIZARD</strong>
+                  <span>SEÑAL DE VÍDEO · KEXP</span>
+                  <strong>ANGINE DE POITRINE</strong>
                   <p>
-                    Tres puertas de entrada a su etapa microtonal. Selecciona
-                    una pista y pulsa play en el reproductor oficial.
+                    Sesión completa y dos piezas independientes. Cambia de toma
+                    aquí; las canciones del álbum viven en el reproductor de abajo.
                   </p>
                 </div>
                 {microtonalTracks.map((track, index) => (
@@ -1196,6 +1363,27 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="micro-audio-vault">
+              <div>
+                <span>ARCHIVO DE AUDIO OFICIAL · SEPARADO DEL VÍDEO</span>
+                <h4>VOL.II — ESCUCHA LAS CANCIONES</h4>
+                <p>
+                  Fabienk, Mata Zyklek, Sarniezz, Utzp, Yor Zarad y Angor se
+                  reproducen por separado desde el álbum oficial del grupo.
+                </p>
+                <a
+                  href="https://anginedepoitrine.bandcamp.com/album/vol-ii"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  ABRIR BANDCAMP OFICIAL ↗
+                </a>
+              </div>
+              <iframe
+                title="Vol.II de Angine de Poitrine en Bandcamp"
+                src="https://bandcamp.com/EmbeddedPlayer/album=1828228714/size=large/bgcol=ffffff/linkcol=111111/artwork=small/transparent=true/"
+              />
             </div>
           </article>
         </div>
@@ -1225,24 +1413,31 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="trailer-section section-pad">
+      <section className="trailer-section section-pad" id="escena-22">
         <div className="trailer-poster">
           <div className="trailer-topline">
-            <span>TRÁILER OFICIAL</span>
-            <span>01:42</span>
+            <span>PUENTE DE MONTAJE · NO ES UN VÍDEO VACÍO</span>
+            <span>00:22 · INTERACTIVO</span>
           </div>
           <div className="trailer-title">
-            <small>UNA VIDA EN PRODUCCIÓN</small>
-            <h2>ESCENA<br /><strong>22</strong></h2>
-            <button type="button" onClick={() => setTrailerOpen(true)}>
-              <span aria-hidden="true">▶</span>
-              REPRODUCIR EXPERIENCIA
+            <small>DEL ARCHIVO REAL AL EXPEDIENTE IMPOSIBLE</small>
+            <h2>CORTE<br /><strong>22</strong></h2>
+            <button
+              type="button"
+              onClick={() => {
+                setTrailerScene(0);
+                setTrailerOpen(true);
+              }}
+            >
+              <span aria-hidden="true">✂</span>
+              ABRIR MONTAJE INTERACTIVO
             </button>
           </div>
           <div className="trailer-caption">
             <p>
-              No es una película sobre lo que ya ha hecho. Es el tráiler de
-              todo lo que todavía está por venir.
+              Esta pieza ya no finge ser un “tráiler oficial” pendiente. Es el
+              corte que conecta las producciones, los referentes y el archivo
+              de terror que debe leerse antes de entrar en M00NW4LK.EXE.
             </p>
           </div>
         </div>
@@ -1527,7 +1722,7 @@ export default function Home() {
       )}
 
       {trailerOpen && (
-        <div className="trailer-modal" role="dialog" aria-modal="true" aria-label="Tráiler de la escena 22">
+        <div className="trailer-modal" role="dialog" aria-modal="true" aria-label="Montaje interactivo de la escena 22">
           <button
             className="modal-close"
             type="button"
@@ -1548,17 +1743,80 @@ export default function Home() {
             </div>
           </div>
           <p className="trailer-note">
-            Esta secuencia está lista para recibir el vídeo final de 90–120
-            segundos cuando estén disponibles las fotos y clips.
+            Un puente narrativo, no un reproductor de pega. La última marca te
+            lleva al material que desbloquea el juego.
           </p>
+          <button
+            className="trailer-route-button"
+            type="button"
+            onClick={focusRecoveredMaterial}
+          >
+            IR AL MATERIAL RECUPERADO <span>→</span>
+          </button>
         </div>
       )}
 
       {recovered && (
-        <div className="recovered-overlay" role="alert">
-          <div className="animatronic-eye">22</div>
-          <p>MATERIAL RECUPERADO</p>
-          <small>ARCHIVO: AHORA_SI_FINAL.mov</small>
+        <div
+          className={`recovered-overlay recovered-step-${recoveredStep}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Tarjeta de material recuperado"
+        >
+          <button
+            className="recovered-close"
+            type="button"
+            onClick={() => setRecovered(false)}
+            aria-label="Cerrar material recuperado"
+          >
+            CERRAR EXPEDIENTE ×
+          </button>
+          <div className="recovered-static" aria-hidden="true" />
+          <div className="recovered-dossier">
+            <div className="recovered-header">
+              <span>FAZBEAR ARCHIVE · INCIDENTE RG-22</span>
+              <strong>MATERIAL<br />RECUPERADO</strong>
+              <small>ARCHIVO: AHORA_SI_FINAL.mov · INTEGRIDAD 22%</small>
+            </div>
+            <div className="recovered-eye-feed" aria-hidden="true">
+              <div className="animatronic-eye">22</div>
+              <span>CAM 05 · CONDUCTOS · 02:22:17</span>
+            </div>
+            <div className="recovered-fragments" aria-live="polite">
+              {recoveredFragments.map((fragment, index) => (
+                <article
+                  key={fragment.code}
+                  className={index < recoveredStep ? "visible" : ""}
+                >
+                  <span>{fragment.code}</span>
+                  <strong>{fragment.title}</strong>
+                  <p>{fragment.body}</p>
+                </article>
+              ))}
+            </div>
+            {recoveredStep < recoveredFragments.length ? (
+              <button
+                className={`recovered-catch catch-${recoveredStep}`}
+                type="button"
+                onClick={revealRecoveredFragment}
+              >
+                <small>
+                  FRAGMENTO {String(recoveredStep + 1).padStart(2, "0")} / 05
+                </small>
+                {recoveredStep === 0
+                  ? "INTERCEPTAR ARCHIVO"
+                  : "LA VENTANA HA ESCAPADO · ATRÁPALA"}
+              </button>
+            ) : (
+              <div className="recovered-authorized">
+                <span>✓ LOS CINCO FRAGMENTOS HAN SIDO LEÍDOS</span>
+                <strong>ACCESO AUTORIZADO</strong>
+                <a href="/walk-exe">
+                  EJECUTAR M00NW4LK.EXE <span>→</span>
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </main>

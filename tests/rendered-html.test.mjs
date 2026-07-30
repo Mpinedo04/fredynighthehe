@@ -29,6 +29,10 @@ test("server-renders the Premiere 22 home route", async () => {
   const html = await response.text();
   assert.match(html, /Premiere 22/i);
   assert.match(html, /Ra(?:ú|Ãº)l Garc(?:í|Ã­)a/i);
+  assert.match(html, /Angine de Poitrine/i);
+  assert.match(html, /Live on KEXP/i);
+  assert.match(html, /Material recuperado/i);
+  assert.match(html, /producci(?:ó|Ã³)n real/i);
   assert.doesNotMatch(html, /Your site is taking shape/i);
 });
 
