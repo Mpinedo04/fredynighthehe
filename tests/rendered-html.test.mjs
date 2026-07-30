@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render(pathname) {
@@ -45,4 +46,13 @@ test("server-renders the M00NW4LK.EXE route and loading shell", async () => {
   assert.match(html, /INICIALIZANDO MOTOR 3D/i);
   assert.match(html, /walk-loading/i);
   assert.match(html, /walk-exe/i);
+});
+
+test("production bundle never exposes local font paths", async () => {
+  const serverBundle = await readFile(
+    new URL("../dist/server/index.js", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(serverBundle, /(?:file:\/\/\/)?[A-Z]:[\\/].*?\.woff2/i);
+  assert.doesNotMatch(serverBundle, /\.vinext[\\/]fonts/i);
 });

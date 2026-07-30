@@ -1,23 +1,6 @@
 import type { Metadata } from "next";
-import { Antonio, Space_Mono, Inter } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
-
-const display = Antonio({
-  variable: "--font-display",
-  subsets: ["latin"],
-});
-
-const mono = Space_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "700"],
-});
-
-const sans = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -60,9 +43,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${display.variable} ${mono.variable} ${sans.variable}`}>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

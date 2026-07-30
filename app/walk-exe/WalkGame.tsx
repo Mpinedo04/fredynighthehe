@@ -61,6 +61,7 @@ import {
 } from "./input-controller";
 import {
   SCARE_ROSTER,
+  decideCctvEncounter,
   mascotForCamera,
   mascotForCatch,
   type ScareMascot,
@@ -68,6 +69,7 @@ import {
 
 type GamePhase = "briefing" | "playing" | "caught" | "escaped";
 type QualityProfile = "low" | "medium" | "high" | "ultra";
+type CctvEncounterPhase = "idle" | "presence" | "scream";
 type AudioLevels = {
   master: number;
   ambience: number;
@@ -198,6 +200,14 @@ function cellCenter(index: number) {
 
 function positionCell(position: THREE.Vector3) {
   return positionCell2D(position.x, position.z);
+}
+
+function sectorForCell(index: number) {
+  const row = Math.floor(index / MAZE_SIZE);
+  const column = index % MAZE_SIZE;
+  return `${String.fromCharCode(65 + Math.floor(row / 4))}-${String(
+    column + 1,
+  ).padStart(2, "0")}`;
 }
 
 function material(
@@ -581,6 +591,13 @@ export default function WalkExe() {
   const tabletRef = useRef(false);
   const cctvIndexRef = useRef(0);
   const cctvFeedRef = useRef<HTMLDivElement>(null);
+  const cctvVisitRef = useRef(0);
+  const cctvQuietVisitsRef = useRef(0);
+  const cctvLastEncounterAtRef = useRef(Number.NEGATIVE_INFINITY);
+  const cctvEncounterGenerationRef = useRef(0);
+  const cctvEncounterTimersRef = useRef<Set<number>>(new Set());
+  const cctvEncounterRef = useRef<ScareMascot | null>(null);
+  const cctvEncounterPhaseRef = useRef<CctvEncounterPhase>("idle");
   const audioRef = useRef<SpatialAudioEngine | null>(null);
   const [phase, setPhase] = useState<GamePhase>("briefing");
   const [seed, setSeed] = useState(220722);
@@ -593,12 +610,18 @@ export default function WalkExe() {
   const [cctvIndex, setCctvIndex] = useState(0);
   const [power, setPower] = useState(96);
   const [inVent, setInVent] = useState(false);
+  const [ventProgress, setVentProgress] = useState(0);
+  const [ventRoute, setVentRoute] = useState("SIN RUTA");
   const [pointerHelp, setPointerHelp] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [enemyMode, setEnemyMode] = useState<EnemyState>("patrol");
   const [quality, setQuality] = useState<QualityProfile>("high");
   const [motionDetected, setMotionDetected] = useState(false);
   const [signalLost, setSignalLost] = useState(false);
+  const [cctvEncounter, setCctvEncounter] =
+    useState<ScareMascot | null>(null);
+  const [cctvEncounterPhase, setCctvEncounterPhase] =
+    useState<CctvEncounterPhase>("idle");
   const [activeJumpscare, setActiveJumpscare] =
     useState<ScareMascot | null>(null);
   const [mapPlayer, setMapPlayer] = useState({ left: 3, top: 3 });
@@ -622,6 +645,18 @@ export default function WalkExe() {
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  const clearCctvEncounter = useCallback(() => {
+    cctvEncounterGenerationRef.current += 1;
+    cctvEncounterTimersRef.current.forEach((timer) =>
+      window.clearTimeout(timer),
+    );
+    cctvEncounterTimersRef.current.clear();
+    cctvEncounterRef.current = null;
+    cctvEncounterPhaseRef.current = "idle";
+    setCctvEncounter(null);
+    setCctvEncounterPhase("idle");
+  }, []);
 
   const startAudio = useCallback(() => {
     const engine =
@@ -698,6 +733,7 @@ export default function WalkExe() {
 
   const restart = useCallback(() => {
     document.exitPointerLock?.();
+    clearCctvEncounter();
     if (audioRef.current) {
       void audioRef.current.cleanup();
       audioRef.current = null;
@@ -706,12 +742,18 @@ export default function WalkExe() {
     setTraveled(0);
     setPower(96);
     setTabletOpen(false);
+    setInVent(false);
+    setVentProgress(0);
+    setVentRoute("SIN RUTA");
     setActiveJumpscare(null);
     tabletRef.current = false;
     setSeed(Math.floor(100000 + Math.random() * 899999));
+    cctvVisitRef.current = 0;
+    cctvQuietVisitsRef.current = 0;
+    cctvLastEncounterAtRef.current = Number.NEGATIVE_INFINITY;
     setGamePhase("briefing");
     setMessage("El sistema ha destruido el mapa anterior.");
-  }, [setGamePhase]);
+  }, [clearCctvEncounter, setGamePhase]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -748,6 +790,7 @@ export default function WalkExe() {
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
+    const qaMode = new URLSearchParams(window.location.search).has("qa");
     const exitCell = farthestCell(maze, 0);
     const spread = chooseSpreadCells(maze, seed, 14);
     const enemyStart = spread[0] ?? exitCell;
@@ -824,6 +867,7 @@ export default function WalkExe() {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.32;
+    renderer.info.autoReset = false;
     renderer.domElement.className = "walk-canvas";
     renderer.domElement.tabIndex = 0;
     mount.appendChild(renderer.domElement);
@@ -862,6 +906,7 @@ export default function WalkExe() {
     let lastCapsuleCollided = false;
     let yaw = startOpening.yaw;
     let pitch = 0;
+    let currentVentHeadingYaw = yaw;
     let traveledDistance = 0;
     let echoesHeld = 0;
     let nextHeartbeat = 0;
@@ -869,6 +914,7 @@ export default function WalkExe() {
     let nextEnemyStep = 0;
     let nextPathUpdate = 0;
     let lastHudUpdate = 0;
+    let lastVentHudUpdate = 0;
     let cctvPower = 96;
     let lastReportedPower = 96;
     let enemyPath = mazePath(maze, enemyStart, 0);
@@ -1940,13 +1986,10 @@ export default function WalkExe() {
         const pairIndex = Number(sourceVent.userData.pair ?? 0);
         const ductHeight = WALL_HEIGHT + 0.78;
         const path = [
-          player.clone(),
-          sourceVent.position.clone().setY(0.72),
           sourceVent.position.clone().setY(ductHeight),
           destinationVent.position.clone().setY(ductHeight),
-          destinationVent.position.clone().setY(0.72),
-          destination.clone().setY(0.72),
         ];
+        player.copy(path[0]);
         const cumulative = [0];
         for (let index = 1; index < path.length; index += 1) {
           cumulative[index] =
@@ -1954,6 +1997,13 @@ export default function WalkExe() {
             path[index - 1].distanceTo(path[index]);
         }
         const totalDistance = cumulative[cumulative.length - 1];
+        const ductDirection = path[1].clone().sub(path[0]);
+        if (Math.hypot(ductDirection.x, ductDirection.z) > 0.05) {
+          currentVentHeadingYaw =
+            Math.atan2(ductDirection.x, ductDirection.z) + Math.PI;
+          yaw = currentVentHeadingYaw;
+        }
+        pitch = 0;
         if (ductRoutes[pairIndex]) ductRoutes[pairIndex].visible = true;
         ventTrip = {
           sourceCell: currentCell,
@@ -1967,7 +2017,13 @@ export default function WalkExe() {
         };
         emitNoise("vent-rattle", currentCell, now);
         setInVent(true);
-        setPrompt("Conducto activo: W avanza · S retrocede · puedes detenerte.");
+        setVentProgress(0);
+        setVentRoute(
+          `${sectorForCell(currentCell)} → ${sectorForCell(pairedCell)}`,
+        );
+        setPrompt(
+          "Conducto activo: W/S desplaza · A/D o ratón giran la cámara.",
+        );
         return;
       }
 
@@ -1997,6 +2053,47 @@ export default function WalkExe() {
       }
     };
 
+    const stageVentForQa = (pairIndex = 0) => {
+      if (!qaMode) return false;
+      const vent = ventMeshes.find(
+        (candidate) =>
+          Number(candidate.userData.pair ?? -1) ===
+          THREE.MathUtils.clamp(
+            Math.trunc(pairIndex),
+            0,
+            ventPairs.length - 1,
+          ),
+      );
+      if (!vent) return false;
+      player.set(vent.position.x, CROUCH_HEIGHT, vent.position.z);
+      capsuleState = createCapsuleState(
+        capsuleWorld,
+        { x: player.x, z: player.z },
+        true,
+      );
+      yaw = vent.rotation.y;
+      pitch = 0;
+      interact(simulationTime);
+      return Boolean(ventTrip);
+    };
+
+    const openCctvForQa = (cameraIndex = 0) => {
+      if (!qaMode) return false;
+      const index = THREE.MathUtils.clamp(
+        Math.trunc(cameraIndex),
+        0,
+        cctvCameras.length - 1,
+      );
+      cctvIndexRef.current = index;
+      setCctvIndex(index);
+      tabletRef.current = true;
+      setTabletOpen(true);
+      inputController.reset(simulationTime);
+      mobilePointers.clear();
+      document.exitPointerLock?.();
+      return true;
+    };
+
     const normalizedKeyCode = (event: KeyboardEvent) => {
       if (event.code) return event.code;
       const upper = event.key.toUpperCase();
@@ -2016,6 +2113,16 @@ export default function WalkExe() {
     };
     const keyDown = (event: KeyboardEvent) => {
       const code = normalizedKeyCode(event);
+      if (!event.repeat && qaMode && code === "F8") {
+        event.preventDefault();
+        stageVentForQa(0);
+        return;
+      }
+      if (!event.repeat && qaMode && code === "F9") {
+        event.preventDefault();
+        openCctvForQa(0);
+        return;
+      }
       const action = walkInputActionForCode(code);
       const timestamp = inputTimestamp(event);
       if (action) {
@@ -2037,6 +2144,7 @@ export default function WalkExe() {
         mobilePointers.clear();
         setTabletOpen(tabletRef.current);
         if (tabletRef.current) audioRef.current?.playCctvStatic();
+        else clearCctvEncounter();
         setPrompt(
           tabletRef.current
             ? "Red CCTV activa. El consumo de energía aumenta."
@@ -2097,7 +2205,12 @@ export default function WalkExe() {
         dragLastX = event.clientX;
         dragLastY = event.clientY;
         renderer.domElement.focus({ preventScroll: true });
-        renderer.domElement.setPointerCapture?.(event.pointerId);
+        try {
+          renderer.domElement.setPointerCapture?.(event.pointerId);
+        } catch {
+          // Some embedded browsers send a synthetic pointer without a
+          // capturable active button. Document-level move/up still handles it.
+        }
       }
     };
     const pointerUp = (event?: PointerEvent) => {
@@ -2320,6 +2433,9 @@ export default function WalkExe() {
               terminalDirection = -1;
             }
           }
+          if (sampledInput.strafe !== 0) {
+            yaw -= sampledInput.strafe * delta * 1.85;
+          }
           const distanceAlong = ventTrip.distanceAlong;
           const progress = THREE.MathUtils.clamp(
             distanceAlong / Math.max(0.0001, ventTrip.totalDistance),
@@ -2349,13 +2465,12 @@ export default function WalkExe() {
             .clone()
             .sub(ventTrip.path[segment]);
           if (Math.hypot(travelDirection.x, travelDirection.z) > 0.1) {
-            const ductYaw =
+            currentVentHeadingYaw =
               Math.atan2(travelDirection.x, travelDirection.z) + Math.PI;
-            yaw +=
-              Math.atan2(
-                Math.sin(ductYaw - yaw),
-                Math.cos(ductYaw - yaw),
-              ) * Math.min(1, delta * 2.6);
+          }
+          if (tickNow - lastVentHudUpdate >= 90) {
+            setVentProgress(Math.round(progress * 100));
+            lastVentHudUpdate = tickNow;
           }
           if (sampledInput.forward === 0) {
             lastAppliedVelocity = { x: 0, z: 0 };
@@ -2410,6 +2525,8 @@ export default function WalkExe() {
             }
             ventTrip = null;
             setInVent(false);
+            setVentProgress(0);
+            setVentRoute("SIN RUTA");
             lastAppliedVelocity = { x: 0, z: 0 };
             emitNoise("vent-rattle", exitCellIndex, tickNow);
             setPrompt(
@@ -2729,6 +2846,10 @@ export default function WalkExe() {
     let lastQaUpdate = 0;
     let lastCctvFrame = Number.NEGATIVE_INFINITY;
     let spatialSourcesStarted = false;
+    let lastRendererCalls = 0;
+    let lastRendererTriangles = 0;
+    let peakRendererCalls = 0;
+    let peakRendererTriangles = 0;
 
     const renderFrame = (now: number) => {
       animation = requestAnimationFrame(renderFrame);
@@ -3048,7 +3169,9 @@ export default function WalkExe() {
           );
           const closeExit =
             cellCenter(exitCell).distanceTo(player.clone().setY(0)) < 1.55;
-          if (closeEcho) setPrompt("E · ESTABILIZAR ECO ESPECTRAL");
+          if (ventTrip) {
+            setPrompt("EN CONDUCTO · W/S RECORRE · A/D O RATÓN MIRA");
+          } else if (closeEcho) setPrompt("E · ESTABILIZAR ECO ESPECTRAL");
           else if (closeVent) setPrompt("E · ENTRAR EN CONDUCTO");
           else if (closeExit) {
             setPrompt("E · ABRIR SALIDA DE EMERGENCIA");
@@ -3141,6 +3264,7 @@ export default function WalkExe() {
       emergencyLight.intensity =
         frame % 217 < 5 ? 0.08 : 0.68 + chasePulse;
 
+      renderer.info.reset();
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, mount.clientWidth, mount.clientHeight);
       renderer.setClearColor(0x020303, 1);
@@ -3194,12 +3318,21 @@ export default function WalkExe() {
       } else {
         renderer.render(scene, camera);
       }
+      lastRendererCalls = renderer.info.render.calls;
+      lastRendererTriangles = renderer.info.render.triangles;
+      peakRendererCalls = Math.max(peakRendererCalls, lastRendererCalls);
+      peakRendererTriangles = Math.max(
+        peakRendererTriangles,
+        lastRendererTriangles,
+      );
     };
 
     const walkWindow = window as Window & {
       __M00NQA__?: {
         snapshot: () => Record<string, unknown>;
         stageEnemy: (distance?: number, state?: EnemyState) => boolean;
+        stageVent: (pairIndex?: number) => boolean;
+        openCctv: (cameraIndex?: number) => boolean;
       };
     };
     const qaBridge = {
@@ -3228,6 +3361,8 @@ export default function WalkExe() {
         transitionEnemyAnimation(state);
         return true;
       },
+      stageVent: stageVentForQa,
+      openCctv: openCctvForQa,
       snapshot: () => {
         const sortedFrames = [...frameTimes].sort(
           (first, second) => first - second,
@@ -3262,6 +3397,13 @@ export default function WalkExe() {
               ? ventTrip.distanceAlong /
                 Math.max(0.0001, ventTrip.totalDistance)
               : 0,
+            lookYaw: yaw,
+            routeYaw: currentVentHeadingYaw,
+            lookOffsetRadians: Math.atan2(
+              Math.sin(yaw - currentVentHeadingYaw),
+              Math.cos(yaw - currentVentHeadingYaw),
+            ),
+            pitch,
           },
           sequences: {
             escape: Boolean(escapeSequence),
@@ -3317,6 +3459,10 @@ export default function WalkExe() {
             fps: graphics.cctvFps,
             signalLost: cctvSignalLost,
             schematicSegments: schematic.length,
+            encounter: cctvEncounterRef.current?.id ?? null,
+            encounterPhase: cctvEncounterPhaseRef.current,
+            visits: cctvVisitRef.current,
+            quietVisits: cctvQuietVisitsRef.current,
           },
           simulation: {
             fixedSteps,
@@ -3338,8 +3484,10 @@ export default function WalkExe() {
             activePersistentSources: 0,
           },
           renderer: {
-            calls: renderer.info.render.calls,
-            triangles: renderer.info.render.triangles,
+            calls: lastRendererCalls,
+            triangles: lastRendererTriangles,
+            peakCalls: peakRendererCalls,
+            peakTriangles: peakRendererTriangles,
             geometries: renderer.info.memory.geometries,
             textures: renderer.info.memory.textures,
             pixelRatio: adaptivePixelRatio,
@@ -3358,6 +3506,11 @@ export default function WalkExe() {
     renderFrame(performance.now());
 
     return () => {
+      cctvEncounterGenerationRef.current += 1;
+      cctvEncounterTimersRef.current.forEach((timer) =>
+        window.clearTimeout(timer),
+      );
+      cctvEncounterTimersRef.current.clear();
       inputController.reset(performance.now());
       mobilePointers.clear();
       cancelAnimationFrame(animation);
@@ -3412,7 +3565,13 @@ export default function WalkExe() {
       }
       delete mount.dataset.qa;
     };
-  }, [quality, requestControl, seed, setGamePhase]);
+  }, [
+    clearCctvEncounter,
+    quality,
+    requestControl,
+    seed,
+    setGamePhase,
+  ]);
 
   useEffect(() => {
     audioRef.current?.setLevels(audioLevels);
@@ -3428,12 +3587,70 @@ export default function WalkExe() {
   );
 
   const chooseCamera = (index: number) => {
-    const mascot = mascotForCamera(seed, index);
+    clearCctvEncounter();
     cctvIndexRef.current = index;
     setCctvIndex(index);
     audioRef.current?.playCctvStatic({ duration: 0.22, gain: 0.14 });
-    audioRef.current?.playJumpscare(0.12, mascot.screamVariant);
-    setPrompt(`${mascot.cameraCode} · ${mascot.signal}`);
+    const now = performance.now();
+    const visitCount = cctvVisitRef.current + 1;
+    cctvVisitRef.current = visitCount;
+    const decision = decideCctvEncounter(
+      seed,
+      index,
+      visitCount,
+      cctvQuietVisitsRef.current,
+      now - cctvLastEncounterAtRef.current,
+      motionDetected,
+    );
+    if (!decision.trigger) {
+      cctvQuietVisitsRef.current += 1;
+      setPrompt(`${cameraNames[index]} · sin actividad confirmada.`);
+      return;
+    }
+
+    cctvQuietVisitsRef.current = 0;
+    cctvLastEncounterAtRef.current = now;
+    const mascot = mascotForCamera(seed + visitCount * 13, index);
+    const generation = cctvEncounterGenerationRef.current;
+    setPrompt("Interferencia localizada. No apartes la vista.");
+
+    const schedule = (delay: number, action: () => void) => {
+      const timer = window.setTimeout(() => {
+        cctvEncounterTimersRef.current.delete(timer);
+        if (
+          generation !== cctvEncounterGenerationRef.current ||
+          !tabletRef.current
+        ) {
+          return;
+        }
+        action();
+      }, delay);
+      cctvEncounterTimersRef.current.add(timer);
+    };
+
+    schedule(decision.revealDelayMs, () => {
+      cctvEncounterRef.current = mascot;
+      cctvEncounterPhaseRef.current = "presence";
+      setCctvEncounter(mascot);
+      setCctvEncounterPhase("presence");
+      setPrompt(`${mascot.cameraCode} · presencia no autorizada.`);
+    });
+    schedule(decision.revealDelayMs + 620, () => {
+      cctvEncounterPhaseRef.current = "scream";
+      setCctvEncounterPhase("scream");
+      setPrompt(`${mascot.name} · ¡BAJA EL MONITOR!`);
+      audioRef.current?.playJumpscare(0.68, mascot.screamVariant);
+    });
+    schedule(
+      decision.revealDelayMs + decision.visibleDurationMs,
+      () => {
+        cctvEncounterRef.current = null;
+        cctvEncounterPhaseRef.current = "idle";
+        setCctvEncounter(null);
+        setCctvEncounterPhase("idle");
+        setPrompt(`${cameraNames[index]} · la señal vuelve a estar vacía.`);
+      },
+    );
   };
 
   const pointerInputTimestamp = (
@@ -3497,8 +3714,6 @@ export default function WalkExe() {
   const updateAudioLevel = (key: keyof AudioLevels, value: number) => {
     setAudioLevels((levels) => ({ ...levels, [key]: value }));
   };
-
-  const cameraMascot = mascotForCamera(seed, cctvIndex);
 
   return (
     <main className={`walk-game phase-${phase} enemy-${enemyMode}`}>
@@ -3593,13 +3808,15 @@ export default function WalkExe() {
         </>
       )}
 
-      {inVent && (
+      {inVent && !tabletOpen && (
         <div className="vent-overlay" role="status">
-          <div className="vent-bars" aria-hidden="true">
-            {Array.from({ length: 9 }, (_, index) => <i key={index} />)}
+          <div className="vent-frame" aria-hidden="true"><i /><i /><i /><i /></div>
+          <div className="vent-route-readout">
+            <small>CONDUCTO DE MANTENIMIENTO · {ventRoute}</small>
+            <strong>{String(ventProgress).padStart(2, "0")}%</strong>
+            <div><i style={{ width: `${ventProgress}%` }} /></div>
+            <span>W/S AVANZA O RETROCEDE · A/D O RATÓN GIRAN LA CÁMARA</span>
           </div>
-          <strong>CONDUCTO DE MANTENIMIENTO</strong>
-          <span>W AVANZA · S RETROCEDE · PUEDES DETENERTE</span>
         </div>
       )}
 
@@ -3611,15 +3828,17 @@ export default function WalkExe() {
               className={`cctv-feed${signalLost ? " signal-lost" : ""}`}
             >
               <div className="cctv-scan" />
-              {!signalLost && (
+              {!signalLost && cctvEncounter && (
                 <div
-                  className={`cctv-intruder${motionDetected ? " detected" : ""}`}
-                  style={{ backgroundImage: `url(${cameraMascot.image})` }}
+                  className={`cctv-intruder encounter-${cctvEncounterPhase}${
+                    cctvEncounterPhase === "scream" ? " detected" : ""
+                  }`}
+                  style={{ backgroundImage: `url(${cctvEncounter.image})` }}
                   aria-hidden="true"
                 >
-                  <span>{cameraMascot.cameraCode}</span>
-                  <strong>{cameraMascot.name}</strong>
-                  <small>{cameraMascot.role}</small>
+                  <span>{cctvEncounter.cameraCode}</span>
+                  <strong>{cctvEncounter.name}</strong>
+                  <small>{cctvEncounter.role}</small>
                 </div>
               )}
               {signalLost && (
@@ -3638,6 +3857,10 @@ export default function WalkExe() {
                 <b>
                   {signalLost
                     ? "SIN SEÑAL"
+                    : cctvEncounterPhase === "scream"
+                    ? "¡RETROCEDE!"
+                    : cctvEncounter
+                    ? "PRESENCIA PARÁSITA"
                     : motionDetected
                     ? "OBJETO NO IDENTIFICADO"
                     : "SIN ACTIVIDAD"}
@@ -3697,6 +3920,7 @@ export default function WalkExe() {
                 onClick={() => {
                   tabletRef.current = false;
                   setTabletOpen(false);
+                  clearCctvEncounter();
                   requestControl();
                 }}
               >

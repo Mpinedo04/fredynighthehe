@@ -673,6 +673,18 @@
   animation-duration: .48s;
 }
 
+.cctv-intruder.encounter-presence {
+  animation:
+    cctv-encounter-arrival .22s steps(2) both,
+    cctv-intruder-haunt 1.4s steps(2) .22s infinite;
+}
+
+.cctv-intruder.encounter-scream {
+  opacity: .82;
+  filter: grayscale(.12) contrast(1.75) brightness(1.08);
+  animation: cctv-encounter-scream .11s steps(2) infinite;
+}
+
 .cctv-intruder::after {
   content: "";
   position: absolute;
@@ -888,43 +900,88 @@
   position: absolute;
   z-index: 80;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border: 3.5rem solid rgba(8,10,9,.82);
+  display: grid;
+  place-items: end center;
+  padding: 0 1rem 2.4rem;
   background:
-    linear-gradient(90deg, rgba(0,0,0,.75), transparent 25% 75%, rgba(0,0,0,.75)),
-    repeating-linear-gradient(0deg, transparent 0 2rem, rgba(173,185,178,.05) 2.1rem 2.2rem);
+    radial-gradient(ellipse at center, transparent 38%, rgba(0,0,0,.72) 100%),
+    linear-gradient(90deg, rgba(0,0,0,.48), transparent 18% 82%, rgba(0,0,0,.48));
   color: #aeb9b0;
   pointer-events: none;
 }
 
-.vent-bars {
+.vent-frame {
   position: absolute;
-  inset: 0;
-  display: flex;
-  justify-content: space-around;
-  perspective: 500px;
+  inset: 1.3rem;
+  border: 1px solid rgba(143,158,149,.18);
+  box-shadow:
+    inset 1.6rem 0 2.4rem rgba(0,0,0,.52),
+    inset -1.6rem 0 2.4rem rgba(0,0,0,.52);
 }
 
-.vent-bars i {
-  width: .45rem;
-  background: linear-gradient(90deg, #080a09, #3e4641, #090b0a);
-  box-shadow: 0 0 1rem #000;
-  transform: rotateX(5deg);
+.vent-frame i {
+  position: absolute;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-color: rgba(183,198,188,.32);
+  border-style: solid;
 }
 
-.vent-overlay strong,
-.vent-overlay span {
+.vent-frame i:nth-child(1) { top: 0; left: 0; border-width: 2px 0 0 2px; }
+.vent-frame i:nth-child(2) { top: 0; right: 0; border-width: 2px 2px 0 0; }
+.vent-frame i:nth-child(3) { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+.vent-frame i:nth-child(4) { right: 0; bottom: 0; border-width: 0 2px 2px 0; }
+
+.vent-route-readout {
   position: relative;
   z-index: 3;
-  padding: .5rem 1rem;
-  background: #050706d9;
+  width: min(34rem, calc(100vw - 3rem));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .45rem 1rem;
+  padding: .85rem 1rem;
+  border: 1px solid #3a433d;
+  background: rgba(5,7,6,.86);
+  box-shadow: 0 .8rem 2rem rgba(0,0,0,.46);
+  backdrop-filter: blur(8px);
+}
+
+.vent-route-readout small,
+.vent-route-readout strong,
+.vent-route-readout span {
   letter-spacing: .14em;
 }
 
-.vent-overlay span {
+.vent-route-readout small {
+  align-self: end;
+  color: #839087;
+  font-size: .43rem;
+}
+
+.vent-route-readout strong {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: #dbe3dd;
+  font: 1.6rem var(--font-display), sans-serif;
+}
+
+.vent-route-readout > div {
+  height: .28rem;
+  background: #202621;
+  overflow: hidden;
+}
+
+.vent-route-readout > div i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #687c70, #c6d5cb);
+  box-shadow: 0 0 .7rem #a8bab0;
+  transition: width .1s linear;
+}
+
+.vent-route-readout span {
+  grid-column: 1 / -1;
   color: #69736c;
   font-size: .48rem;
 }
@@ -1094,6 +1151,19 @@
 @keyframes cctv-intruder-tear {
   from { background-position: 0 0, 0 0; }
   to { background-position: -190% 0, 0 0; }
+}
+
+@keyframes cctv-encounter-arrival {
+  from {
+    opacity: 0;
+    transform: scale(.82) translateY(8%);
+    filter: contrast(2.4) brightness(2);
+  }
+}
+
+@keyframes cctv-encounter-scream {
+  0% { transform: scale(1.02) translate(-1%, 1%); }
+  50% { transform: scale(1.16) translate(1%, -1%); }
 }
 
 @keyframes mascot-scare-shell {

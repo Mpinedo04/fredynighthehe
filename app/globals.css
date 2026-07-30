@@ -1,6 +1,41 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Premiere Antonio";
+  src: url("/fonts/antonio-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Premiere Space Mono";
+  src: url("/fonts/space-mono-regular-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Premiere Space Mono";
+  src: url("/fonts/space-mono-bold-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Premiere Inter";
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
+  --font-display: "Premiere Antonio";
+  --font-mono: "Premiere Space Mono";
+  --font-sans: "Premiere Inter";
   --ink: #05070b;
   --ink-soft: #0a0f18;
   --paper: #f1eee7;

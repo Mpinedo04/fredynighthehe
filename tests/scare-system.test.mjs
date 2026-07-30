@@ -3,10 +3,48 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { decideCctvEncounter } from "../app/walk-exe/scare-roster.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const MASCOTS = ["ursus-9", "velvet-r", "avis-3", "vulpes-x"];
+
+test("CCTV encounters stay occasional, respect cooldown and cannot disappear forever", () => {
+  const safeOpening = decideCctvEncounter(
+    220722,
+    0,
+    1,
+    99,
+    Number.POSITIVE_INFINITY,
+  );
+  assert.equal(safeOpening.trigger, false);
+
+  let quietVisits = 0;
+  const decisions = [];
+  for (let visit = 2; visit <= 8; visit += 1) {
+    const decision = decideCctvEncounter(
+      220722,
+      visit % 6,
+      visit,
+      quietVisits,
+      Number.POSITIVE_INFINITY,
+    );
+    decisions.push(decision.trigger);
+    if (decision.trigger) break;
+    quietVisits += 1;
+  }
+  assert.ok(decisions.includes(false), "the camera network should include empty feeds");
+  assert.equal(
+    decisions.at(-1),
+    true,
+    "a fifth quiet camera must force an encounter",
+  );
+
+  const cooldown = decideCctvEncounter(220722, 2, 9, 99, 7_499, true);
+  assert.equal(cooldown.trigger, false);
+  const afterCooldown = decideCctvEncounter(220722, 2, 10, 4, 7_500);
+  assert.equal(afterCooldown.trigger, true);
+});
 
 test("the corrupt mascot network ships four distinct high-resolution faces", async () => {
   for (const mascot of MASCOTS) {
