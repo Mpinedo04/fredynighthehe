@@ -507,6 +507,24 @@
   color: #6b756d;
 }
 
+.game-overlay .briefing-roster button {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: .32rem .45rem;
+  border-color: rgba(206, 224, 207, .2);
+  background: rgba(183, 207, 186, .08);
+  color: #9eada1;
+  font-size: .37rem;
+  letter-spacing: .12em;
+}
+
+.game-overlay .briefing-roster button:hover,
+.game-overlay .briefing-roster button:focus-visible {
+  border-color: #d7e1d5;
+  background: #d7e1d5;
+  color: #070907;
+}
+
 .fiction-note {
   margin-top: .8rem;
   color: #5d6960;
@@ -698,7 +716,8 @@
 
 .cctv-intruder span,
 .cctv-intruder strong,
-.cctv-intruder small {
+.cctv-intruder small,
+.cctv-intruder em {
   position: absolute;
   z-index: 2;
   right: 1rem;
@@ -726,6 +745,15 @@
   color: #8f9b91;
   font-size: .38rem;
   letter-spacing: .1em;
+}
+
+.cctv-intruder em {
+  top: 4.65rem;
+  max-width: 68%;
+  color: #d6b86f;
+  font-size: .34rem;
+  font-style: normal;
+  letter-spacing: .08em;
 }
 
 .cctv-feed-top {

@@ -46,6 +46,10 @@ export type SpatialAudioQaCounters = Readonly<{
   activeOneShots: number;
   activePersistentSources: number;
   nodesCreatedByType: Readonly<Record<string, number>>;
+  mascotWarningsPlayed: number;
+  mascotScreamsPlayed: number;
+  mascotScreamsFailed: number;
+  lastMascotVariant: number | null;
 }>;
 
 export type SpatialAudioOptions = Readonly<{
@@ -89,6 +93,12 @@ const DEFAULT_LEVELS: SpatialAudioLevels = {
 
 const DEFAULT_UP: AudioVector3 = { x: 0, y: 1, z: 0 };
 const SILENCE = 0.0001;
+const MASCOT_SCREAM_PROFILES = [
+  { primaryRate: 0.82, layerRate: 0.57, warningRate: 0.68 },
+  { primaryRate: 1.08, layerRate: 1.42, warningRate: 1.24 },
+  { primaryRate: 0.98, layerRate: 1.27, warningRate: 1.12 },
+  { primaryRate: 0.92, layerRate: 1.18, warningRate: 0.84 },
+] as const;
 
 function clamp(value: number, minimum = 0, maximum = 1) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -302,6 +312,10 @@ export class SpatialAudioEngine {
   private nodesCreated = 0;
   private activeOneShots = 0;
   private readonly nodesCreatedByType: Record<string, number> = {};
+  private mascotWarningsPlayed = 0;
+  private mascotScreamsPlayed = 0;
+  private mascotScreamsFailed = 0;
+  private lastMascotVariant: number | null = null;
 
   constructor(options: SpatialAudioOptions = {}) {
     this.levels = { ...DEFAULT_LEVELS };
@@ -630,16 +644,60 @@ export class SpatialAudioEngine {
   }
 
   playJumpscare(strength = 1, variant = 0) {
+    return this.playMascotScream(variant, strength);
+  }
+
+  playMascotWarning(variant = 0) {
     const bus = this.buses.get("jumpscare");
-    if (!bus || this.context?.state !== "running") return false;
+    const context = this.context;
+    this.lastMascotVariant = Math.trunc(variant);
+    if (!bus || context?.state !== "running") return false;
     const jumpscares = this.requireBuffers().jumpscares;
-    const selected =
-      jumpscares[((Math.trunc(variant) % jumpscares.length) + jumpscares.length) %
-        jumpscares.length];
-    return this.playBuffer(selected, bus, {
-      gain: clamp(strength, 0, 1.5) * 0.82,
-      playbackRate: 0.965 + this.random() * 0.055,
+    const normalizedVariant =
+      ((Math.trunc(variant) % jumpscares.length) + jumpscares.length) %
+      jumpscares.length;
+    const selected = jumpscares[normalizedVariant];
+    const profile = MASCOT_SCREAM_PROFILES[normalizedVariant];
+    const played = this.playBuffer(selected, bus, {
+      gain: 0.34,
+      playbackRate: profile.warningRate,
+      duration: Math.min(0.2, selected.duration),
+      offset: Math.min(
+        selected.duration * 0.18,
+        Math.max(0, selected.duration - 0.2),
+      ),
     });
+    if (played) this.mascotWarningsPlayed += 1;
+    return played;
+  }
+
+  playMascotScream(variant = 0, strength = 1) {
+    const bus = this.buses.get("jumpscare");
+    const context = this.context;
+    this.lastMascotVariant = Math.trunc(variant);
+    if (!bus || context?.state !== "running") {
+      this.mascotScreamsFailed += 1;
+      return false;
+    }
+    const jumpscares = this.requireBuffers().jumpscares;
+    const normalizedVariant =
+      ((Math.trunc(variant) % jumpscares.length) + jumpscares.length) %
+      jumpscares.length;
+    const selected = jumpscares[normalizedVariant];
+    const profile = MASCOT_SCREAM_PROFILES[normalizedVariant];
+    const scaledStrength = clamp(strength, 0, 1.5);
+    const primary = this.playBuffer(selected, bus, {
+      gain: scaledStrength * 1.08,
+      playbackRate: profile.primaryRate,
+    });
+    const mechanicalLayer = this.playBuffer(selected, bus, {
+      gain: scaledStrength * 0.38,
+      playbackRate: profile.layerRate,
+    });
+    const played = primary || mechanicalLayer;
+    if (played) this.mascotScreamsPlayed += 1;
+    else this.mascotScreamsFailed += 1;
+    return played;
   }
 
   getQaCounters(): SpatialAudioQaCounters {
@@ -655,6 +713,10 @@ export class SpatialAudioEngine {
       activeOneShots: this.activeOneShots,
       activePersistentSources: this.persistentSources.size,
       nodesCreatedByType: { ...this.nodesCreatedByType },
+      mascotWarningsPlayed: this.mascotWarningsPlayed,
+      mascotScreamsPlayed: this.mascotScreamsPlayed,
+      mascotScreamsFailed: this.mascotScreamsFailed,
+      lastMascotVariant: this.lastMascotVariant,
     };
   }
 

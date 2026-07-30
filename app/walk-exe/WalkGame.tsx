@@ -692,7 +692,32 @@ export default function WalkExe() {
           "El navegador ha bloqueado el audio. El juego continúa en silencio.",
         );
       });
+    return engine;
   }, [audioLevels, seed]);
+
+  const primeCctvAudio = useCallback(() => {
+    const engine = audioRef.current ?? startAudio();
+    const activation = engine.isUnlocked ? engine.resume() : engine.unlock();
+    return activation.catch(() => false);
+  }, [startAudio]);
+
+  const previewMascotScream = useCallback(
+    (mascot: ScareMascot) => {
+      const engine = audioRef.current ?? startAudio();
+      void primeCctvAudio().then((running) => {
+        if (!running || audioRef.current !== engine) {
+          setMessage(
+            "AUDIO BLOQUEADO · vuelve a pulsar OÍR para autorizar el sonido.",
+          );
+          return;
+        }
+        engine.playMascotWarning(mascot.screamVariant);
+        engine.playMascotScream(mascot.screamVariant, 0.9);
+        setMessage(`PRUEBA DE AUDIO · ${mascot.name} · ${mascot.signal}`);
+      });
+    },
+    [primeCctvAudio, startAudio],
+  );
 
   const setGamePhase = useCallback((next: GamePhase) => {
     inputControllerRef.current?.reset(performance.now());
@@ -2143,7 +2168,13 @@ export default function WalkExe() {
         inputController.reset(timestamp);
         mobilePointers.clear();
         setTabletOpen(tabletRef.current);
-        if (tabletRef.current) audioRef.current?.playCctvStatic();
+        if (tabletRef.current) {
+          void audioRef.current?.resume().then((running) => {
+            if (running && tabletRef.current) {
+              audioRef.current?.playCctvStatic();
+            }
+          });
+        }
         else clearCctvEncounter();
         setPrompt(
           tabletRef.current
@@ -3482,6 +3513,10 @@ export default function WalkExe() {
             activeNodes: 0,
             activeOneShots: 0,
             activePersistentSources: 0,
+            mascotWarningsPlayed: 0,
+            mascotScreamsPlayed: 0,
+            mascotScreamsFailed: 0,
+            lastMascotVariant: null,
           },
           renderer: {
             calls: lastRendererCalls,
@@ -3590,7 +3625,11 @@ export default function WalkExe() {
     clearCctvEncounter();
     cctvIndexRef.current = index;
     setCctvIndex(index);
-    audioRef.current?.playCctvStatic({ duration: 0.22, gain: 0.14 });
+    void primeCctvAudio().then((running) => {
+      if (running && tabletRef.current) {
+        audioRef.current?.playCctvStatic({ duration: 0.22, gain: 0.14 });
+      }
+    });
     const now = performance.now();
     const visitCount = cctvVisitRef.current + 1;
     cctvVisitRef.current = visitCount;
@@ -3634,12 +3673,33 @@ export default function WalkExe() {
       setCctvEncounter(mascot);
       setCctvEncounterPhase("presence");
       setPrompt(`${mascot.cameraCode} · presencia no autorizada.`);
+      const engine = audioRef.current;
+      if (engine?.playMascotWarning(mascot.screamVariant)) return;
+      void engine?.resume().then((running) => {
+        if (
+          running &&
+          generation === cctvEncounterGenerationRef.current &&
+          tabletRef.current
+        ) {
+          engine.playMascotWarning(mascot.screamVariant);
+        }
+      });
     });
     schedule(decision.revealDelayMs + 620, () => {
       cctvEncounterPhaseRef.current = "scream";
       setCctvEncounterPhase("scream");
       setPrompt(`${mascot.name} · ¡BAJA EL MONITOR!`);
-      audioRef.current?.playJumpscare(0.68, mascot.screamVariant);
+      const engine = audioRef.current;
+      if (engine?.playMascotScream(mascot.screamVariant, 1.18)) return;
+      void engine?.resume().then((running) => {
+        if (
+          running &&
+          generation === cctvEncounterGenerationRef.current &&
+          tabletRef.current
+        ) {
+          engine.playMascotScream(mascot.screamVariant, 1.18);
+        }
+      });
     });
     schedule(
       decision.revealDelayMs + decision.visibleDurationMs,
@@ -3839,6 +3899,7 @@ export default function WalkExe() {
                   <span>{cctvEncounter.cameraCode}</span>
                   <strong>{cctvEncounter.name}</strong>
                   <small>{cctvEncounter.role}</small>
+                  <em>AUDIO · {cctvEncounter.signal}</em>
                 </div>
               )}
               {signalLost && (
@@ -3899,6 +3960,9 @@ export default function WalkExe() {
                     key={name}
                     type="button"
                     className={cctvIndex === index ? "active" : ""}
+                    onPointerDown={() => {
+                      void primeCctvAudio();
+                    }}
                     onClick={() => chooseCamera(index)}
                     style={{
                       left: `${cameraMapPositions[index]?.left ?? 12}%`,
@@ -3976,6 +4040,13 @@ export default function WalkExe() {
                     <strong>{mascot.name}</strong>
                     <small>{mascot.role}</small>
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => previewMascotScream(mascot)}
+                    aria-label={`Oír scream de ${mascot.name}`}
+                  >
+                    ▶ OÍR
+                  </button>
                 </article>
               ))}
             </div>
@@ -4120,11 +4191,18 @@ export default function WalkExe() {
               type="button"
               onClick={() => {
                 if (power <= 0) return;
+                void primeCctvAudio();
                 tabletRef.current = !tabletRef.current;
                 inputControllerRef.current?.reset(performance.now());
                 mobilePointersRef.current.clear();
                 setTabletOpen(tabletRef.current);
-                if (tabletRef.current) audioRef.current?.playCctvStatic();
+                if (tabletRef.current) {
+                  void audioRef.current?.resume().then((running) => {
+                    if (running && tabletRef.current) {
+                      audioRef.current?.playCctvStatic();
+                    }
+                  });
+                }
                 if (tabletRef.current) document.exitPointerLock?.();
               }}
             >

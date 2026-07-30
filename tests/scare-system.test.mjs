@@ -74,6 +74,12 @@ test("every mascot is wired to CCTV, a named scream and the caught sequence", as
 
   assert.match(audio, /jumpscares:\s*\[ursusScream,\s*velvetScream,\s*avisScream,\s*vulpesScream\]/);
   assert.match(audio, /playJumpscare\(strength = 1, variant = 0\)/);
+  assert.match(audio, /playMascotWarning\(variant = 0\)/);
+  assert.match(audio, /playMascotScream\(variant = 0, strength = 1\)/);
+  assert.match(audio, /mascotScreamsPlayed/);
+  assert.match(game, /playMascotScream\(mascot\.screamVariant, 1\.18\)/);
+  assert.match(game, /playMascotWarning\(mascot\.screamVariant\)/);
+  assert.match(game, /Oír scream de \$\{mascot\.name\}/);
   assert.match(game, /mascotForCatch/);
   assert.match(game, /className="mascot-jumpscare-face"/);
   assert.match(game, /className=\{`cctv-intruder/);
