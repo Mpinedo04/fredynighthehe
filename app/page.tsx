@@ -9,17 +9,102 @@ import {
 } from "react";
 
 const credits = [
-  "Dirección",
-  "Cámara",
-  "Sonido",
-  "Iluminación",
-  "Montaje",
-  "Color",
-  "Producción",
-  "Interpretación",
-  "Música",
-  "Creatividad",
-];
+  {
+    name: "Dirección",
+    detail: "Idea, tono y puesta en escena",
+    image: "/archive/roles/direction.webp",
+    alt: "Rig profesional de cámara",
+  },
+  {
+    name: "Cámara",
+    detail: "Encuadre, óptica y movimiento",
+    image: "/archive/roles/camera.webp",
+    alt: "Cámara cinematográfica Blackmagic",
+  },
+  {
+    name: "Sonido",
+    detail: "Captura, ambiente y pulso",
+    image: "/archive/roles/sound.webp",
+    alt: "Grabadora de sonido profesional",
+  },
+  {
+    name: "Iluminación",
+    detail: "Contraste, textura y atmósfera",
+    image: "/archive/roles/light.webp",
+    alt: "Estudio audiovisual con focos y cámaras",
+  },
+  {
+    name: "Montaje",
+    detail: "Ritmo, estructura y toma final",
+    image: "/archive/roles/edit.webp",
+    alt: "Monitor profesional de producción",
+  },
+  {
+    name: "Color",
+    detail: "DaVinci, intención y acabado",
+    image: "/archive/roles/color.webp",
+    alt: "Símbolo de DaVinci Resolve",
+  },
+  {
+    name: "Producción",
+    detail: "Equipo, logística y soluciones",
+    image: "/archive/roles/production.webp",
+    alt: "Cámara montada sobre estabilizador",
+  },
+  {
+    name: "Interpretación",
+    detail: "Presencia, personaje y escena",
+    image: "/archive/roles/performance.webp",
+    alt: "Raúl actuando sobre un escenario",
+  },
+  {
+    name: "Música",
+    detail: "Voz, escucha y diseño rítmico",
+    image: "/archive/roles/music.webp",
+    alt: "Micrófono de estudio",
+  },
+  {
+    name: "Creatividad",
+    detail: "La idea que conecta todo",
+    image: "/archive/roles/creativity.webp",
+    alt: "Raúl sosteniendo algodón de azúcar durante un rodaje",
+  },
+] as const;
+
+const friendTestimonials = [
+  {
+    number: "01",
+    role: "AYUDANTE DE DIRECCIÓN EMOCIONAL",
+    quote:
+      "Aquí irá ese mensaje que consigue hacerte reír y emocionarte en la misma frase.",
+    image: "/archive/friends-01.webp",
+    alt: "Raúl conversando con su equipo durante un evento",
+  },
+  {
+    number: "02",
+    role: "PRODUCTOR DE MOMENTOS ABSURDOS",
+    quote:
+      "Testigo oficial de ideas que empezaron como una broma y terminaron teniendo créditos.",
+    image: "/archive/friends-02.webp",
+    alt: "Raúl y su equipo en un festival de cortometrajes",
+  },
+  {
+    number: "03",
+    role: "TÉCNICO DE RECUERDOS",
+    quote:
+      "Responsable de conservar las tomas que nunca deberían borrarse.",
+    image: "/archive/friends-03.webp",
+    alt: "Equipo de Raúl celebrando junto en un parque",
+  },
+  {
+    number: "04",
+    role: "AMIGO RECURRENTE",
+    quote:
+      "Presente desde la primera temporada. Renovado indefinidamente.",
+    image: "/archive/friends-04.webp",
+    alt: "Rodaje de una escena en una cocina",
+  },
+] as const;
 
 const projects = [
   {
@@ -190,32 +275,32 @@ const behindFrames = [
   {
     code: "01A",
     title: "GRABANDO",
-    caption: "Imágenes Ocultas · rodaje contrarreloj",
-    image: "/youtube/imagenes-ocultas.jpg",
+    caption: "Rodaje real · cámara y actores en localización",
+    image: "/archive/trailer-shoot.webp",
   },
   {
     code: "02B",
     title: "EN CABINA",
-    caption: "WTF El Documental · control y entrevistas",
-    image: "/youtube/wtf-documental.jpg",
+    caption: "Raaulinhoo · control, referencias y montaje",
+    image: "/archive/dossier-studio.webp",
   },
   {
     code: "03C",
     title: "CON SU GENTE",
-    caption: "Corazón Intacto · reparto y equipo",
-    image: "/youtube/corazon-intacto.jpg",
+    caption: "Festival · equipo y selección oficial",
+    image: "/archive/friends-02.webp",
   },
   {
     code: "04D",
     title: "TOMA FALSA",
-    caption: "El pan ta’ duro · el caos también se monta",
-    image: "/youtube/el-pan-ta-duro.jpg",
+    caption: "Que Caloreh · utilería con azúcar",
+    image: "/archive/channel-avatar.webp",
   },
   {
     code: "05E",
     title: "MONTANDO",
-    caption: "Catarsis · la historia termina en la mesa",
-    image: "/youtube/catarsis.jpg",
+    caption: "Monitorización · cámara, rig y precisión",
+    image: "/archive/dossier-camera.webp",
   },
 ];
 
@@ -1035,6 +1120,17 @@ export default function Home() {
 
       <section className="hero" id="premiere">
         <div className="hero-beam" aria-hidden="true" />
+        <figure className="hero-still">
+          <img
+            src="/archive/hero-stage.webp"
+            alt="Raúl García actuando sobre un escenario"
+            fetchPriority="high"
+          />
+          <figcaption>
+            <span>ARCHIVO PERSONAL · ESCENARIO</span>
+            <strong>EL PROTAGONISTA ENTRA EN CUADRO</strong>
+          </figcaption>
+        </figure>
         <div className="hero-copy">
           <p className="eyebrow">UNA PRODUCCIÓN DE TODA SU GENTE</p>
           <h1>
@@ -1069,11 +1165,16 @@ export default function Home() {
 
       <section className="portrait-section" id="reparto">
         <div className="section-number">01</div>
-        <div className="portrait-frame" aria-label="Fotograma reservado para una foto de Raúl">
+        <div className="portrait-frame">
+          <img
+            className="portrait-photo"
+            src="/archive/portrait-set.webp"
+            alt="Raúl junto a una cámara durante un rodaje"
+          />
           <div className="camera-reticle" aria-hidden="true">
             <span>REC</span>
             <b>RAÚL</b>
-            <small>FOTOGRAMA PERSONAL</small>
+            <small>FOTOGRAMA REAL · EN RODAJE</small>
           </div>
         </div>
         <div className="portrait-copy">
@@ -1092,9 +1193,11 @@ export default function Home() {
         </div>
         <div className="credit-roll" aria-label="Créditos de Raúl">
           {credits.map((credit, index) => (
-            <div key={credit}>
+            <div key={credit.name}>
               <span>{String(index + 1).padStart(2, "0")}</span>
-              <b>{credit}</b>
+              <img src={credit.image} alt={credit.alt} loading="lazy" />
+              <b>{credit.name}</b>
+              <em>{credit.detail}</em>
               <i aria-hidden="true" />
               <small>RAÚL GARCÍA</small>
             </div>
@@ -1115,7 +1218,13 @@ export default function Home() {
         </div>
 
         <div className="channel-marquee">
-          <div className="channel-avatar">R</div>
+          <div className="channel-avatar">
+            <img
+              src="/archive/channel-avatar.webp"
+              alt="Retrato de Raúl"
+              loading="lazy"
+            />
+          </div>
           <div>
             <small>CANAL OFICIAL EN YOUTUBE</small>
             <strong>@Raaulinhoo</strong>
@@ -1218,9 +1327,8 @@ export default function Home() {
           <div className="tape-note">
             <span>NOTA DE MONTAJE</span>
             <p>
-              Ya hay imágenes reales de sus producciones. Cuando aparezcan las
-              fotos privadas del rodaje, cada fotograma se puede sustituir sin
-              rehacer esta mesa.
+              Fotografías reales recuperadas de su portfolio: rodajes, cabina,
+              festival, equipo y esos momentos que nunca caben en los créditos.
             </p>
           </div>
         </div>
@@ -1234,6 +1342,32 @@ export default function Home() {
             <h2>EL EXPEDIENTE<br />DE RAÚL</h2>
           </div>
           <div className="stamp">CLASIFICADO</div>
+        </div>
+        <div className="dossier-evidence" aria-label="Pruebas visuales del expediente">
+          <figure>
+            <img
+              src="/archive/dossier-camera.webp"
+              alt="Raúl trabajando con una cámara sobre un rig"
+              loading="lazy"
+            />
+            <figcaption><span>PRUEBA A</span> OPERADOR EN PLATÓ</figcaption>
+          </figure>
+          <figure>
+            <img
+              src="/archive/dossier-studio.webp"
+              alt="Raúl en una mesa de trabajo audiovisual"
+              loading="lazy"
+            />
+            <figcaption><span>PRUEBA B</span> CABINA RAAULINHOO</figcaption>
+          </figure>
+          <figure>
+            <img
+              src="/archive/dossier-location.webp"
+              alt="Raúl durante un rodaje en exteriores"
+              loading="lazy"
+            />
+            <figcaption><span>PRUEBA C</span> LOCALIZACIÓN EXTERIOR</figcaption>
+          </figure>
         </div>
         <div className="dossier-grid">
           <dl className="identity-file">
@@ -1675,17 +1809,19 @@ export default function Home() {
           <h2>Gente que volvería<br />para la segunda temporada.</h2>
         </div>
         <div className="testimonials">
-          {[
-            ["01", "AYUDANTE DE DIRECCIÓN EMOCIONAL", "Aquí irá ese mensaje que consigue hacerte reír y emocionarte en la misma frase."],
-            ["02", "PRODUCTOR DE MOMENTOS ABSURDOS", "Testigo oficial de ideas que empezaron como una broma y terminaron teniendo créditos."],
-            ["03", "TÉCNICO DE RECUERDOS", "Responsable de conservar las tomas que nunca deberían borrarse."],
-            ["04", "AMIGO RECURRENTE", "Presente desde la primera temporada. Renovado indefinidamente."],
-          ].map(([number, role, quote]) => (
-            <article key={number}>
-              <div className="avatar-placeholder">{number}</div>
+          {friendTestimonials.map((testimonial) => (
+            <article key={testimonial.number}>
+              <div className="avatar-placeholder">
+                <img
+                  src={testimonial.image}
+                  alt={testimonial.alt}
+                  loading="lazy"
+                />
+                <span>{testimonial.number}</span>
+              </div>
               <div>
-                <p>{role}</p>
-                <blockquote>“{quote}”</blockquote>
+                <p>{testimonial.role}</p>
+                <blockquote>“{testimonial.quote}”</blockquote>
                 <span>NOMBRE DEL AMIGO · CAST PENDIENTE</span>
               </div>
             </article>
@@ -1695,6 +1831,12 @@ export default function Home() {
 
       <section className="trailer-section section-pad" id="escena-22">
         <div className="trailer-poster">
+          <img
+            className="trailer-photo"
+            src="/archive/trailer-shoot.webp"
+            alt="Equipo rodando una escena en una cocina"
+            loading="lazy"
+          />
           <div className="trailer-topline">
             <span>PUENTE DE MONTAJE · NO ES UN VÍDEO VACÍO</span>
             <span>00:22 · INTERACTIVO</span>
@@ -1756,6 +1898,12 @@ export default function Home() {
 
       <section className={clapped ? "final-message revealed" : "final-message"}>
         <div className="final-frame">
+          <img
+            className="final-photo"
+            src="/archive/final-festival.webp"
+            alt="Raúl y su equipo en un festival de cortometrajes"
+            loading="lazy"
+          />
           <p className="eyebrow red">RAÚL GARCÍA · ESCENA 22 · TOMA ∞</p>
           <h2>Feliz cumpleaños,<br /><span>Raúl.</span></h2>
           <div className="final-copy">
@@ -1777,6 +1925,12 @@ export default function Home() {
           </button>
         </div>
         <div className={postCredits ? "post-credits visible" : "post-credits"}>
+          <img
+            className="post-credits-photo"
+            src="/archive/postcredits-team.webp"
+            alt="Raúl y sus amigos celebrando juntos"
+            loading="lazy"
+          />
           <span>ESCENA POSTCRÉDITOS</span>
           <p>
             Sí, hay secuela. Se titula <strong>“Todo lo demás”</strong> y ya
