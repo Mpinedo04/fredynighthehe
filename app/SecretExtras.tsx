@@ -56,6 +56,12 @@ type MicroDot = {
   frequency: number;
 };
 
+type MicroReadout = {
+  step: number;
+  octave: number;
+  frequency: number;
+};
+
 type FnafEncounter = {
   milestone: number;
   image: string;
@@ -150,6 +156,13 @@ export default function SecretExtras({
   const [fnafMessage, setFnafMessage] = useState("");
   const [microUnlockClicks, setMicroUnlockClicks] = useState(0);
   const [microDots, setMicroDots] = useState<MicroDot[]>([]);
+  const [microWaveform, setMicroWaveform] = useState<OscillatorType>("triangle");
+  const [microTempo, setMicroTempo] = useState(112);
+  const [microReadout, setMicroReadout] = useState<MicroReadout>({
+    step: 0,
+    octave: 2,
+    frequency: 220,
+  });
   const [continuityMessage, setContinuityMessage] = useState("");
   const [directorCut, setDirectorCut] = useState(false);
   const [anchors, setAnchors] = useState<Partial<Record<ContinuityId, Element>>>({});
@@ -173,6 +186,8 @@ export default function SecretExtras({
   const microUnlockRef = useRef(0);
   const microIdRef = useRef(0);
   const microDotsRef = useRef<MicroDot[]>([]);
+  const microReadoutRafRef = useRef<number | null>(null);
+  const pendingMicroReadoutRef = useRef<MicroReadout | null>(null);
   const cancelRuntimeRef = useRef<() => void>(() => undefined);
 
   const completedCount = completedSecretCount(progress);
@@ -235,7 +250,7 @@ export default function SecretExtras({
       const now = context.currentTime;
       const oscillator = context.createOscillator();
       const gain = context.createGain();
-      oscillator.type = "triangle";
+      oscillator.type = microWaveform;
       oscillator.frequency.value = frequency;
       gain.gain.setValueAtTime(0.0001, now);
       gain.gain.exponentialRampToValueAtTime(volume, now + 0.018);
@@ -251,8 +266,33 @@ export default function SecretExtras({
       oscillator.start(now);
       oscillator.stop(now + duration + 0.02);
     },
-    [getAudioContext],
+    [getAudioContext, microWaveform],
   );
+
+  const playMicroSequence = useCallback(() => {
+    const dots = microDotsRef.current;
+    const context = getAudioContext();
+    if (!context || dots.length === 0) return;
+    const stepDuration = 60 / microTempo / 2;
+    const now = context.currentTime + 0.04;
+    dots.forEach((dot, index) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const panner = context.createStereoPanner();
+      const startsAt = now + index * stepDuration;
+      oscillator.type = microWaveform;
+      oscillator.frequency.value = dot.frequency;
+      panner.pan.value = Math.max(-1, Math.min(1, (dot.x / window.innerWidth) * 2 - 1));
+      gain.gain.setValueAtTime(0.0001, startsAt);
+      gain.gain.exponentialRampToValueAtTime(0.055, startsAt + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startsAt + stepDuration * 0.82);
+      oscillator.connect(gain);
+      gain.connect(panner);
+      panner.connect(context.destination);
+      oscillator.start(startsAt);
+      oscillator.stop(startsAt + stepDuration);
+    });
+  }, [getAudioContext, microTempo, microWaveform]);
 
   const playMicroFinale = useCallback(
     (dots: MicroDot[]) => {
@@ -330,6 +370,12 @@ export default function SecretExtras({
     setFnafEncounter(null);
     setFnafEnding(null);
     setMicroDots([]);
+    microDotsRef.current = [];
+    if (microReadoutRafRef.current !== null) {
+      window.cancelAnimationFrame(microReadoutRafRef.current);
+      microReadoutRafRef.current = null;
+    }
+    pendingMicroReadoutRef.current = null;
     setDirectorCut(false);
   }, [clearEncounterHost, clearRuntimeTimers, restoreSpielbergInversion]);
 
@@ -468,13 +514,26 @@ export default function SecretExtras({
       return;
     }
     setMicroDots([]);
+    microDotsRef.current = [];
     setActiveMode("micro");
   }, []);
 
   const finishMicroLab = useCallback(() => {
     setProgress((current) => completeSecret(current, "microtonal"));
     setMicroDots([]);
+    microDotsRef.current = [];
     setActiveMode(null);
+  }, []);
+
+  const undoMicroNote = useCallback(() => {
+    const next = microDotsRef.current.slice(0, -1);
+    microDotsRef.current = next;
+    setMicroDots(next);
+  }, []);
+
+  const clearMicroNotes = useCallback(() => {
+    microDotsRef.current = [];
+    setMicroDots([]);
   }, []);
 
   const finishDirectorCut = useCallback(() => {
@@ -720,21 +779,39 @@ export default function SecretExtras({
     triggerFnafEnding();
   }, [activeMode, blocked, progress, scrollDepth, started, triggerFnafEnding]);
 
-  useEffect(() => {
-    const handleUnlock = () => {
-      if (!started || blockedRef.current || progressRef.current.completed.includes("microtonal")) {
-        return;
-      }
-      microUnlockRef.current = Math.min(3, microUnlockRef.current + 1);
-      setMicroUnlockClicks(microUnlockRef.current);
-      if (microUnlockRef.current >= 3) startMicroLab();
-    };
-    window.addEventListener("premiere22:micro-unlock", handleUnlock);
-    return () => window.removeEventListener("premiere22:micro-unlock", handleUnlock);
+  const registerMicroUnlock = useCallback(() => {
+    if (!started || blockedRef.current || progressRef.current.completed.includes("microtonal")) {
+      return;
+    }
+    microUnlockRef.current = Math.min(3, microUnlockRef.current + 1);
+    setMicroUnlockClicks(microUnlockRef.current);
+    if (microUnlockRef.current >= 3) startMicroLab();
   }, [startMicroLab, started]);
 
   useEffect(() => {
+    const handleUnlock = () => registerMicroUnlock();
+    window.addEventListener("premiere22:micro-unlock", handleUnlock);
+    return () => window.removeEventListener("premiere22:micro-unlock", handleUnlock);
+  }, [registerMicroUnlock]);
+
+  useEffect(() => {
     if (activeMode !== "micro") return;
+    const updateReadout = (event: PointerEvent) => {
+      pendingMicroReadoutRef.current = microtoneFromPoint(
+        event.clientX,
+        event.clientY,
+        window.innerWidth,
+        window.innerHeight,
+      );
+      if (microReadoutRafRef.current !== null) return;
+      microReadoutRafRef.current = window.requestAnimationFrame(() => {
+        if (pendingMicroReadoutRef.current) {
+          setMicroReadout(pendingMicroReadoutRef.current);
+        }
+        pendingMicroReadoutRef.current = null;
+        microReadoutRafRef.current = null;
+      });
+    };
     const handlePointer = (event: PointerEvent) => {
       const target = event.target;
       if (
@@ -750,6 +827,7 @@ export default function SecretExtras({
         window.innerWidth,
         window.innerHeight,
       );
+      setMicroReadout(tone);
       playMicroNote(tone.frequency, event.clientX);
       if (microDotsRef.current.length >= 24) return;
       const next = [
@@ -767,11 +845,20 @@ export default function SecretExtras({
         activeModeRef.current = "micro-finale";
         setActiveMode("micro-finale");
         playMicroFinale(next);
-        addTimer(finishMicroLab, 4200);
+        addTimer(finishMicroLab, 5600);
       }
     };
+    document.addEventListener("pointermove", updateReadout, true);
     document.addEventListener("pointerdown", handlePointer, true);
-    return () => document.removeEventListener("pointerdown", handlePointer, true);
+    return () => {
+      document.removeEventListener("pointermove", updateReadout, true);
+      document.removeEventListener("pointerdown", handlePointer, true);
+      if (microReadoutRafRef.current !== null) {
+        window.cancelAnimationFrame(microReadoutRafRef.current);
+        microReadoutRafRef.current = null;
+      }
+      pendingMicroReadoutRef.current = null;
+    };
   }, [activeMode, addTimer, finishMicroLab, playMicroFinale, playMicroNote]);
 
   useEffect(() => {
@@ -864,6 +951,25 @@ export default function SecretExtras({
 
   return (
     <>
+      {started && !blocked && activeMode === null && !progress.completed.includes("microtonal") && (
+        <button
+          type="button"
+          className="micro-discovery-beacon"
+          onClick={registerMicroUnlock}
+          aria-label={`Abrir laboratorio 24 TET. ${microUnlockClicks} de 3 pulsos realizados`}
+          data-hee-control
+        >
+          <span>LABORATORIO MICROTONAL</span>
+          <strong>24 <b>TET</b></strong>
+          <small>{microUnlockClicks === 0 ? "PULSA 3 VECES" : `${3 - microUnlockClicks} PULSO${3 - microUnlockClicks === 1 ? "" : "S"} MÁS`}</small>
+          <i aria-hidden="true">
+            {Array.from({ length: 3 }, (_, index) => (
+              <b key={index} className={index < microUnlockClicks ? "active" : ""} />
+            ))}
+          </i>
+        </button>
+      )}
+
       <aside className={`secret-console ${panelOpen ? "open" : ""}`} data-hee-control>
         <button
           type="button"
@@ -962,6 +1068,11 @@ export default function SecretExtras({
               <small>ANGINE DE POITRINE · 24 TET</small>
               <strong>{activeMode === "micro-finale" ? "COMPOSICIÓN 22" : "PULSA CUALQUIER ESPACIO VACÍO"}</strong>
             </div>
+            <div className="micro-live-readout" aria-live="polite">
+              <span>PASO {String(microReadout.step + 1).padStart(2, "0")}</span>
+              <strong>{microReadout.frequency.toFixed(2)} Hz</strong>
+              <small>OCTAVA {microReadout.octave + 1} · {microReadout.step * 50}¢</small>
+            </div>
             <span>{String(microDots.length).padStart(2, "0")}/24 NOTAS</span>
             {activeMode === "micro" && (
               <button type="button" onClick={() => cancelRuntime()}>
@@ -969,7 +1080,55 @@ export default function SecretExtras({
               </button>
             )}
           </header>
+          {activeMode === "micro" && (
+            <div className="micro-lab-controls" data-hee-control>
+              <fieldset>
+                <legend>TIMBRE</legend>
+                {(["sine", "triangle", "square", "sawtooth"] as OscillatorType[]).map((waveform) => (
+                  <button
+                    type="button"
+                    key={waveform}
+                    className={microWaveform === waveform ? "active" : ""}
+                    onClick={() => setMicroWaveform(waveform)}
+                  >
+                    {waveform === "sine" ? "SENO" : waveform === "triangle" ? "TRI" : waveform === "square" ? "CUAD" : "SIERRA"}
+                  </button>
+                ))}
+              </fieldset>
+              <fieldset>
+                <legend>PULSO</legend>
+                {[84, 112, 148].map((tempo) => (
+                  <button
+                    type="button"
+                    key={tempo}
+                    className={microTempo === tempo ? "active" : ""}
+                    onClick={() => setMicroTempo(tempo)}
+                  >
+                    {tempo}
+                  </button>
+                ))}
+              </fieldset>
+              <button type="button" disabled={microDots.length === 0} onClick={playMicroSequence}>
+                ▶ REPRODUCIR SECUENCIA
+              </button>
+              <button type="button" disabled={microDots.length === 0} onClick={undoMicroNote}>
+                ↶ ÚLTIMA
+              </button>
+              <button type="button" disabled={microDots.length === 0} onClick={clearMicroNotes}>
+                × LIMPIAR
+              </button>
+            </div>
+          )}
           <div className="micro-lab-grid" aria-hidden="true" />
+          <div className="micro-sonic-rings" aria-hidden="true"><i /><i /><i /><b>24</b></div>
+          <div className="micro-octave-map" aria-hidden="true">
+            <span>OCTAVA 3 · AGUDA</span>
+            <span>OCTAVA 2 · MEDIA</span>
+            <span>OCTAVA 1 · GRAVE</span>
+          </div>
+          <div className="micro-step-ruler" aria-hidden="true">
+            {Array.from({ length: 24 }, (_, index) => <i key={index}>{index + 1}</i>)}
+          </div>
           {microDots.map((dot, index) => {
             const target = MICRO_TARGETS[index] ?? [50, 50];
             return (
@@ -984,6 +1143,7 @@ export default function SecretExtras({
                     "--target-y": `${target[1]}vh`,
                     "--dot-delay": `${index * 18}ms`,
                     "--dot-size": `${0.7 + (dot.step % 5) * 0.13}rem`,
+                    "--dot-hue": `${(dot.step * 15 + dot.octave * 38) % 360}`,
                   } as CSSProperties
                 }
               >

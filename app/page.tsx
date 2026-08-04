@@ -1856,6 +1856,7 @@ export default function Home() {
               ))}
               <span className="poitrine-head head-khn"><b /></span>
               <span className="poitrine-head head-klek"><b /></span>
+              <div className="poitrine-tet-mark"><b>24</b><span>TET</span><small>50¢ / PASO</small></div>
               <strong>MICRO<br /><em>TONAL</em></strong>
             </div>
             <div className="micro-copy">
@@ -1876,7 +1877,9 @@ export default function Home() {
                   onClick={() => window.dispatchEvent(new Event("premiere22:micro-unlock"))}
                   aria-label="Calibrar el laboratorio secreto de 24 divisiones"
                 >
-                  24 TET
+                  <span>EXPERIMENTO INTERACTIVO</span>
+                  <strong>24 TET</strong>
+                  <em>PULSA 3 VECES PARA ABRIR EL LABORATORIO →</em>
                 </button>
                 <span>PASO</span><b>50.00 ¢</b>
               </div>

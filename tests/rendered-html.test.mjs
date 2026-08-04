@@ -43,10 +43,24 @@ test("server-renders the Premiere 22 home route", async () => {
   assert.match(html, /Premiere 22/i);
   assert.match(html, /Ra(?:ú|Ãº)l Garc(?:í|Ã­)a/i);
   assert.match(html, /Angine de Poitrine/i);
+  assert.match(html, /24 TET/i);
+  assert.match(html, /PULSA 3 VECES PARA ABRIR EL LABORATORIO/i);
   assert.match(html, /Live on KEXP/i);
   assert.match(html, /Material recuperado/i);
   assert.match(html, /producci(?:ó|Ã³)n real/i);
   assert.doesNotMatch(html, /Your site is taking shape/i);
+});
+
+test("microtonal laboratory exposes composition controls and live analysis", async () => {
+  const source = await readFile(
+    new URL("../app/SecretExtras.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /REPRODUCIR SECUENCIA/);
+  assert.match(source, /TIMBRE/);
+  assert.match(source, /PULSO/);
+  assert.match(source, /micro-live-readout/);
+  assert.match(source, /micro-step-ruler/);
 });
 
 test("interactive montage defines the inset index used by every cut label", async () => {
