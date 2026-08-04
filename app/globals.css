@@ -8476,6 +8476,12 @@ html.spielberg-inversion-active {
 
 .micro-discovery-beacon > i b.active { background: #e84136; }
 
+.micro-discovery-beacon.replay {
+  box-shadow: -.7rem .7rem 0 rgba(255,255,255,.32);
+}
+
+.micro-discovery-beacon.replay > strong b { color: #6f43ff; }
+
 .micro-discovery-beacon:hover,
 .micro-discovery-beacon:focus-visible {
   background: #080808;
@@ -8489,6 +8495,7 @@ html.spielberg-inversion-active {
     radial-gradient(circle at center, rgba(232,65,54,.14), transparent 38%),
     rgba(2,2,2,.86);
   backdrop-filter: grayscale(.8) contrast(1.22) blur(2px);
+  pointer-events: auto;
 }
 
 .micro-cursor-lab header {

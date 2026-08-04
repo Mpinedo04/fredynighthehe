@@ -61,6 +61,13 @@ test("microtonal laboratory exposes composition controls and live analysis", asy
   assert.match(source, /PULSO/);
   assert.match(source, /micro-live-readout/);
   assert.match(source, /micro-step-ruler/);
+  assert.match(source, /LAB COMPLETADO · REPETIR/);
+  assert.match(source, /role="application"/);
+  const overlayOpening = source.match(
+    /<div\s+className={`micro-cursor-lab[\s\S]*?aria-label="Laboratorio microtonal de cursor"\s*>/,
+  )?.[0] ?? "";
+  assert.match(overlayOpening, /role="application"/);
+  assert.doesNotMatch(overlayOpening, /data-hee-control/);
 });
 
 test("interactive montage defines the inset index used by every cut label", async () => {

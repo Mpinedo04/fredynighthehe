@@ -371,6 +371,8 @@ export default function SecretExtras({
     setFnafEnding(null);
     setMicroDots([]);
     microDotsRef.current = [];
+    setMicroUnlockClicks(0);
+    microUnlockRef.current = 0;
     if (microReadoutRafRef.current !== null) {
       window.cancelAnimationFrame(microReadoutRafRef.current);
       microReadoutRafRef.current = null;
@@ -508,8 +510,7 @@ export default function SecretExtras({
   const startMicroLab = useCallback(() => {
     if (
       blockedRef.current ||
-      activeModeRef.current ||
-      progressRef.current.completed.includes("microtonal")
+      activeModeRef.current
     ) {
       return;
     }
@@ -522,6 +523,8 @@ export default function SecretExtras({
     setProgress((current) => completeSecret(current, "microtonal"));
     setMicroDots([]);
     microDotsRef.current = [];
+    setMicroUnlockClicks(0);
+    microUnlockRef.current = 0;
     setActiveMode(null);
   }, []);
 
@@ -780,7 +783,7 @@ export default function SecretExtras({
   }, [activeMode, blocked, progress, scrollDepth, started, triggerFnafEnding]);
 
   const registerMicroUnlock = useCallback(() => {
-    if (!started || blockedRef.current || progressRef.current.completed.includes("microtonal")) {
+    if (!started || blockedRef.current || activeModeRef.current) {
       return;
     }
     microUnlockRef.current = Math.min(3, microUnlockRef.current + 1);
@@ -951,15 +954,15 @@ export default function SecretExtras({
 
   return (
     <>
-      {started && !blocked && activeMode === null && !progress.completed.includes("microtonal") && (
+      {started && !blocked && activeMode === null && (
         <button
           type="button"
-          className="micro-discovery-beacon"
+          className={`micro-discovery-beacon ${progress.completed.includes("microtonal") ? "replay" : ""}`}
           onClick={registerMicroUnlock}
           aria-label={`Abrir laboratorio 24 TET. ${microUnlockClicks} de 3 pulsos realizados`}
           data-hee-control
         >
-          <span>LABORATORIO MICROTONAL</span>
+          <span>{progress.completed.includes("microtonal") ? "LAB COMPLETADO · REPETIR" : "LABORATORIO MICROTONAL"}</span>
           <strong>24 <b>TET</b></strong>
           <small>{microUnlockClicks === 0 ? "PULSA 3 VECES" : `${3 - microUnlockClicks} PULSO${3 - microUnlockClicks === 1 ? "" : "S"} MÁS`}</small>
           <i aria-hidden="true">
@@ -1060,10 +1063,10 @@ export default function SecretExtras({
       {(activeMode === "micro" || activeMode === "micro-finale") && (
         <div
           className={`micro-cursor-lab ${activeMode === "micro-finale" ? "complete" : ""}`}
-          data-hee-control
+          role="application"
           aria-label="Laboratorio microtonal de cursor"
         >
-          <header>
+          <header data-hee-control>
             <div>
               <small>ANGINE DE POITRINE · 24 TET</small>
               <strong>{activeMode === "micro-finale" ? "COMPOSICIÓN 22" : "PULSA CUALQUIER ESPACIO VACÍO"}</strong>
