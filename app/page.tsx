@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
 } from "react";
+import SecretExtras from "./SecretExtras";
 
 const credits = [
   {
@@ -599,6 +600,7 @@ export default function Home() {
   const [muteAttempts, setMuteAttempts] = useState(0);
   const [clapped, setClapped] = useState(false);
   const [postCredits, setPostCredits] = useState(false);
+  const [secretExclusive, setSecretExclusive] = useState(false);
   const scrollDepthRef = useRef(0);
   const heeAudioRef = useRef<Set<HTMLAudioElement>>(new Set());
   const heeBurstTimersRef = useRef<Set<number>>(new Set());
@@ -613,7 +615,7 @@ export default function Home() {
   } | null>(null);
 
   const playHee = useCallback(() => {
-    if (heeMuted || typeof window === "undefined") return;
+    if (heeMuted || secretExclusive || typeof window === "undefined") return;
 
     const depth = scrollDepthRef.current;
     const multiplier = heeMultiplierForDepth(depth);
@@ -654,7 +656,18 @@ export default function Home() {
       }, index * stagger);
       heeBurstTimersRef.current.add(timer);
     });
-  }, [heeMuted]);
+  }, [heeMuted, secretExclusive]);
+
+  useEffect(() => {
+    if (!secretExclusive) return;
+    heeBurstTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    heeBurstTimersRef.current.clear();
+    heeAudioRef.current.forEach((sample) => {
+      sample.pause();
+      sample.currentTime = 0;
+    });
+    heeAudioRef.current.clear();
+  }, [secretExclusive]);
 
   useEffect(() => {
     const preload = new Audio("/audio/michael-jackson-hee-hee.mp3");
@@ -729,11 +742,11 @@ export default function Home() {
   }, [playHee]);
 
   useEffect(() => {
-    if (!heeReady || heeMuted || scrollBand < 3) return;
+    if (!heeReady || heeMuted || secretExclusive || scrollBand < 3) return;
     const delay = heeDelayForDepth(scrollBand / 20);
     const timer = window.setInterval(playHee, delay);
     return () => window.clearInterval(timer);
-  }, [heeReady, heeMuted, playHee, scrollBand]);
+  }, [heeReady, heeMuted, playHee, scrollBand, secretExclusive]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1242,7 +1255,7 @@ export default function Home() {
 
       <section className="hero" id="premiere">
         <div className="hero-beam" aria-hidden="true" />
-        <figure className="hero-still">
+        <figure className="hero-still" data-secret-anchor="hero">
           <img
             src="/archive/hero-stage.webp"
             alt="Raúl García actuando sobre un escenario"
@@ -1389,7 +1402,7 @@ export default function Home() {
           ))}
         </div>
 
-        <article className="project-focus" aria-live="polite">
+        <article className="project-focus" aria-live="polite" data-secret-anchor="project">
           <button
             type="button"
             className="focus-still"
@@ -1837,7 +1850,16 @@ export default function Home() {
               </p>
               <div className="tuning-readout">
                 <span>BASE</span><b>110.00 Hz</b>
-                <span>DIVISIÓN</span><b>24 TET</b>
+                <span>DIVISIÓN</span>
+                <button
+                  type="button"
+                  className="micro-secret-switch"
+                  data-hee-control
+                  onClick={() => window.dispatchEvent(new Event("premiere22:micro-unlock"))}
+                  aria-label="Calibrar el laboratorio secreto de 24 divisiones"
+                >
+                  24 TET
+                </button>
                 <span>PASO</span><b>50.00 ¢</b>
               </div>
             </div>
@@ -1932,7 +1954,10 @@ export default function Home() {
         </div>
         <div className="testimonials">
           {friendTestimonials.map((testimonial) => (
-            <article key={testimonial.number}>
+            <article
+              key={testimonial.number}
+              data-secret-anchor={testimonial.number === "03" ? "friends" : undefined}
+            >
               <div className="avatar-placeholder">
                 <img
                   src={testimonial.image}
@@ -1952,7 +1977,7 @@ export default function Home() {
       </section>
 
       <section className="trailer-section section-pad" id="escena-22">
-        <div className="trailer-poster">
+        <div className="trailer-poster" data-secret-anchor="trailer">
           <img
             className="trailer-photo"
             src="/archive/trailer-shoot.webp"
@@ -2069,6 +2094,16 @@ export default function Home() {
         <span>RAAULINHOO © ESCENA 22</span>
       </footer>
 
+      <SecretExtras
+        started={started}
+        scrollDepth={scrollDepth}
+        soundOn={soundOn}
+        blocked={
+          activeVideo !== null || trailerOpen || recovered || chaseOpen
+        }
+        onExclusiveChange={setSecretExclusive}
+      />
+
       {chaseOpen && (
         <div
           className={`moonwalk-chase phase-${chasePhase}`}
@@ -2149,7 +2184,7 @@ export default function Home() {
         </div>
       )}
 
-      {heeReady && scrollDepth >= 50 && !heeMuted && (
+      {heeReady && scrollDepth >= 50 && !heeMuted && !secretExclusive && (
         <div
           className={`hee-chaos-visual chaos-x${heeMultiplierForDepth(scrollDepth / 100)}`}
           aria-hidden="true"
@@ -2165,7 +2200,7 @@ export default function Home() {
         </div>
       )}
 
-      {heeReady && scrollDepth >= 50 && !heeMuted && (
+      {heeReady && scrollDepth >= 50 && !heeMuted && !secretExclusive && (
         <aside
           className={`hee-control-panel evade-${muteAttempts}`}
           data-hee-control
