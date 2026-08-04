@@ -9,6 +9,9 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
+    "model:materials": "python scripts/generate-subject-materials.py --source design/subject-m22-face-source.png --out-dir public/models/subject-m22-materials",
+    "model:build": "node scripts/build-subject-m22-assets.mjs",
+    "model:verify": "node scripts/verify-subject-build.mjs",
     "test": "npm run build && node --test tests/input-controller.test.mjs tests/capsule-controller.test.mjs tests/maze-core.test.mjs tests/runtime-core.test.mjs tests/rendered-html.test.mjs tests/subject-model.test.mjs tests/scare-system.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"

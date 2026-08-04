@@ -281,7 +281,7 @@ const trailerScenes = [
     mainAlt: "Animatrónico Velvet R emergiendo de la oscuridad",
     cutImages: [
       {
-        src: "/models/subject-m22-face-v2.png",
+        src: "/models/subject-m22-materials/high/face-basecolor.png",
         alt: "Archivo facial de la unidad M22",
         label: "SUJETO M22",
       },

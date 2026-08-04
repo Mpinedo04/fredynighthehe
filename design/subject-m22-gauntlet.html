@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SUBJECT M-22 · Gauntlet visual</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-monospace, Consolas, monospace; background: #090b0b; color: #d8ddd8; }
+      body { max-width: 1440px; margin: auto; padding: 28px; }
+      header, article { border: 1px solid #313936; background: #0d1110; padding: 20px; margin-bottom: 20px; }
+      h1, h2 { margin: 0 0 12px; text-transform: uppercase; letter-spacing: .08em; }
+      h1 { color: #e32020; } h2 { font-size: 15px; }
+      .status { color: #8ce1a9; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+      figure { margin: 0; border: 1px solid #29302e; padding: 10px; background: #050706; }
+      img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #020303; }
+      figcaption, li, p { color: #aeb7b1; line-height: 1.55; }
+      code { color: #fff; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>SUBJECT M-22 · Gauntlet Loop</h1>
+      <p class="status">Estado: plan aprobado por crítica independiente en la ronda 4.</p>
+      <p>Listón: el turnaround aprobado, evaluado con cámara, pose e iluminación repetibles.</p>
+    </header>
+    <article>
+      <h2>Referencia y baseline</h2>
+      <div class="grid">
+        <figure><img src="subject-m22-concept-v2.png" alt="Turnaround de referencia" /><figcaption>Referencia aprobada</figcaption></figure>
+        <figure><img src="gauntlet/subject-m22/baseline-front.png" alt="Baseline con impostor plano" /><figcaption>Baseline: PNG frontal superpuesto</figcaption></figure>
+      </div>
+    </article>
+    <article>
+      <h2>Candidato actual</h2>
+      <div class="grid">
+        <figure><img src="gauntlet/subject-m22/current-front.png" alt="Candidato frontal" /><figcaption>Frontal</figcaption></figure>
+        <figure><img src="gauntlet/subject-m22/current-three-quarter.png" alt="Candidato a tres cuartos" /><figcaption>Tres cuartos · 45°</figcaption></figure>
+        <figure><img src="gauntlet/subject-m22/current-profile.png" alt="Candidato de perfil" /><figcaption>Perfil · 90°</figcaption></figure>
+        <figure><img src="gauntlet/subject-m22/current-face-close.png" alt="Primer plano del candidato" /><figcaption>Primer plano facial</figcaption></figure>
+        <figure><img src="gauntlet/subject-m22/current-plates-open.png" alt="Primer plano del candidato con las placas abiertas" /><figcaption>Placas faciales abiertas</figcaption></figure>
+        <figure><img src="gauntlet/subject-m22/current-game-light.png" alt="Candidato bajo la iluminación real del juego" /><figcaption>Iluminación real del juego</figcaption></figure>
+      </div>
+    </article>
+    <article>
+      <h2>Rúbrica de aprobación</h2>
+      <ul>
+        <li>Sin rectángulos, halos, z-fighting ni geometría fotográfica flotante.</li>
+        <li>Parallax real en nariz, labios, pómulos, cuencas y mentón.</li>
+        <li>UV continua y adherida al abrir las placas faciales.</li>
+        <li>Base color sin luces horneadas; normal y roughness reaccionan a luz lateral.</li>
+        <li><code>p95 &lt; 16,7 ms</code> en 1280×720, calidad alta.</li>
+      </ul>
+      <p>Resultado medido: 59.582 triángulos, 11 texturas propias activas y <code>p95 7,1 ms</code> a 1280×720.</p>
+    </article>
+  </body>
+</html>

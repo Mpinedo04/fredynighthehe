@@ -9,6 +9,7 @@ import {
 } from "react";
 import Link from "next/link";
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   CELL_SIZE,
@@ -66,6 +67,12 @@ import {
   mascotForCatch,
   type ScareMascot,
 } from "./scare-roster";
+import {
+  SUBJECT_MATERIALS,
+  SUBJECT_TEXTURE_SETS,
+  subjectTextureAnisotropy,
+  subjectTextureVariant,
+} from "./subject-materials";
 
 type GamePhase = "briefing" | "playing" | "caught" | "escaped";
 type QualityProfile = "low" | "medium" | "high" | "ultra";
@@ -311,7 +318,7 @@ function createSubjectM() {
 
   const hat = new THREE.Group();
   hat.name = "hat";
-  hat.position.set(0, 0.77, -0.01);
+  hat.position.set(0, 0.66, -0.01);
   headPivot.add(hat);
   addMesh(hat, new THREE.CylinderGeometry(0.5, 0.5, 0.055, 28), black, [0, 0, 0]);
   addMesh(hat, new THREE.CylinderGeometry(0.32, 0.38, 0.36, 24), black, [0, 0.18, 0]);
@@ -989,6 +996,14 @@ export default function WalkExe() {
     let playerCrouching = false;
     let modelPreviewUntil = 0;
     let modelPreviewState: EnemyState = "listen";
+    let qaEnemyStage: {
+      distance: number;
+      state: EnemyState;
+      yawOffsetDegrees: number;
+      verticalOffset: number;
+    } | null = null;
+    const qaNeutralLighting =
+      new URLSearchParams(window.location.search).get("qa") !== "game";
     let nextObjectDropAt = 0;
     let lastAppliedVelocity = { x: 0, z: 0 };
     let lastInputSlices: InputSlice[] = [];
@@ -1543,16 +1558,13 @@ export default function WalkExe() {
     let eyeGlowRight = subjectDetail.getObjectByName(
       "eyeGlowRight",
     ) as THREE.PointLight | undefined;
-    let faceDecalSurface: THREE.MeshBasicMaterial | null = null;
-    let faceDecalTexture: THREE.Texture | null = null;
-    let faceDecalLoaded = false;
-    let performanceSkinSurface: THREE.MeshBasicMaterial | null = null;
-    let performanceSkinTexture: THREE.Texture | null = null;
-    let performanceSkinLoaded = false;
-    let mechanicalDetailMeshes: THREE.Mesh[] = [];
-    let mechanicalOverlayHidden = false;
-    let outerShellMeshes: THREE.Mesh[] = [];
     let outerShellRetracted = false;
+    let pbrMaterialsLoaded = false;
+    let pbrMaterialsFailed = false;
+    let pbrAppliedMaterials = 0;
+    const pbrTextureVariant = subjectTextureVariant(quality);
+    const pbrTextures = new Set<THREE.Texture>();
+    let subjectEnvironmentTarget: THREE.WebGLRenderTarget | null = null;
     let servoMaterials: THREE.MeshStandardMaterial[] = [];
     const collectServoMaterials = () => {
       const collected = new Set<THREE.MeshStandardMaterial>();
@@ -1573,6 +1585,163 @@ export default function WalkExe() {
       servoMaterials = [...collected];
     };
     collectServoMaterials();
+
+    type SubjectTextureBundle = {
+      baseColor: THREE.Texture;
+      normal: THREE.Texture;
+      rm?: THREE.Texture;
+    };
+    const subjectTextureLoader = new THREE.TextureLoader();
+    const requestedAnisotropy = Math.min(
+      subjectTextureAnisotropy(quality),
+      renderer.capabilities.getMaxAnisotropy(),
+    );
+    const ensureSubjectEnvironment = () => {
+      if (subjectEnvironmentTarget) return subjectEnvironmentTarget.texture;
+      const environment = new RoomEnvironment();
+      const generator = new THREE.PMREMGenerator(renderer);
+      subjectEnvironmentTarget = generator.fromScene(environment, 0.04);
+      environment.dispose();
+      generator.dispose();
+      subjectEnvironmentTarget.texture.name = "SUBJECT_M22_PMREM";
+      return subjectEnvironmentTarget.texture;
+    };
+    const loadSubjectTexture = (
+      url: string,
+      colorTexture: boolean,
+      repeat: readonly [number, number],
+    ) =>
+      new Promise<THREE.Texture | null>((resolve) => {
+        const pendingTexture = subjectTextureLoader.load(
+          url,
+          (texture) => {
+            if (rigLoadCancelled) {
+              texture.dispose();
+              resolve(null);
+              return;
+            }
+            texture.colorSpace = colorTexture
+              ? THREE.SRGBColorSpace
+              : THREE.NoColorSpace;
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(...repeat);
+            texture.anisotropy = requestedAnisotropy;
+            texture.name = `SUBJECT_M22_${url.split("/").at(-1) ?? "TEXTURE"}`;
+            texture.needsUpdate = true;
+            pbrTextures.add(texture);
+            resolve(texture);
+          },
+          undefined,
+          () => {
+            pendingTexture.dispose();
+            resolve(null);
+          },
+        );
+      });
+    const loadSubjectTextureBundle = async (
+      textureSet: (typeof SUBJECT_TEXTURE_SETS)[typeof pbrTextureVariant][keyof (typeof SUBJECT_TEXTURE_SETS)[typeof pbrTextureVariant]],
+    ): Promise<SubjectTextureBundle | null> => {
+      const [baseColor, normal, rm] = await Promise.all([
+        loadSubjectTexture(textureSet.baseColor, true, textureSet.repeat),
+        loadSubjectTexture(textureSet.normal, false, textureSet.repeat),
+        textureSet.rm
+          ? loadSubjectTexture(textureSet.rm, false, textureSet.repeat)
+          : Promise.resolve(undefined),
+      ]);
+      if (!baseColor || !normal || (textureSet.rm && !rm)) {
+        [baseColor, normal, rm].forEach((texture) => {
+          if (!texture) return;
+          pbrTextures.delete(texture);
+          texture.dispose();
+        });
+        return null;
+      }
+      return { baseColor, normal, ...(rm ? { rm } : {}) };
+    };
+    const applySubjectPbrMaterials = async (model: THREE.Object3D) => {
+      const textureSets = SUBJECT_TEXTURE_SETS[pbrTextureVariant];
+      const requiredTextureSets = [
+        ...new Set(
+          Object.values(SUBJECT_MATERIALS).map(
+            (definition) => definition.textureSet,
+          ),
+        ),
+      ];
+      const loadedTextureSets = new Map<
+        keyof typeof textureSets,
+        SubjectTextureBundle
+      >();
+      await Promise.all(
+        requiredTextureSets.map(async (textureSetName) => {
+          const bundle = await loadSubjectTextureBundle(
+            textureSets[textureSetName],
+          );
+          if (bundle) loadedTextureSets.set(textureSetName, bundle);
+        }),
+      );
+      if (rigLoadCancelled) return;
+
+      const materials = new Map<string, Set<THREE.MeshStandardMaterial>>();
+      model.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        const surfaces = Array.isArray(object.material)
+          ? object.material
+          : [object.material];
+        surfaces.forEach((surface) => {
+          if (!(surface instanceof THREE.MeshStandardMaterial)) return;
+          const namedMaterials = materials.get(surface.name) ?? new Set();
+          namedMaterials.add(surface);
+          materials.set(surface.name, namedMaterials);
+        });
+      });
+
+      let failedSets = 0;
+      let appliedMaterials = 0;
+      Object.entries(SUBJECT_MATERIALS).forEach(
+        ([materialName, definition]) => {
+          const targets = materials.get(materialName);
+          if (!targets?.size) return;
+          const bundle = loadedTextureSets.get(definition.textureSet);
+          if (!bundle) failedSets += 1;
+          targets.forEach((surface) => {
+            if (bundle) {
+              const useBaseColor =
+                !("useBaseColor" in definition) ||
+                definition.useBaseColor !== false;
+              if (useBaseColor) {
+                surface.map = bundle.baseColor;
+                surface.color.setHex(definition.tint);
+              }
+              surface.normalMap = bundle.normal;
+              surface.normalScale.setScalar(definition.normalScale);
+              if (bundle.rm) {
+                surface.roughnessMap = bundle.rm;
+                surface.metalnessMap = bundle.rm;
+                surface.roughness = 1;
+                surface.metalness = 1;
+              }
+              appliedMaterials += 1;
+            }
+            if (
+              "environmentIntensity" in definition &&
+              definition.environmentIntensity
+            ) {
+              surface.envMap = ensureSubjectEnvironment();
+              surface.envMapIntensity = definition.environmentIntensity;
+            }
+            surface.needsUpdate = true;
+          });
+        },
+      );
+      pbrAppliedMaterials = appliedMaterials;
+      pbrMaterialsFailed = failedSets > 0;
+      pbrMaterialsLoaded = appliedMaterials > 0 && failedSets === 0;
+      subject.userData.pbrMaterialsLoaded = pbrMaterialsLoaded;
+      subject.userData.pbrMaterialsFailed = pbrMaterialsFailed;
+      subject.userData.pbrTextureVariant = pbrTextureVariant;
+      subject.userData.pbrAppliedMaterials = pbrAppliedMaterials;
+    };
 
     let enemyMixer = new THREE.AnimationMixer(subjectDetail);
     const enemyClips = createSubjectMotionClips();
@@ -1654,34 +1823,11 @@ export default function WalkExe() {
 
         importedModel.name = "SUJETO_M22_ASSET";
         let detailedMeshCount = 0;
-        const importedMechanicalMeshes: THREE.Mesh[] = [];
-        const importedOuterShellMeshes: THREE.Mesh[] = [];
         importedModel.traverse((object) => {
           if (!(object instanceof THREE.Mesh)) return;
           detailedMeshCount += 1;
           object.castShadow = true;
           object.receiveShadow = true;
-          if (
-            object.name !== "performanceSkin" &&
-            object.name !== "faceDecal"
-          ) {
-            importedMechanicalMeshes.push(object);
-            const surfaces = Array.isArray(object.material)
-              ? object.material
-              : [object.material];
-            if (
-              surfaces.some((surface) =>
-                [
-                  "AGED_IVORY_SUIT",
-                  "IVORY_WORN_EDGES",
-                  "CRACKED_SILICONE_MASK",
-                  "CRYSTAL_PERFORMANCE_GLOVE",
-                ].includes(surface.name),
-              )
-            ) {
-              importedOuterShellMeshes.push(object);
-            }
-          }
         });
 
         enemyMixer.stopAllAction();
@@ -1689,8 +1835,6 @@ export default function WalkExe() {
         subjectFallback.visible = false;
         subjectDetailSlot.add(importedModel);
         subjectDetail = importedModel;
-        mechanicalDetailMeshes = importedMechanicalMeshes;
-        outerShellMeshes = importedOuterShellMeshes;
         head = subjectDetail.getObjectByName("head");
         jaw = subjectDetail.getObjectByName("jaw");
         subjectHat = subjectDetail.getObjectByName("hat");
@@ -1705,90 +1849,7 @@ export default function WalkExe() {
           "eyeGlowRight",
         ) as THREE.PointLight | undefined;
         collectServoMaterials();
-        const faceDecal = subjectDetail.getObjectByName(
-          "faceDecal",
-        ) as THREE.Mesh | undefined;
-        if (faceDecal) {
-          new THREE.TextureLoader().load(
-            "/models/subject-m22-face-v2.png",
-            (texture) => {
-              if (rigLoadCancelled) {
-                texture.dispose();
-                return;
-              }
-              texture.colorSpace = THREE.SRGBColorSpace;
-              texture.anisotropy = Math.min(
-                8,
-                renderer.capabilities.getMaxAnisotropy(),
-              );
-              const decalMaterial = new THREE.MeshBasicMaterial({
-                name: "SUBJECT_M22_FACE_DECAL",
-                map: texture,
-                color: 0xb8b8b8,
-                transparent: true,
-                opacity: 1,
-                alphaTest: 0.018,
-                depthWrite: true,
-                side: THREE.DoubleSide,
-                toneMapped: true,
-              });
-              const previousSurfaces = Array.isArray(faceDecal.material)
-                ? faceDecal.material
-                : [faceDecal.material];
-              previousSurfaces.forEach((surface) => surface.dispose());
-              faceDecal.material = decalMaterial;
-              faceDecalSurface = decalMaterial;
-              faceDecalTexture = texture;
-              faceDecalLoaded = true;
-            },
-            undefined,
-            () => {
-              subject.userData.faceDecalFailed = true;
-            },
-          );
-        }
-        const performanceSkin = subjectDetail.getObjectByName(
-          "performanceSkin",
-        ) as THREE.Mesh | undefined;
-        if (performanceSkin) {
-          new THREE.TextureLoader().load(
-            "/models/subject-m22-performance-skin.png",
-            (texture) => {
-              if (rigLoadCancelled) {
-                texture.dispose();
-                return;
-              }
-              texture.colorSpace = THREE.SRGBColorSpace;
-              texture.anisotropy = Math.min(
-                8,
-                renderer.capabilities.getMaxAnisotropy(),
-              );
-              const skinMaterial = new THREE.MeshBasicMaterial({
-                name: "SUBJECT_M22_PERFORMANCE_SKIN",
-                map: texture,
-                color: 0xc5c5c5,
-                transparent: true,
-                opacity: 0.94,
-                alphaTest: 0.03,
-                depthWrite: true,
-                side: THREE.FrontSide,
-                toneMapped: true,
-              });
-              const previousSurfaces = Array.isArray(performanceSkin.material)
-                ? performanceSkin.material
-                : [performanceSkin.material];
-              previousSurfaces.forEach((surface) => surface.dispose());
-              performanceSkin.material = skinMaterial;
-              performanceSkinSurface = skinMaterial;
-              performanceSkinTexture = texture;
-              performanceSkinLoaded = true;
-            },
-            undefined,
-            () => {
-              subject.userData.performanceSkinFailed = true;
-            },
-          );
-        }
+        void applySubjectPbrMaterials(subjectDetail);
 
         enemyMixer = new THREE.AnimationMixer(subjectDetail);
         enemyActions = createEnemyActions(enemyMixer, gltf.animations);
@@ -1826,6 +1887,10 @@ export default function WalkExe() {
     const bodyFill = new THREE.PointLight(0xa9c6af, 7.5, 5.5, 2);
     bodyFill.position.set(0, 0.08, 0.18);
     camera.add(bodyFill);
+    const qaSideLight = new THREE.PointLight(0xd5ad91, 9, 6, 2);
+    qaSideLight.position.set(1.75, 1.1, -0.8);
+    qaSideLight.visible = false;
+    camera.add(qaSideLight);
     scene.add(camera);
 
     const playPulse = (strength: number) => {
@@ -2189,7 +2254,13 @@ export default function WalkExe() {
       }
       if (!event.repeat && code === "KeyF") {
         flashlightEnabled = !flashlightEnabled;
+        const qaInspectionActive = qaEnemyStage !== null;
         flashlight.visible = flashlightEnabled;
+        flashlight.intensity =
+          qaInspectionActive && qaNeutralLighting ? 12 : 132;
+        bodyFill.intensity =
+          qaInspectionActive && qaNeutralLighting ? 2 : 7.5;
+        qaSideLight.visible = qaInspectionActive && qaNeutralLighting;
       }
     };
     const keyUp = (event: KeyboardEvent) => {
@@ -2857,8 +2928,6 @@ export default function WalkExe() {
     const cctvFrustum = new THREE.Frustum();
     const cctvProjection = new THREE.Matrix4();
     const enemyProbe = new THREE.Vector3();
-    const enemyFacingProbe = new THREE.Vector3();
-    const enemyToPlayerProbe = new THREE.Vector3();
     const audioForward = new THREE.Vector3();
     const audioUp = new THREE.Vector3();
     const enemyAudioForward = new THREE.Vector3();
@@ -3020,14 +3089,8 @@ export default function WalkExe() {
             (jawTarget - jaw.rotation.x) * Math.min(1, delta * 10);
         }
         if (subjectHat) {
-          const hatLift =
-            currentEnemyMode === "ambush"
-              ? 0.24
-              : currentEnemyMode === "listen"
-                ? 0.08
-                : 0;
           subjectHat.position.y +=
-            (subjectHatBaseY + hatLift - subjectHat.position.y) *
+            (subjectHatBaseY - subjectHat.position.y) *
             Math.min(1, delta * 5);
           subjectHat.rotation.z =
             Math.sin(now * 0.0014) *
@@ -3045,66 +3108,18 @@ export default function WalkExe() {
               : currentEnemyMode === "listen"
                 ? 0.12
                 : 0;
-        subject.getWorldDirection(enemyFacingProbe).multiplyScalar(-1);
-        enemyToPlayerProbe
-          .copy(player)
-          .setY(subject.position.y)
-          .sub(subject.position);
-        const frontAlignment =
-          enemyToPlayerProbe.lengthSq() > 0.0001
-            ? THREE.MathUtils.clamp(
-                (enemyFacingProbe.dot(enemyToPlayerProbe.normalize()) - 0.2) /
-                  0.55,
-                0,
-                1,
-              )
-            : 0;
-        mechanicalOverlayHidden =
-          performanceSkinLoaded &&
-          frontAlignment > 0.72 &&
-          faceThreat < 0.35;
-        mechanicalDetailMeshes.forEach((part) => {
-          part.visible = !mechanicalOverlayHidden;
-        });
         outerShellRetracted = faceThreat > 0.58;
-        outerShellMeshes.forEach((part) => {
-          part.visible = !mechanicalOverlayHidden && !outerShellRetracted;
-        });
         if (facePlateLeft && facePlateRight) {
           facePlateLeft.rotation.y +=
-            (-faceThreat * 0.68 - facePlateLeft.rotation.y) *
+            (-faceThreat * 0.5 - facePlateLeft.rotation.y) *
             Math.min(1, delta * 8);
           facePlateRight.rotation.y +=
-            (faceThreat * 0.68 - facePlateRight.rotation.y) *
+            (faceThreat * 0.5 - facePlateRight.rotation.y) *
             Math.min(1, delta * 8);
           facePlateLeft.rotation.z =
             -faceThreat * 0.12 + Math.sin(now * 0.006) * faceThreat * 0.025;
           facePlateRight.rotation.z =
             faceThreat * 0.12 - Math.sin(now * 0.006) * faceThreat * 0.025;
-        }
-        if (faceDecalSurface) {
-          const facialReveal = THREE.MathUtils.smoothstep(
-            faceThreat,
-            0.28,
-            0.82,
-          );
-          faceDecalSurface.opacity = THREE.MathUtils.clamp(
-            1 - facialReveal * 0.94,
-            0.06,
-            1,
-          );
-        }
-        if (performanceSkinSurface) {
-          const mechanicalReveal = THREE.MathUtils.smoothstep(
-            faceThreat,
-            0.28,
-            0.82,
-          );
-          performanceSkinSurface.opacity = THREE.MathUtils.clamp(
-            1 - mechanicalReveal * 0.94,
-            0.06,
-            1,
-          );
         }
         const servoIntensity =
           2.8 +
@@ -3361,32 +3376,65 @@ export default function WalkExe() {
     const walkWindow = window as Window & {
       __M00NQA__?: {
         snapshot: () => Record<string, unknown>;
-        stageEnemy: (distance?: number, state?: EnemyState) => boolean;
+        stageEnemy: (
+          distance?: number,
+          state?: EnemyState,
+          yawOffsetDegrees?: number,
+          verticalOffset?: number,
+        ) => boolean;
         stageVent: (pairIndex?: number) => boolean;
         openCctv: (cameraIndex?: number) => boolean;
       };
     };
     const qaBridge = {
-      stageEnemy: (distance = 4.6, state: EnemyState = "listen") => {
+      stageEnemy: (
+        distance = 4.6,
+        state: EnemyState = "listen",
+        yawOffsetDegrees = 0,
+        verticalOffset = 0,
+      ) => {
         if (!new URLSearchParams(window.location.search).has("qa")) {
           return false;
         }
-        const stagedDistance = THREE.MathUtils.clamp(distance, 3.2, 8);
+        const stagedDistance = THREE.MathUtils.clamp(distance, 1.8, 8);
+        const stagedYawOffset = THREE.MathUtils.clamp(
+          yawOffsetDegrees,
+          -180,
+          180,
+        );
+        const stagedVerticalOffset = THREE.MathUtils.clamp(
+          verticalOffset,
+          -2.4,
+          1,
+        );
         const viewDirection = new THREE.Vector3(0, 0, -1).applyAxisAngle(
           new THREE.Vector3(0, 1, 0),
           yaw,
         );
         subject.position
           .copy(player)
-          .setY(0)
+          .setY(stagedVerticalOffset)
           .addScaledVector(viewDirection, stagedDistance);
         const towardPlayer = player.clone().setY(0).sub(subject.position);
         subject.rotation.y =
-          Math.atan2(towardPlayer.x, towardPlayer.z) + Math.PI;
+          Math.atan2(towardPlayer.x, towardPlayer.z) +
+          Math.PI +
+          THREE.MathUtils.degToRad(stagedYawOffset);
         currentPlayerDistance = stagedDistance;
         currentRouteDistance = 1;
-        modelPreviewUntil = simulationTime + 6_000;
+        modelPreviewUntil = Number.POSITIVE_INFINITY;
         modelPreviewState = state;
+        qaEnemyStage = {
+          distance: stagedDistance,
+          state,
+          yawOffsetDegrees: stagedYawOffset,
+          verticalOffset: stagedVerticalOffset,
+        };
+        flashlight.visible = true;
+        flashlight.intensity = qaNeutralLighting ? 12 : 132;
+        bodyFill.intensity = qaNeutralLighting ? 2 : 7.5;
+        qaSideLight.intensity = 7.5;
+        qaSideLight.visible = qaNeutralLighting;
         currentEnemyMode = state;
         setEnemyMode(state);
         transitionEnemyAnimation(state);
@@ -3458,10 +3506,14 @@ export default function WalkExe() {
             model: subject.userData.model ?? "procedural-fallback",
             detailMeshes: subject.userData.meshes ?? 0,
             faceMechanics: Boolean(facePlateLeft && facePlateRight),
-            faceDecalLoaded,
-            performanceSkinLoaded,
-            mechanicalOverlayHidden,
+            pbrMaterialsLoaded,
+            pbrMaterialsFailed,
+            pbrTextureVariant,
+            pbrAppliedMaterials,
             outerShellRetracted,
+            yawRadians: subject.rotation.y,
+            yawDegrees: THREE.MathUtils.radToDeg(subject.rotation.y),
+            qaStage: qaEnemyStage,
           },
           hearing: {
             queuedEvents: acousticEvents.length,
@@ -3571,9 +3623,10 @@ export default function WalkExe() {
       rigLoadCancelled = true;
       enemyMixer.stopAllAction();
       enemyMixer.uncacheRoot(subjectDetail);
-      faceDecalTexture?.dispose();
-      performanceSkinTexture?.dispose();
-      renderer.dispose();
+      pbrTextures.forEach((texture) => texture.dispose());
+      pbrTextures.clear();
+      subjectEnvironmentTarget?.dispose();
+      subjectEnvironmentTarget = null;
       scene.traverse((object) => {
         if (
           !(object instanceof THREE.Mesh) &&
@@ -3593,6 +3646,7 @@ export default function WalkExe() {
       cctvTarget.dispose();
       cctvDisplayGeometry.dispose();
       cctvDisplayMaterial.dispose();
+      renderer.dispose();
       mount.removeChild(renderer.domElement);
       canvasRef.current = null;
       if (walkWindow.__M00NQA__ === qaBridge) {
@@ -3621,7 +3675,7 @@ export default function WalkExe() {
     [],
   );
 
-  const chooseCamera = (index: number) => {
+  const chooseCamera = (index: number, eventTimestamp: number) => {
     clearCctvEncounter();
     cctvIndexRef.current = index;
     setCctvIndex(index);
@@ -3630,7 +3684,7 @@ export default function WalkExe() {
         audioRef.current?.playCctvStatic({ duration: 0.22, gain: 0.14 });
       }
     });
-    const now = performance.now();
+    const now = eventTimestamp;
     const visitCount = cctvVisitRef.current + 1;
     cctvVisitRef.current = visitCount;
     const decision = decideCctvEncounter(
@@ -3963,7 +4017,7 @@ export default function WalkExe() {
                     onPointerDown={() => {
                       void primeCctvAudio();
                     }}
-                    onClick={() => chooseCamera(index)}
+                    onClick={(event) => chooseCamera(index, event.timeStamp)}
                     style={{
                       left: `${cameraMapPositions[index]?.left ?? 12}%`,
                       top: `${cameraMapPositions[index]?.top ?? 12}%`,
