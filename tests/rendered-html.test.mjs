@@ -6,6 +6,8 @@ import {
   createSecretProgress,
   findContinuityClue,
   microtoneFromPoint,
+  invertScrollDelta,
+  mirrorScrollPosition,
   nextFnafMilestone,
   parseSecretProgress,
   registerScrollReversal,
@@ -63,21 +65,21 @@ test("secret progress is versioned, sanitized and reset-safe", () => {
   const corrupted = parseSecretProgress(
     JSON.stringify({
       version: 1,
-      completed: ["nolan", "unknown", "nolan"],
+      completed: ["spielberg", "unknown", "spielberg"],
       continuityFound: ["hero", "wrong"],
       fnafHandled: [28, 999],
       fnafCaught: [28, 42],
       fnafMissed: 99,
     }),
   );
-  assert.deepEqual(corrupted.completed, ["nolan"]);
+  assert.deepEqual(corrupted.completed, ["spielberg"]);
   assert.deepEqual(corrupted.continuityFound, ["hero"]);
   assert.deepEqual(corrupted.fnafHandled, [28]);
   assert.deepEqual(corrupted.fnafCaught, [28]);
   assert.equal(corrupted.fnafMissed, 1);
 });
 
-test("Nolan inversion requires three reversals inside the time window", () => {
+test("Spielberg projection inversion requires three reversals inside the time window", () => {
   let state = registerScrollReversal([], 1000);
   assert.equal(state.triggered, false);
   state = registerScrollReversal(state.history, 1650);
@@ -86,6 +88,16 @@ test("Nolan inversion requires three reversals inside the time window", () => {
   assert.equal(state.triggered, true);
   state = registerScrollReversal(state.history, 5000);
   assert.equal(state.triggered, false);
+});
+
+test("Spielberg inversion mirrors the page position and reverses scroll input", () => {
+  assert.equal(mirrorScrollPosition(0, 5000, 1000), 4000);
+  assert.equal(mirrorScrollPosition(4000, 5000, 1000), 0);
+  assert.equal(mirrorScrollPosition(1250, 5000, 1000), 2750);
+  assert.equal(mirrorScrollPosition(-200, 5000, 1000), 4000);
+  assert.equal(mirrorScrollPosition(9000, 5000, 1000), 0);
+  assert.equal(invertScrollDelta(120), -120);
+  assert.equal(invertScrollDelta(-90), 90);
 });
 
 test("FNAF milestones are unique and distinguish catches from misses", () => {

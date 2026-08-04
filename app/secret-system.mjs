@@ -1,7 +1,7 @@
 export const SECRET_STORAGE_KEY = "premiere22.secret-extras.v1";
 
 export const SECRET_IDS = [
-  "nolan",
+  "spielberg",
   "nightShift",
   "microtonal",
   "continuity",
@@ -105,6 +105,15 @@ export function registerScrollReversal(history, now, windowMs = 1400) {
     history: next,
     triggered: next.length >= 3,
   };
+}
+
+export function mirrorScrollPosition(scrollY, documentHeight, viewportHeight) {
+  const maximumScroll = Math.max(0, documentHeight - viewportHeight);
+  return Math.max(0, Math.min(maximumScroll, maximumScroll - scrollY));
+}
+
+export function invertScrollDelta(delta) {
+  return -delta;
 }
 
 export function microtoneFromPoint(clientX, clientY, width, height) {

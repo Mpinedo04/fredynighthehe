@@ -18,6 +18,8 @@ import {
   completedSecretCount,
   createSecretProgress,
   findContinuityClue,
+  invertScrollDelta,
+  mirrorScrollPosition,
   microtoneFromPoint,
   nextFnafMilestone,
   parseSecretProgress,
@@ -29,7 +31,7 @@ import {
 } from "./secret-system.mjs";
 
 type ActiveMode =
-  | "nolan"
+  | "spielberg"
   | "fnaf"
   | "fnaf-ending"
   | "micro"
@@ -62,7 +64,7 @@ type FnafEncounter = {
 };
 
 const SECRET_LABELS: Record<SecretId, string> = {
-  nolan: "ANOMALÍA TEMPORAL",
+  spielberg: "INVERSIÓN DE PROYECCIÓN",
   nightShift: "TURNO NOCTURNO",
   microtonal: "LABORATORIO 24 TET",
   continuity: "ERRORES DE CONTINUIDAD",
@@ -142,7 +144,7 @@ export default function SecretExtras({
   const [panelOpen, setPanelOpen] = useState(false);
   const [resetArmed, setResetArmed] = useState(false);
   const [activeMode, setActiveMode] = useState<ActiveMode>(null);
-  const [nolanProgress, setNolanProgress] = useState(0);
+  const [spielbergProgress, setSpielbergProgress] = useState(0);
   const [fnafEncounter, setFnafEncounter] = useState<FnafEncounter | null>(null);
   const [fnafEnding, setFnafEnding] = useState<"six-am" | "scare" | null>(null);
   const [fnafMessage, setFnafMessage] = useState("");
@@ -156,8 +158,9 @@ export default function SecretExtras({
   const activeModeRef = useRef<ActiveMode>(activeMode);
   const blockedRef = useRef(blocked);
   const soundOnRef = useRef(soundOn);
-  const nolanRafRef = useRef<number | null>(null);
-  const nolanScrollRestoreRef = useRef("");
+  const spielbergRafRef = useRef<number | null>(null);
+  const inversionHeightRef = useRef(0);
+  const inversionTouchYRef = useRef<number | null>(null);
   const programmaticScrollRef = useRef(false);
   const lastScrollYRef = useRef(0);
   const lastScrollDirectionRef = useRef(0);
@@ -202,19 +205,19 @@ export default function SecretExtras({
     return audioContextRef.current;
   }, []);
 
-  const playNolanEffect = useCallback(() => {
+  const playProjectionEffect = useCallback(() => {
     const context = getAudioContext();
     if (!context) return;
     const now = context.currentTime;
     const oscillator = context.createOscillator();
     const gain = context.createGain();
     const filter = context.createBiquadFilter();
-    oscillator.type = "sawtooth";
-    oscillator.frequency.setValueAtTime(170, now);
-    oscillator.frequency.exponentialRampToValueAtTime(42, now + 1.55);
+    oscillator.type = "triangle";
+    oscillator.frequency.setValueAtTime(55, now);
+    oscillator.frequency.exponentialRampToValueAtTime(220, now + 1.55);
     filter.type = "lowpass";
-    filter.frequency.setValueAtTime(2200, now);
-    filter.frequency.exponentialRampToValueAtTime(180, now + 1.55);
+    filter.frequency.setValueAtTime(240, now);
+    filter.frequency.exponentialRampToValueAtTime(2600, now + 1.55);
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.exponentialRampToValueAtTime(0.035, now + 0.05);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.6);
@@ -274,27 +277,41 @@ export default function SecretExtras({
     [getAudioContext],
   );
 
-  const restoreNolanScroll = useCallback(() => {
-    if (nolanRafRef.current !== null) {
-      window.cancelAnimationFrame(nolanRafRef.current);
-      nolanRafRef.current = null;
+  const restoreSpielbergInversion = useCallback(() => {
+    if (spielbergRafRef.current !== null) {
+      window.cancelAnimationFrame(spielbergRafRef.current);
+      spielbergRafRef.current = null;
     }
     if (typeof document !== "undefined") {
-      document.body.style.overflow = nolanScrollRestoreRef.current;
+      const experience = document.querySelector<HTMLElement>(".experience");
+      if (experience?.classList.contains("spielberg-inverted")) {
+        const documentHeight = Math.max(
+          inversionHeightRef.current,
+          document.documentElement.scrollHeight,
+        );
+        const restoredY = mirrorScrollPosition(
+          window.scrollY,
+          documentHeight,
+          window.innerHeight,
+        );
+        experience.classList.remove("spielberg-inverted");
+        document.documentElement.classList.remove("spielberg-inversion-active");
+        window.scrollTo(0, restoredY);
+      }
     }
     programmaticScrollRef.current = false;
   }, []);
 
-  const finishNolan = useCallback(
+  const finishSpielberg = useCallback(
     (completed: boolean) => {
-      restoreNolanScroll();
-      setNolanProgress(0);
+      restoreSpielbergInversion();
+      setSpielbergProgress(0);
       if (completed) {
-        setProgress((current) => completeSecret(current, "nolan"));
+        setProgress((current) => completeSecret(current, "spielberg"));
       }
       setActiveMode(null);
     },
-    [restoreNolanScroll],
+    [restoreSpielbergInversion],
   );
 
   const clearEncounterHost = useCallback(() => {
@@ -303,54 +320,62 @@ export default function SecretExtras({
 
   const cancelRuntime = useCallback(() => {
     clearRuntimeTimers();
-    restoreNolanScroll();
+    restoreSpielbergInversion();
     clearEncounterHost();
     scareAudioRef.current?.pause();
     scareAudioRef.current = null;
     document.body.classList.remove("secret-director-cut");
     setActiveMode(null);
-    setNolanProgress(0);
+    setSpielbergProgress(0);
     setFnafEncounter(null);
     setFnafEnding(null);
     setMicroDots([]);
     setDirectorCut(false);
-  }, [clearEncounterHost, clearRuntimeTimers, restoreNolanScroll]);
+  }, [clearEncounterHost, clearRuntimeTimers, restoreSpielbergInversion]);
 
-  const triggerNolan = useCallback(() => {
+  const triggerSpielberg = useCallback(() => {
     if (
       activeModeRef.current ||
       blockedRef.current ||
-      progressRef.current.completed.includes("nolan")
+      progressRef.current.completed.includes("spielberg")
     ) {
       return;
     }
 
-    setActiveMode("nolan");
+    const experience = document.querySelector<HTMLElement>(".experience");
+    if (!experience) return;
+
+    setActiveMode("spielberg");
     reversalHistoryRef.current = [];
     programmaticScrollRef.current = true;
-    playNolanEffect();
+    playProjectionEffect();
 
     const reduced = reducedMotionEnabled();
     const startY = window.scrollY;
-    const targetY = Math.max(0, startY - window.innerHeight * 0.75);
-    const duration = reduced ? 700 : 1800;
+    const documentHeight = document.documentElement.scrollHeight;
+    const mirroredY = mirrorScrollPosition(
+      startY,
+      documentHeight,
+      window.innerHeight,
+    );
+    const duration = reduced ? 8000 : 14000;
     const startedAt = performance.now();
-    nolanScrollRestoreRef.current = document.body.style.overflow;
-    if (!reduced) document.body.style.overflow = "hidden";
+    inversionHeightRef.current = documentHeight;
+    experience.classList.add("spielberg-inverted");
+    document.documentElement.classList.add("spielberg-inversion-active");
+    window.scrollTo(0, mirroredY);
 
     const animate = (now: number) => {
       const normalized = Math.min(1, (now - startedAt) / duration);
-      const eased = 1 - Math.pow(1 - normalized, 3);
-      setNolanProgress(normalized);
-      if (!reduced) window.scrollTo(0, startY + (targetY - startY) * eased);
+      setSpielbergProgress(normalized);
       if (normalized < 1) {
-        nolanRafRef.current = window.requestAnimationFrame(animate);
+        spielbergRafRef.current = window.requestAnimationFrame(animate);
       } else {
-        finishNolan(true);
+        finishSpielberg(true);
       }
     };
-    nolanRafRef.current = window.requestAnimationFrame(animate);
-  }, [finishNolan, playNolanEffect]);
+    spielbergRafRef.current = window.requestAnimationFrame(animate);
+  }, [finishSpielberg, playProjectionEffect]);
 
   const resolveEncounter = useCallback(
     (caught: boolean) => {
@@ -563,7 +588,7 @@ export default function SecretExtras({
   }, [started]);
 
   useEffect(() => {
-    if (!started || blocked || progress.completed.includes("nolan")) return;
+    if (!started || blocked || progress.completed.includes("spielberg")) return;
     lastScrollYRef.current = window.scrollY;
     const handleScroll = () => {
       if (programmaticScrollRef.current || activeModeRef.current || blockedRef.current) {
@@ -583,14 +608,89 @@ export default function SecretExtras({
           performance.now(),
         );
         reversalHistoryRef.current = result.history;
-        if (result.triggered) triggerNolan();
+        if (result.triggered) triggerSpielberg();
       }
       lastScrollDirectionRef.current = direction;
       lastScrollYRef.current = nextY;
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [blocked, progress.completed, started, triggerNolan]);
+  }, [blocked, progress.completed, started, triggerSpielberg]);
+
+  useEffect(() => {
+    if (activeMode !== "spielberg") return;
+
+    const scrollInverted = (delta: number) => {
+      window.scrollBy({ top: invertScrollDelta(delta), left: 0, behavior: "auto" });
+    };
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      scrollInverted(event.deltaY);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest("input,textarea,select,button,a") &&
+        event.key !== "Escape"
+      ) {
+        return;
+      }
+
+      const keyDeltas: Record<string, number> = {
+        ArrowDown: 90,
+        ArrowUp: -90,
+        PageDown: window.innerHeight * 0.82,
+        PageUp: -window.innerHeight * 0.82,
+      };
+      if (event.key in keyDeltas) {
+        event.preventDefault();
+        scrollInverted(keyDeltas[event.key]);
+      } else if (event.key === " ") {
+        event.preventDefault();
+        scrollInverted((event.shiftKey ? -1 : 1) * window.innerHeight * 0.82);
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        window.scrollTo(0, document.documentElement.scrollHeight);
+      } else if (event.key === "End") {
+        event.preventDefault();
+        window.scrollTo(0, 0);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        finishSpielberg(true);
+      }
+    };
+    const handleTouchStart = (event: TouchEvent) => {
+      inversionTouchYRef.current = event.touches[0]?.clientY ?? null;
+    };
+    const handleTouchMove = (event: TouchEvent) => {
+      const nextY = event.touches[0]?.clientY;
+      const previousY = inversionTouchYRef.current;
+      if (nextY === undefined || previousY === null) return;
+      event.preventDefault();
+      scrollInverted(previousY - nextY);
+      inversionTouchYRef.current = nextY;
+    };
+    const handleTouchEnd = () => {
+      inversionTouchYRef.current = null;
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd);
+    window.addEventListener("touchcancel", handleTouchEnd);
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchEnd);
+      inversionTouchYRef.current = null;
+    };
+  }, [activeMode, finishSpielberg]);
 
   useEffect(() => {
     if (
@@ -702,7 +802,7 @@ export default function SecretExtras({
 
   const secretStatus = useMemo(
     () => ({
-      nolan: progress.completed.includes("nolan") ? "COMPLETO" : "NO DETECTADO",
+      spielberg: progress.completed.includes("spielberg") ? "COMPLETO" : "NO DETECTADO",
       nightShift: progress.completed.includes("nightShift")
         ? "6 AM · SUPERADO"
         : `${fnafHour === 0 ? "12" : fnafHour} AM · ${progress.fnafCaught.length}/${FNAF_MILESTONES.length}`,
@@ -828,25 +928,27 @@ export default function SecretExtras({
         </div>
       )}
 
-      {activeMode === "nolan" && (
-        <div className="nolan-inversion" role="dialog" aria-modal="true" data-hee-control>
-          <div className="nolan-inversion-film" aria-hidden="true">
+      {activeMode === "spielberg" && typeof document !== "undefined" && createPortal(
+        <div className="spielberg-inversion" role="dialog" aria-modal="true" data-hee-control>
+          <div className="spielberg-inversion-film" aria-hidden="true">
             {Array.from({ length: 12 }, (_, index) => <i key={index} />)}
           </div>
-          <div className="nolan-cursor past" aria-hidden="true">PASADO</div>
-          <div className="nolan-cursor future" aria-hidden="true">FUTURO</div>
-          <div className="nolan-inversion-copy">
-            <small>PROTOCOLO TEMPORAL · NOLAN</small>
-            <h2>LA PÁGINA<br />RECUERDA EL FUTURO.</h2>
+          <div className="spielberg-cursor screen-up" aria-hidden="true">↓ SUBE</div>
+          <div className="spielberg-cursor screen-down" aria-hidden="true">↑ BAJA</div>
+          <div className="spielberg-inversion-copy">
+            <small>PROTOCOLO DE PROYECCIÓN · SPIELBERG</small>
+            <h2>LA PÁGINA<br />ESTÁ AL REVÉS.</h2>
+            <p>SCROLL ABAJO = SUBIR · SCROLL ARRIBA = BAJAR</p>
             <div>
-              <span>T−00:{String(Math.max(0, Math.ceil((1 - nolanProgress) * 18))).padStart(2, "0")}</span>
-              <i><b style={{ width: `${nolanProgress * 100}%` }} /></i>
+              <span>PROYECCIÓN · {String(Math.max(0, Math.ceil((1 - spielbergProgress) * 14))).padStart(2, "0")} S</span>
+              <i><b style={{ width: `${spielbergProgress * 100}%` }} /></i>
             </div>
-            <button type="button" onClick={() => finishNolan(true)}>
-              ESTABILIZAR LÍNEA TEMPORAL <span>↶</span>
+            <button type="button" onClick={() => finishSpielberg(true)}>
+              RESTAURAR PROYECCIÓN <span>↻</span>
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {(activeMode === "micro" || activeMode === "micro-finale") && (

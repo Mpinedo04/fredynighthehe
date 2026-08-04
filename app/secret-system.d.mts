@@ -1,4 +1,4 @@
-export type SecretId = "nolan" | "nightShift" | "microtonal" | "continuity";
+export type SecretId = "spielberg" | "nightShift" | "microtonal" | "continuity";
 export type ContinuityId = "hero" | "project" | "friends" | "trailer";
 
 export interface SecretProgressV1 {
@@ -23,5 +23,7 @@ export function findContinuityClue(progress: SecretProgressV1, clueId: Continuit
 export function resolveFnafMilestone(progress: SecretProgressV1, milestone: number, caught: boolean): SecretProgressV1;
 export function nextFnafMilestone(scrollDepth: number, handled: number[]): number | null;
 export function registerScrollReversal(history: number[], now: number, windowMs?: number): { history: number[]; triggered: boolean };
+export function mirrorScrollPosition(scrollY: number, documentHeight: number, viewportHeight: number): number;
+export function invertScrollDelta(delta: number): number;
 export function microtoneFromPoint(clientX: number, clientY: number, width: number, height: number): { step: number; octave: number; frequency: number };
 export function completedSecretCount(progress: SecretProgressV1): number;

@@ -226,7 +226,7 @@ const trailerScenes = [
     eyebrow: "RITMO · CINE · MICROTONAL · TERROR",
     title: "LAS OBSESIONES CAMBIAN EL MONTAJE",
     body:
-      "Michael Jackson marca el pulso; Nolan rompe el tiempo; la música microtonal abre notas nuevas y los animatrónicos invaden el fuera de campo.",
+      "Michael Jackson marca el pulso; Spielberg convierte el asombro en puesta en escena; la música microtonal abre notas nuevas y los animatrónicos invaden el fuera de campo.",
     mainImage: "/michael/michael-jackson-1988.jpg",
     mainAlt: "Michael Jackson actuando en directo en 1988",
     cutImages: [
@@ -522,28 +522,53 @@ const michaelEras = [
   },
 ] as const;
 
-const nolanFilms = [
-  { year: "1998", title: "FOLLOWING", device: "ORDEN FRAGMENTADO", format: "16 MM" },
-  { year: "2000", title: "MEMENTO", device: "MEMORIA INVERSA", format: "35 MM" },
-  { year: "2002", title: "INSOMNIA", device: "TIEMPO SUBJETIVO", format: "35 MM" },
-  { year: "2005", title: "BATMAN BEGINS", device: "ORIGEN Y MIEDO", format: "35 MM" },
-  { year: "2006", title: "THE PRESTIGE", device: "TRES ACTOS / TRUCO", format: "35 MM" },
-  { year: "2008", title: "THE DARK KNIGHT", device: "ESCALADA PARALELA", format: "IMAX + 35 MM" },
-  { year: "2010", title: "INCEPTION", device: "CAPAS DE SUEÑO", format: "65 + 35 MM" },
-  { year: "2012", title: "THE DARK KNIGHT RISES", device: "ESCALA CRUZADA", format: "IMAX + 35 MM" },
-  { year: "2014", title: "INTERSTELLAR", device: "RELATIVIDAD", format: "IMAX 65 MM" },
-  { year: "2017", title: "DUNKIRK", device: "SEMANA / DÍA / HORA", format: "IMAX 65 MM" },
-  { year: "2020", title: "TENET", device: "INVERSIÓN", format: "IMAX 65 MM" },
-  { year: "2023", title: "OPPENHEIMER", device: "FISIÓN / FUSIÓN", format: "IMAX B&N + COLOR" },
-  { year: "2026", title: "THE ODYSSEY", device: "REGRESO ÉPICO", format: "100% IMAX FILM" },
+const spielbergFilms = [
+  { year: "1964", title: "FIRELIGHT", motif: "PRIMER CONTACTO", craft: "CIENCIA FICCIÓN ARTESANAL" },
+  { year: "1971", title: "DUEL", motif: "AMENAZA SIN ROSTRO", craft: "SUSPENSE EN CARRETERA" },
+  { year: "1974", title: "THE SUGARLAND EXPRESS", motif: "HUIDA Y FAMILIA", craft: "ROAD MOVIE" },
+  { year: "1975", title: "JAWS", motif: "LO QUE NO SE VE", craft: "SUSPENSE Y PUNTO DE VISTA" },
+  { year: "1977", title: "CLOSE ENCOUNTERS", motif: "ASOMBRO CÓSMICO", craft: "LUZ, SONIDO Y SILUETA" },
+  { year: "1979", title: "1941", motif: "CAOS COREOGRAFIADO", craft: "COMEDIA BÉLICA" },
+  { year: "1981", title: "RAIDERS OF THE LOST ARK", motif: "AVENTURA PURA", craft: "SERIAL CLÁSICO" },
+  { year: "1982", title: "E.T.", motif: "INFANCIA Y ASOMBRO", craft: "CÁMARA A LA ALTURA DEL NIÑO" },
+  { year: "1983", title: "TWILIGHT ZONE", motif: "SEGUNDA INFANCIA", craft: "CUENTO FANTÁSTICO" },
+  { year: "1984", title: "TEMPLE OF DOOM", motif: "AVENTURA OSCURA", craft: "SET PIECES ENCADENADAS" },
+  { year: "1985", title: "THE COLOR PURPLE", motif: "INTIMIDAD Y RESISTENCIA", craft: "DRAMA HUMANO" },
+  { year: "1987", title: "EMPIRE OF THE SUN", motif: "INFANCIA EN LA GUERRA", craft: "ÉPICA ÍNTIMA" },
+  { year: "1989", title: "THE LAST CRUSADE", motif: "PADRE E HIJO", craft: "COMEDIA DE AVENTURAS" },
+  { year: "1989", title: "ALWAYS", motif: "AMOR Y MEMORIA", craft: "ROMANCE FANTÁSTICO" },
+  { year: "1991", title: "HOOK", motif: "CRECER SIN OLVIDAR", craft: "FANTASÍA ESCÉNICA" },
+  { year: "1993", title: "JURASSIC PARK", motif: "ASOMBRO Y PELIGRO", craft: "EFECTOS FÍSICOS + DIGITALES" },
+  { year: "1993", title: "SCHINDLER'S LIST", motif: "MEMORIA HISTÓRICA", craft: "BLANCO Y NEGRO DOCUMENTAL" },
+  { year: "1997", title: "THE LOST WORLD", motif: "NATURALEZA DESATADA", craft: "PERSECUCIÓN Y ESCALA" },
+  { year: "1997", title: "AMISTAD", motif: "JUSTICIA Y TESTIMONIO", craft: "DRAMA HISTÓRICO" },
+  { year: "1998", title: "SAVING PRIVATE RYAN", motif: "INMERSIÓN BÉLICA", craft: "CÁMARA EN EL FRENTE" },
+  { year: "2001", title: "A.I.", motif: "INFANCIA ARTIFICIAL", craft: "CUENTO FUTURISTA" },
+  { year: "2002", title: "MINORITY REPORT", motif: "FUTURO TÁCTIL", craft: "THRILLER DE VIGILANCIA" },
+  { year: "2002", title: "CATCH ME IF YOU CAN", motif: "JUEGO Y SOLEDAD", craft: "MONTAJE ÁGIL" },
+  { year: "2004", title: "THE TERMINAL", motif: "HUMANIDAD EN TRÁNSITO", craft: "FÁBULA CORAL" },
+  { year: "2005", title: "WAR OF THE WORLDS", motif: "FAMILIA BAJO ATAQUE", craft: "CAOS SUBJETIVO" },
+  { year: "2005", title: "MUNICH", motif: "VIOLENCIA Y CONSECUENCIA", craft: "THRILLER MORAL" },
+  { year: "2008", title: "KINGDOM OF THE CRYSTAL SKULL", motif: "AVENTURA ATÓMICA", craft: "SERIAL PULP" },
+  { year: "2011", title: "THE ADVENTURES OF TINTIN", motif: "CÁMARA IMPOSIBLE", craft: "PERFORMANCE CAPTURE" },
+  { year: "2011", title: "WAR HORSE", motif: "ÉPICA CLÁSICA", craft: "PAISAJE Y EMOCIÓN" },
+  { year: "2012", title: "LINCOLN", motif: "EL PODER DE LA PALABRA", craft: "DRAMA POLÍTICO" },
+  { year: "2015", title: "BRIDGE OF SPIES", motif: "HOMBRES EN LA FRONTERA", craft: "CLASICISMO DE ESPÍAS" },
+  { year: "2016", title: "THE BFG", motif: "ASOMBRO GIGANTE", craft: "FANTASÍA DIGITAL" },
+  { year: "2017", title: "THE POST", motif: "PRENSA CONTRA PODER", craft: "URGENCIA PERIODÍSTICA" },
+  { year: "2018", title: "READY PLAYER ONE", motif: "MUNDO DENTRO DEL MUNDO", craft: "PRODUCCIÓN VIRTUAL" },
+  { year: "2021", title: "WEST SIDE STORY", motif: "MOVIMIENTO Y COLOR", craft: "MUSICAL CINÉTICO" },
+  { year: "2022", title: "THE FABELMANS", motif: "CINE COMO MEMORIA", craft: "AUTOBIOGRAFÍA FILMADA" },
+  { year: "2026", title: "DISCLOSURE DAY", motif: "LA VERDAD EN EL CIELO", craft: "CONTACTO CONTEMPORÁNEO" },
 ] as const;
 
-const nolanMethod = [
-  ["01", "REGLA", "Una idea temporal clara gobierna la película."],
-  ["02", "PELÍCULA", "Gran formato fotoquímico para conservar textura y escala."],
-  ["03", "REALIDAD", "Localizaciones, vehículos y efectos prácticos siempre que es posible."],
-  ["04", "MONTAJE", "Líneas simultáneas se tensan mediante montaje paralelo."],
-  ["05", "SALA", "Imagen y sonido se diseñan para sentirse físicamente."],
+const spielbergMethod = [
+  ["01", "MIRADA", "La cámara descubre la maravilla a través de los ojos del personaje."],
+  ["02", "BLOQUEO", "Actores y cámara se mueven juntos; el plano explica antes que el diálogo."],
+  ["03", "LUZ", "Contraluces, haces y siluetas convierten lo cotidiano en un acontecimiento."],
+  ["04", "EFECTOS", "Lo físico da una reacción real; lo digital amplía aquello que ya está en el set."],
+  ["05", "MÚSICA", "La melodía conduce la emoción y transforma el montaje en recuerdo."],
+  ["06", "CORAZÓN", "La escala siempre descansa sobre una familia, una amistad o una decisión moral."],
 ] as const;
 
 const heeButtonLabels = [
@@ -578,8 +603,7 @@ export default function Home() {
   const [selectedProject, setSelectedProject] = useState(4);
   const [mjAnswer, setMjAnswer] = useState(false);
   const [mjEra, setMjEra] = useState(2);
-  const [countdown, setCountdown] = useState(10);
-  const [nolanFilm, setNolanFilm] = useState(nolanFilms.length - 1);
+  const [spielbergFilm, setSpielbergFilm] = useState(spielbergFilms.length - 1);
   const [recovered, setRecovered] = useState(false);
   const [recoveredStep, setRecoveredStep] = useState(0);
   const [materialRead, setMaterialRead] = useState(false);
@@ -747,13 +771,6 @@ export default function Home() {
     const timer = window.setInterval(playHee, delay);
     return () => window.clearInterval(timer);
   }, [heeReady, heeMuted, playHee, scrollBand, secretExclusive]);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setCountdown((value) => (value <= 0 ? 10 : value - 1));
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     if (!trailerOpen || trailerPaused) return;
@@ -1624,37 +1641,38 @@ export default function Home() {
             </div>
           </article>
 
-          <article className="idol-card nolan-world">
+          <article className="idol-card spielberg-world">
             <div className="idol-label">
               <span>REFERENTE 02</span>
-              <strong>13 LARGOMETRAJES · 1998—2026</strong>
+              <strong>37 DIRECCIONES · 1964—2026</strong>
             </div>
-            <div className="nolan-clock" aria-live="polite">
-              <div className="clock-ring ring-one" />
-              <div className="clock-ring ring-two" />
-              <div className="clock-ring ring-three" />
-              <span>{nolanFilms[nolanFilm].year}</span>
-              <strong>{nolanFilms[nolanFilm].title}</strong>
+            <div className="spielberg-projector" aria-live="polite">
+              <div className="spielberg-reel reel-one" />
+              <div className="spielberg-reel reel-two" />
+              <div className="spielberg-beam" aria-hidden="true" />
+              <div className="spielberg-stars" aria-hidden="true"><i /><i /><i /><i /><i /></div>
+              <span>{spielbergFilms[spielbergFilm].year}</span>
+              <strong>{spielbergFilms[spielbergFilm].title}</strong>
               <small>
-                T–00:{String(countdown).padStart(2, "0")} · {nolanFilms[nolanFilm].format}
+                PELÍCULA {String(spielbergFilm + 1).padStart(2, "0")} / {spielbergFilms.length} · {spielbergFilms[spielbergFilm].craft}
               </small>
             </div>
             <div className="idol-copy">
-              <p className="eyebrow">TIEMPO · REALIDAD FÍSICA · GRAN FORMATO</p>
-              <h3>CHRISTOPHER<br />NOLAN</h3>
+              <p className="eyebrow">ASOMBRO · AVENTURA · HUMANIDAD</p>
+              <h3>STEVEN<br />SPIELBERG</h3>
               <p>
-                Cada película parte de una regla formal y la convierte en
-                espectáculo tangible: relojes, estructuras anidadas, película
-                fotoquímica, efectos reales y montaje paralelo.
+                El espectáculo empieza en una mirada. Spielberg convierte una
+                familia, un niño o una decisión moral en el centro de tiburones,
+                dinosaurios, guerras, encuentros y mundos imposibles.
               </p>
-              <div className="nolan-film-strip" role="list" aria-label="Filmografía completa de Christopher Nolan">
-                {nolanFilms.map((film, index) => (
+              <div className="spielberg-film-strip" role="list" aria-label="Filmografía completa dirigida por Steven Spielberg">
+                {spielbergFilms.map((film, index) => (
                   <button
                     type="button"
                     role="listitem"
-                    aria-pressed={nolanFilm === index}
-                    className={nolanFilm === index ? "active" : ""}
-                    onClick={() => setNolanFilm(index)}
+                    aria-pressed={spielbergFilm === index}
+                    className={spielbergFilm === index ? "active" : ""}
+                    onClick={() => setSpielbergFilm(index)}
                     key={film.title}
                   >
                     <span>{film.year}</span>
@@ -1662,13 +1680,13 @@ export default function Home() {
                   </button>
                 ))}
               </div>
-              <div className="nolan-film-readout" aria-live="polite">
-                <span>DISPOSITIVO NARRATIVO</span>
-                <strong>{nolanFilms[nolanFilm].device}</strong>
-                <small>{nolanFilms[nolanFilm].format}</small>
+              <div className="spielberg-film-readout" aria-live="polite">
+                <span>CENTRO EMOCIONAL</span>
+                <strong>{spielbergFilms[spielbergFilm].motif}</strong>
+                <small>{spielbergFilms[spielbergFilm].craft}</small>
               </div>
-              <ol className="nolan-method" aria-label="Método de trabajo de Christopher Nolan">
-                {nolanMethod.map(([number, label, detail]) => (
+              <ol className="spielberg-method" aria-label="Método cinematográfico de Steven Spielberg">
+                {spielbergMethod.map(([number, label, detail]) => (
                   <li key={number}>
                     <span>{number}</span>
                     <strong>{label}</strong>
