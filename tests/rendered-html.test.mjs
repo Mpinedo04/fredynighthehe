@@ -71,8 +71,9 @@ test("microtonal laboratory exposes composition controls and live analysis", asy
 });
 
 test("interactive montage defines the inset index used by every cut label", async () => {
+  // The montage moved from page.tsx into its own modal component.
   const pageSource = await readFile(
-    new URL("../app/page.tsx", import.meta.url),
+    new URL("../app/modals/TrailerModal.tsx", import.meta.url),
     "utf8",
   );
   assert.match(

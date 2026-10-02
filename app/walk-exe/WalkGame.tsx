@@ -128,6 +128,15 @@ type CaughtSequence = {
 
 const JUMPSCARE_DURATION_MS = 1120;
 
+/** Phones shake with every jumpscare (Android; silently ignored elsewhere). */
+function vibrateScare() {
+  try {
+    navigator.vibrate?.([0, 90, 40, 220, 60, 120]);
+  } catch {
+    // Vibration is optional.
+  }
+}
+
 const cameraNames = [
   "CAM 01 · GALERÍA OESTE",
   "CAM 02 · CUARTO DE FIESTA",
@@ -1936,6 +1945,7 @@ export default function WalkExe() {
 
     const playMechanicalScream = (mascot: ScareMascot) => {
       audioRef.current?.playJumpscare(1, mascot.screamVariant);
+      vibrateScare();
     };
 
     const triggerCaught = (now: number) => {
@@ -3743,6 +3753,7 @@ export default function WalkExe() {
       cctvEncounterPhaseRef.current = "scream";
       setCctvEncounterPhase("scream");
       setPrompt(`${mascot.name} · ¡BAJA EL MONITOR!`);
+      vibrateScare();
       const engine = audioRef.current;
       if (engine?.playMascotScream(mascot.screamVariant, 1.18)) return;
       void engine?.resume().then((running) => {

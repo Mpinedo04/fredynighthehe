@@ -1,0 +1,146 @@
+.reference-room {
+  border-top: 1px solid var(--line);
+  background:
+    radial-gradient(circle at 30% 70%, rgba(45,108,255,.1), transparent 25rem),
+    #070a0f;
+}
+
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.reference-card {
+  position: relative;
+  min-height: 34rem;
+  padding: 2rem;
+  border: 1px solid var(--line);
+  background: #0b1018;
+  overflow: hidden;
+}
+
+.room-number {
+  display: block;
+  color: #546074;
+  font: .52rem var(--font-mono);
+  letter-spacing: .1em;
+}
+
+.reference-card h3 {
+  position: relative;
+  z-index: 2;
+  margin: .7rem 0 1rem;
+  font: 4rem/.9 var(--font-display);
+  text-transform: uppercase;
+}
+
+.jackson {
+  background:
+    linear-gradient(145deg, transparent 40%, rgba(255,61,61,.15)),
+    #090b10;
+}
+
+.mj-silhouette {
+  position: absolute;
+  right: 1rem;
+  top: 2rem;
+  color: rgba(255,255,255,.06);
+  font: 16rem var(--font-display);
+  transform: rotate(-12deg);
+}
+
+.reference-card .eyebrow {
+  position: relative;
+  z-index: 2;
+  margin-top: 13rem;
+}
+
+.room-answer {
+  position: relative;
+  z-index: 2;
+  max-height: 0;
+  margin: 1.2rem 0 0;
+  color: #aab5c8;
+  font-size: .82rem;
+  line-height: 1.5;
+  opacity: 0;
+  transition: .35s;
+}
+
+.room-answer.visible {
+  max-height: 5rem;
+  opacity: 1;
+}
+
+.nolan {
+  background:
+    repeating-radial-gradient(circle at 50% 32%, transparent 0 38px, rgba(116,154,255,.07) 39px 40px),
+    #09101a;
+}
+
+.countdown {
+  margin: 4rem 0 3.4rem;
+  color: var(--blue-soft);
+  font: 5rem var(--font-mono);
+  letter-spacing: -.12em;
+}
+
+.nolan .eyebrow,
+.horror .eyebrow {
+  margin-top: 0;
+}
+
+.room-quote {
+  margin: 2rem 0 0;
+  color: #93a0b5;
+  font: .75rem/1.7 var(--font-mono);
+}
+
+.cctv {
+  position: relative;
+  height: 15rem;
+  margin: 2rem 0;
+  border: 1px solid #384253;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.028) 3px 4px),
+    #080b0d;
+}
+
+.cctv > span {
+  position: absolute;
+  top: .8rem;
+  left: .8rem;
+  z-index: 2;
+  color: var(--red);
+  font: .52rem var(--font-mono);
+}
+
+.cctv small {
+  position: absolute;
+  right: .8rem;
+  bottom: .7rem;
+  color: #596273;
+  font: .45rem var(--font-mono);
+}
+
+.secret-door {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 6rem;
+  height: 11rem;
+  border: 1px solid #343c47;
+  transform: translateX(-50%);
+}
+
+.secret-door i {
+  position: absolute;
+  right: .7rem;
+  top: 50%;
+  width: .4rem;
+  height: .4rem;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 13px var(--red);
+}

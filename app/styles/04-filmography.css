@@ -1,0 +1,180 @@
+.filmography {
+  overflow: hidden;
+}
+
+.film-strip {
+  display: flex;
+  gap: 1rem;
+  width: max-content;
+  padding: 2rem 7vw 2rem 0;
+  border-top: 1px solid #222b3a;
+  border-bottom: 1px solid #222b3a;
+  overflow-x: auto;
+  max-width: calc(100vw - 7vw);
+  scrollbar-color: var(--blue) #111;
+  scroll-snap-type: x mandatory;
+}
+
+.film-card {
+  position: relative;
+  flex: 0 0 18rem;
+  padding: 1rem;
+  border: 1px solid #252d3b;
+  background: #0b1019;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+  transition: transform 0.25s, border-color 0.25s;
+}
+
+.film-card:hover,
+.film-card.selected {
+  transform: translateY(-8px);
+  border-color: var(--blue);
+}
+
+.film-card.selected {
+  box-shadow: 0 0 0 1px var(--blue), 0 18px 45px rgba(0,0,0,.4);
+}
+
+.sprockets {
+  display: block;
+  height: 8px;
+  margin: -0.3rem 0 0.7rem;
+  background: repeating-linear-gradient(90deg, #526078 0 9px, transparent 9px 18px);
+  opacity: .4;
+}
+
+.film-visual {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 17rem;
+  padding: 1rem;
+  background:
+    linear-gradient(150deg, transparent 25%, rgba(45,108,255,.22) 25% 48%, transparent 48%),
+    #121a29;
+  overflow: hidden;
+}
+
+.film-visual::after {
+  content: "";
+  position: absolute;
+  width: 13rem;
+  height: 13rem;
+  right: -6rem;
+  bottom: -5rem;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2rem rgba(255,255,255,.025), 0 0 0 4rem rgba(255,255,255,.015);
+}
+
+.film-card.red .film-visual {
+  background: linear-gradient(135deg, #401014, #0d1119 65%);
+}
+
+.film-card.violet .film-visual {
+  background: linear-gradient(135deg, #2d1746, #0d1119 65%);
+}
+
+.film-card.amber .film-visual {
+  background: linear-gradient(135deg, #463015, #0d1119 65%);
+}
+
+.film-card.special .film-visual {
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 12px, rgba(255,255,255,.025) 12px 13px),
+    linear-gradient(135deg, #262a32, #10141b);
+}
+
+.film-visual small {
+  color: #9daccc;
+  font: 0.55rem var(--font-mono);
+}
+
+.film-visual b {
+  position: relative;
+  z-index: 1;
+  max-width: 90%;
+  font: 2.2rem/0.98 var(--font-display);
+  letter-spacing: .02em;
+}
+
+.film-visual em {
+  position: absolute;
+  top: 1rem;
+  right: -2.6rem;
+  padding: .35rem 3rem;
+  background: var(--red);
+  font: 0.42rem var(--font-mono);
+  font-style: normal;
+  letter-spacing: .08em;
+  transform: rotate(35deg);
+}
+
+.film-meta {
+  display: block;
+  padding: 1rem 0 .2rem;
+}
+
+.film-meta small,
+.film-meta strong {
+  display: block;
+}
+
+.film-meta small {
+  margin-bottom: .35rem;
+  color: #58657a;
+  font: .48rem var(--font-mono);
+  letter-spacing: .1em;
+}
+
+.film-meta strong {
+  font-size: .72rem;
+  font-weight: 500;
+}
+
+.project-focus {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 2.5rem;
+  margin-top: 2rem;
+  padding: 2rem;
+  border: 1px solid var(--line);
+  background: rgba(15, 21, 32, .72);
+}
+
+.focus-index {
+  color: var(--blue);
+  font: 4rem var(--font-display);
+}
+
+.project-focus h3 {
+  margin: 0 0 .5rem;
+  font: 2rem var(--font-display);
+  text-transform: uppercase;
+}
+
+.project-focus p:not(.eyebrow) {
+  margin: 0;
+  color: #8691a4;
+}
+
+.project-focus .eyebrow {
+  margin-bottom: .4rem;
+}
+
+.text-action,
+.reference-card button {
+  padding: .75rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--blue);
+  background: none;
+  cursor: pointer;
+  color: #dfe7f7;
+  font: 700 .58rem var(--font-mono);
+  letter-spacing: .12em;
+}

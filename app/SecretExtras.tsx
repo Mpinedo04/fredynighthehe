@@ -29,6 +29,12 @@ import {
   type SecretId,
   type SecretProgressV1,
 } from "./secret-system.mjs";
+import { audioContext } from "./audio/engine";
+import { ACHIEVEMENTS } from "./prank-system.mjs";
+import { ACHIEVEMENT_TOTAL, resetAchievements, useAchievements } from "./pranks/Achievements";
+import { announceMicroNote, drainPower, fireScare } from "./pranks/bus";
+import { updateNight } from "./ui/nightStore";
+import { showToast } from "./ui/Toasts";
 
 type ActiveMode =
   | "spielberg"
@@ -44,6 +50,7 @@ type SecretExtrasProps = {
   scrollDepth: number;
   soundOn: boolean;
   blocked: boolean;
+  beaconVisible: boolean;
   onExclusiveChange: (exclusive: boolean) => void;
 };
 
@@ -137,6 +144,7 @@ export default function SecretExtras({
   scrollDepth,
   soundOn,
   blocked,
+  beaconVisible,
   onExclusiveChange,
 }: SecretExtrasProps) {
   const [progress, setProgress] = useState<SecretProgressV1>(() => {
@@ -153,7 +161,6 @@ export default function SecretExtras({
   const [spielbergProgress, setSpielbergProgress] = useState(0);
   const [fnafEncounter, setFnafEncounter] = useState<FnafEncounter | null>(null);
   const [fnafEnding, setFnafEnding] = useState<"six-am" | "scare" | null>(null);
-  const [fnafMessage, setFnafMessage] = useState("");
   const [microUnlockClicks, setMicroUnlockClicks] = useState(0);
   const [microDots, setMicroDots] = useState<MicroDot[]>([]);
   const [microWaveform, setMicroWaveform] = useState<OscillatorType>("triangle");
@@ -163,7 +170,6 @@ export default function SecretExtras({
     octave: 2,
     frequency: 220,
   });
-  const [continuityMessage, setContinuityMessage] = useState("");
   const [directorCut, setDirectorCut] = useState(false);
   const [anchors, setAnchors] = useState<Partial<Record<ContinuityId, Element>>>({});
 
@@ -181,7 +187,6 @@ export default function SecretExtras({
   const encounterTimerRef = useRef<number | null>(null);
   const runtimeTimersRef = useRef<Set<number>>(new Set());
   const encounterRef = useRef<FnafEncounter | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const scareAudioRef = useRef<HTMLAudioElement | null>(null);
   const microUnlockRef = useRef(0);
   const microIdRef = useRef(0);
@@ -191,6 +196,7 @@ export default function SecretExtras({
   const cancelRuntimeRef = useRef<() => void>(() => undefined);
 
   const completedCount = completedSecretCount(progress);
+  const achievementState = useAchievements();
   const exclusive = activeMode !== null;
 
   const addTimer = useCallback((callback: () => void, delay: number) => {
@@ -213,11 +219,7 @@ export default function SecretExtras({
 
   const getAudioContext = useCallback(() => {
     if (!soundOnRef.current || typeof window === "undefined") return null;
-    if (!audioContextRef.current || audioContextRef.current.state === "closed") {
-      audioContextRef.current = new AudioContext();
-    }
-    void audioContextRef.current.resume().catch(() => undefined);
-    return audioContextRef.current;
+    return audioContext();
   }, []);
 
   const playProjectionEffect = useCallback(() => {
@@ -437,16 +439,22 @@ export default function SecretExtras({
       setProgress((previous) =>
         resolveFnafMilestone(previous, current.milestone, caught),
       );
-      setFnafMessage(
-        caught
-          ? `${current.name} INTERCEPTADO · ENERGÍA CONSERVADA`
-          : `${current.name} CAMBIÓ DE CÁMARA · ENERGÍA −20%`,
-      );
+      if (!caught) drainPower(10);
+      showToast({
+        key: "fnaf",
+        kicker: "TURNO NOCTURNO · CCTV",
+        title: caught
+          ? `${current.name} INTERCEPTADO`
+          : `${current.name} CAMBIÓ DE CÁMARA`,
+        body: caught ? "Energía conservada. Buen reflejo." : "Energía −10%. La próxima vez, pulsa antes.",
+        tone: caught ? "green" : "red",
+        image: current.image,
+        duration: 2400,
+      });
       setFnafEncounter(null);
       setActiveMode(null);
-      addTimer(() => setFnafMessage(""), 1900);
     },
-    [addTimer],
+    [],
   );
 
   const chooseVisibleHost = useCallback((milestone: number) => {
@@ -476,6 +484,7 @@ export default function SecretExtras({
       encounterRef.current = nextEncounter;
       setFnafEncounter(nextEncounter);
       setActiveMode("fnaf");
+      fireScare();
       encounterTimerRef.current = window.setTimeout(() => {
         resolveEncounter(false);
       }, 4000);
@@ -496,6 +505,7 @@ export default function SecretExtras({
     const scare = progressRef.current.fnafMissed >= 3;
     setActiveMode("fnaf-ending");
     setFnafEnding(scare ? "scare" : "six-am");
+    if (scare) fireScare();
     if (scare && soundOnRef.current) {
       const sample = new Audio("/audio/fnaf-jumpscare-scream.mp3");
       sample.volume = 0.28;
@@ -563,13 +573,19 @@ export default function SecretExtras({
         return;
       }
       setProgress(next);
-      setContinuityMessage(clue.note);
-      addTimer(() => setContinuityMessage(""), 2500);
+      showToast({
+        key: "continuity",
+        kicker: `NOTA DE SCRIPT · CONTINUIDAD ${next.continuityFound.length}/4`,
+        title: clue.label.toUpperCase(),
+        body: clue.note,
+        tone: "amber",
+        duration: 3200,
+      });
       if (next.continuityFound.length === CONTINUITY_IDS.length) {
         startDirectorCut();
       }
     },
-    [addTimer, startDirectorCut],
+    [startDirectorCut],
   );
 
   const resetSecrets = useCallback(() => {
@@ -579,6 +595,7 @@ export default function SecretExtras({
       return;
     }
     cancelRuntime();
+    resetAchievements();
     const empty = createSecretProgress();
     setProgress(empty);
     setResetArmed(false);
@@ -603,6 +620,15 @@ export default function SecretExtras({
   useEffect(() => {
     progressRef.current = progress;
   }, [progress]);
+
+  // The topbar clock shows the night-shift objectives (no separate HUD).
+  useEffect(() => {
+    updateNight({
+      caught: progress.fnafCaught.length,
+      objectives: FNAF_MILESTONES.length,
+      shiftActive: started && scrollDepth >= 25 && !progress.completed.includes("nightShift"),
+    });
+  }, [progress, scrollDepth, started]);
 
   useEffect(() => {
     activeModeRef.current = activeMode;
@@ -832,6 +858,7 @@ export default function SecretExtras({
       );
       setMicroReadout(tone);
       playMicroNote(tone.frequency, event.clientX);
+      announceMicroNote(tone.step);
       if (microDotsRef.current.length >= 24) return;
       const next = [
         ...microDotsRef.current,
@@ -880,15 +907,12 @@ export default function SecretExtras({
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("blur", handleBlur);
       cancelRuntimeRef.current();
-      void audioContextRef.current?.close();
-      audioContextRef.current = null;
     };
   }, []);
 
   const fnafHour = progress.completed.includes("nightShift")
     ? 6
     : Math.min(5, progress.fnafHandled.length);
-  const fnafPower = Math.max(0, 100 - progress.fnafMissed * 20);
 
   const secretStatus = useMemo(
     () => ({
@@ -954,7 +978,7 @@ export default function SecretExtras({
 
   return (
     <>
-      {started && !blocked && activeMode === null && (
+      {started && !blocked && activeMode === null && beaconVisible && (
         <button
           type="button"
           className={`micro-discovery-beacon ${progress.completed.includes("microtonal") ? "replay" : ""}`}
@@ -1007,6 +1031,26 @@ export default function SecretExtras({
               </div>
             ))}
           </div>
+          <div className="secret-console-achievements">
+            <header>
+              <small>LOGROS · 22G CADA UNO</small>
+              <strong>{achievementState.unlocked.length}/{ACHIEVEMENT_TOTAL}</strong>
+            </header>
+            <ul>
+              {ACHIEVEMENTS.map((achievement) => {
+                const done = achievementState.unlocked.includes(achievement.id);
+                return (
+                  <li key={achievement.id} className={done ? "complete" : ""}>
+                    <b aria-hidden="true">{done ? "🏆" : "🔒"}</b>
+                    <span>
+                      <strong>{done ? achievement.title : "???"}</strong>
+                      <small>{done ? achievement.detail : "Sigue buscando."}</small>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
           <button type="button" className="secret-reset" onClick={resetSecrets}>
             {resetArmed ? "CONFIRMAR REINICIO" : "REINICIAR LOS 4 EXTRAS"}
             <span>{resetArmed ? "!" : "↺"}</span>
@@ -1014,28 +1058,7 @@ export default function SecretExtras({
         </div>
       </aside>
 
-      {scrollDepth >= 25 && !progress.completed.includes("nightShift") && (
-        <aside className="night-shift-hud" data-hee-control aria-live="polite">
-          <div>
-            <span>● TURNO NOCTURNO</span>
-            <strong>{fnafHour === 0 ? "12" : fnafHour} AM</strong>
-          </div>
-          <div>
-            <span>ENERGÍA</span>
-            <i><b style={{ width: `${fnafPower}%` }} /></i>
-            <strong>{fnafPower}%</strong>
-          </div>
-          <small>OBJETIVOS · {progress.fnafCaught.length}/{FNAF_MILESTONES.length}</small>
-        </aside>
-      )}
-
       {renderFnafEncounter()}
-
-      {fnafMessage && (
-        <div className="secret-toast fnaf-toast" role="status" data-hee-control>
-          {fnafMessage}
-        </div>
-      )}
 
       {activeMode === "spielberg" && typeof document !== "undefined" && createPortal(
         <div className="spielberg-inversion" role="dialog" aria-modal="true" data-hee-control>
@@ -1189,19 +1212,11 @@ export default function SecretExtras({
 
       {CONTINUITY_IDS.map(renderContinuityClue)}
 
-      {continuityMessage && (
-        <div className="secret-toast continuity-toast" role="status" data-hee-control>
-          <small>NOTA DE SCRIPT</small>
-          {continuityMessage}
-          <strong>CONTINUIDAD {progress.continuityFound.length}/4</strong>
-        </div>
-      )}
-
       {directorCut && (
         <div className="director-cut-overlay" role="dialog" aria-modal="true" data-hee-control>
           <div className="director-film-strip top" aria-hidden="true">
             {["imagenes-ocultas", "catarsis", "davinci", "que-caloreh"].map((image) => (
-              <img key={image} src={`/youtube/${image}.jpg`} alt="" />
+              <img key={image} src={`/youtube/${image}.webp`} alt="" />
             ))}
           </div>
           <div className="director-notes" aria-hidden="true">
@@ -1223,7 +1238,7 @@ export default function SecretExtras({
           </div>
           <div className="director-film-strip bottom" aria-hidden="true">
             {["el-pan-ta-duro", "wtf-documental", "corazon-intacto", "imagenes-ocultas"].map((image) => (
-              <img key={image} src={`/youtube/${image}.jpg`} alt="" />
+              <img key={image} src={`/youtube/${image}.webp`} alt="" />
             ))}
           </div>
         </div>
