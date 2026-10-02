@@ -1,0 +1,887 @@
+@media (max-width: 900px) {
+  .topbar {
+    height: 64px;
+    padding: 0 1rem;
+  }
+
+  .topbar nav {
+    display: none;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+    padding: 8rem 1.2rem 5rem;
+  }
+
+  .hero-still {
+    top: 4.5rem;
+    right: -14vw;
+    bottom: auto;
+    width: 88vw;
+    height: 47rem;
+    opacity: .58;
+    transform: rotate(1deg);
+  }
+
+  .hero-still figcaption {
+    display: none;
+  }
+
+  .hero h1 {
+    display: block;
+  }
+
+  .hero h1 span,
+  .hero h1 strong {
+    display: block;
+  }
+
+  .hero h1 span {
+    font-size: 25vw;
+  }
+
+  .hero h1 strong {
+    margin: -.05em 0 0;
+    font-size: 49vw;
+  }
+
+  .title-card {
+    display: block;
+  }
+
+  .title-card p:last-child {
+    margin-top: .8rem;
+    padding: .8rem 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--red);
+  }
+
+  .hero-ticket {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    margin-top: 4rem;
+  }
+
+  .portrait-section,
+  .clapper,
+  .dossier-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .portrait-section,
+  .section-pad {
+    padding: 6rem 1.2rem;
+  }
+
+  .portrait-frame {
+    min-height: 30rem;
+  }
+
+  .section-heading {
+    display: block;
+  }
+
+  .section-heading > p {
+    margin-top: 1.5rem;
+  }
+
+  .credit-roll > div {
+    grid-template-columns: 2rem 4.5rem minmax(0, 1fr);
+    gap: .3rem 1rem;
+    padding: .55rem 0;
+  }
+
+  .credit-roll > div > span {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+
+  .credit-roll img {
+    grid-column: 2;
+    grid-row: 1 / 3;
+    width: 4.5rem;
+    height: 3rem;
+  }
+
+  .credit-roll b {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .credit-roll em {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .credit-roll small,
+  .credit-roll i {
+    display: none;
+  }
+
+  .dossier-evidence img {
+    height: 9rem;
+  }
+
+  .film-strip {
+    max-width: calc(100vw - 1.2rem);
+  }
+
+  .channel-marquee {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .channel-marquee > span {
+    display: none;
+  }
+
+  .project-focus {
+    grid-template-columns: minmax(15rem, 20rem) 1fr;
+  }
+
+  .project-focus .text-action {
+    grid-column: 1 / -1;
+  }
+
+  .idol-worlds {
+    grid-template-columns: 1fr;
+  }
+
+  .idol-card,
+  .fnaf-world,
+  .micro-world {
+    grid-column: auto;
+  }
+
+  .fnaf-world,
+  .micro-world {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+    padding: 5.5rem 1.2rem 1.2rem;
+  }
+
+  .security-office,
+  .scream-archive,
+  .fnaf-copy {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .fnaf-copy {
+    padding: 1rem 0 2rem;
+  }
+
+  .scream-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .microtonal-jukebox {
+    grid-template-columns: 1fr;
+  }
+
+  .micro-audio-vault {
+    grid-template-columns: 1fr;
+  }
+
+  .poitrine-constellation {
+    min-height: 18rem;
+  }
+
+  .recovered-dossier {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 18rem minmax(34rem, 1fr) auto;
+  }
+
+  .recovered-header,
+  .recovered-eye-feed,
+  .recovered-fragments,
+  .recovered-catch,
+  .recovered-authorized {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .recovered-catch.catch-3 {
+    transform: translateY(-2rem) rotate(-4deg);
+  }
+
+  .recovered-catch.catch-4 {
+    transform: translate(-4vw, -8rem) rotate(5deg);
+  }
+
+  .micro-copy h3 {
+    font-size: 4.2rem;
+  }
+
+  .micro-keys {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .chase-hud span {
+    display: none;
+  }
+
+  .chase-hud {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .corridor-door {
+    width: 6rem;
+  }
+
+  .youtube-modal {
+    padding: 5rem 1rem 1rem;
+  }
+
+  .player-caption {
+    grid-template-columns: 1fr auto;
+  }
+
+  .player-caption span {
+    grid-column: 1 / -1;
+  }
+
+  .contact-sheet {
+    display: flex;
+    overflow-x: auto;
+    padding: 3rem 2rem;
+  }
+
+  .photo-placeholder {
+    flex: 0 0 17rem;
+    height: 22rem;
+  }
+
+  .tape-note {
+    display: none;
+  }
+
+  .dossier {
+    margin: 8rem 1.2rem;
+    padding: 2rem 1.3rem;
+  }
+
+  .file-tab {
+    left: 1.3rem;
+  }
+
+  .dossier-header h2 {
+    font-size: 3.7rem;
+  }
+
+  .stamp {
+    display: none;
+  }
+
+  .room-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reference-card {
+    min-height: 31rem;
+  }
+
+  .testimonials article {
+    grid-template-columns: 4.5rem 1fr;
+    gap: 1rem;
+  }
+
+  .avatar-placeholder {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+
+  .testimonials article > div:last-child {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .testimonials span {
+    text-align: left;
+  }
+
+  .trailer-poster {
+    min-height: 35rem;
+  }
+
+  .trailer-title h2 {
+    font-size: 4rem;
+  }
+
+  .trailer-title h2 strong {
+    font-size: 8rem;
+  }
+
+  .clapper {
+    padding: 7rem 1.2rem;
+  }
+
+  .clap-body {
+    padding: 1rem;
+  }
+
+  .clap-body > span {
+    grid-template-columns: 6rem 1fr;
+  }
+
+  .trailer-modal {
+    padding: 4.5rem .75rem 1rem;
+  }
+
+  .trailer-suite-header {
+    grid-template-columns: 1fr auto;
+  }
+
+  .trailer-suite-header strong {
+    display: none;
+  }
+
+  .trailer-screen {
+    aspect-ratio: auto;
+    min-height: 38rem;
+  }
+
+  .trailer-cut-stack {
+    top: 11%;
+    right: 5%;
+    width: min(20rem, 38%);
+  }
+
+  .trailer-scene-copy {
+    width: min(38rem, 72%);
+  }
+
+  .trailer-control-deck {
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+  }
+
+  .trailer-chapters {
+    display: flex;
+    padding-bottom: .3rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+
+  .trailer-chapters button {
+    flex: 0 0 10.5rem;
+    scroll-snap-align: start;
+  }
+
+  .trailer-suite-footer {
+    align-items: stretch;
+  }
+
+  footer {
+    display: grid;
+    text-align: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .trailer-modal {
+    padding: 4rem .45rem .75rem;
+  }
+
+  .trailer-modal > .modal-close {
+    top: .75rem;
+    right: .75rem;
+  }
+
+  .trailer-suite-header {
+    min-height: 2.7rem;
+    padding: .55rem .7rem;
+  }
+
+  .trailer-suite-header div span {
+    font-size: .43rem;
+  }
+
+  .trailer-screen {
+    min-height: 36rem;
+  }
+
+  .trailer-image-wash {
+    background:
+      linear-gradient(0deg, rgba(2,3,5,.98) 0 28%, rgba(2,3,5,.54) 60%, rgba(2,3,5,.16)),
+      radial-gradient(circle at 75% 22%, rgba(var(--trailer-accent-rgb),.18), transparent 18rem);
+  }
+
+  .trailer-cut-stack {
+    top: 3.5rem;
+    right: 7%;
+    width: 52%;
+  }
+
+  .trailer-cut-stack figure {
+    margin-bottom: -2.7rem;
+  }
+
+  .trailer-cut-stack figcaption {
+    padding: .3rem .4rem;
+    font-size: .38rem;
+  }
+
+  .trailer-scene-copy {
+    right: 1.5rem;
+    bottom: 2.5rem;
+    left: 1.5rem;
+    width: auto;
+  }
+
+  .trailer-scene-copy > p {
+    font-size: .45rem;
+  }
+
+  .trailer-scene-copy h2 {
+    font-size: clamp(2.55rem, 13vw, 4rem);
+  }
+
+  .trailer-scene-copy > div {
+    grid-template-columns: 2rem 1fr;
+    gap: .7rem;
+    margin-top: .9rem;
+  }
+
+  .trailer-scene-copy > div p {
+    font-size: .64rem;
+    line-height: 1.5;
+  }
+
+  .trailer-frame-meta {
+    right: .7rem;
+    left: .7rem;
+    font-size: .38rem;
+  }
+
+  .trailer-frame-meta-top span:last-child,
+  .trailer-frame-meta-bottom span:last-child {
+    display: none;
+  }
+
+  .trailer-step {
+    top: 46%;
+    width: 2.2rem;
+    height: 3.4rem;
+  }
+
+  .trailer-control-deck {
+    grid-template-columns: 1fr;
+    padding: .7rem;
+  }
+
+  .trailer-play-control {
+    display: flex;
+    min-height: 2.8rem;
+  }
+
+  .trailer-chapters button {
+    flex-basis: 8.8rem;
+  }
+
+  .trailer-suite-footer {
+    display: grid;
+    gap: .8rem;
+    padding: .8rem;
+  }
+
+  .trailer-suite-footer p span {
+    display: none;
+  }
+
+  .trailer-route-button {
+    min-width: 0;
+  }
+
+  .opening-lines {
+    font-size: .56rem;
+    letter-spacing: .08em;
+  }
+
+  .hero-still {
+    right: -34vw;
+    width: 122vw;
+    height: 38rem;
+    opacity: .45;
+  }
+
+  .brand small {
+    display: none;
+  }
+
+  .portrait-copy h2,
+  .section-heading h2,
+  .friends-heading h2,
+  .clapper-copy h2 {
+    font-size: 3.4rem;
+  }
+
+  .camera-reticle b {
+    font-size: 4rem;
+  }
+
+  .identity-file > div {
+    grid-template-columns: 1fr;
+    gap: .35rem;
+  }
+
+  .dossier-evidence {
+    display: flex;
+    margin-right: -1rem;
+    padding: .5rem 1rem 1.5rem 0;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+
+  .dossier-evidence figure {
+    flex: 0 0 82%;
+    scroll-snap-align: start;
+  }
+
+  .dossier-evidence img {
+    height: 11rem;
+  }
+
+  .credit-roll b {
+    font-size: 1.1rem;
+  }
+
+  .credit-roll em {
+    font-size: .43rem;
+  }
+
+  .not-found {
+    display: block;
+  }
+
+  .not-found b {
+    display: block;
+    margin-top: .25rem;
+    text-align: left;
+  }
+
+  .countdown {
+    font-size: 4rem;
+  }
+
+  .reference-card h3 {
+    font-size: 3.4rem;
+  }
+
+  .channel-marquee {
+    grid-template-columns: auto 1fr;
+  }
+
+  .channel-marquee a {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+
+  .film-card {
+    flex-basis: 18rem;
+  }
+
+  .project-focus {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+
+  .focus-still,
+  .project-focus .text-action {
+    grid-column: auto;
+  }
+
+  .idol-card {
+    min-height: auto;
+  }
+
+  .idol-copy {
+    padding: 1.5rem;
+  }
+
+  .idol-copy h3,
+  .micro-copy h3 {
+    font-size: 3.35rem;
+  }
+
+  .mj-stage {
+    height: 23rem;
+  }
+
+  .mj-stage figcaption {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: .35rem;
+  }
+
+  .nolan-clock {
+    height: 25rem;
+    transform: scale(.8);
+    margin: 0 -3rem;
+  }
+
+  .security-office {
+    grid-template-columns: 1fr;
+  }
+
+  .camera-console {
+    gap: 1rem;
+  }
+
+  .camera-map {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .scream-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .microtonal-jukebox {
+    grid-template-columns: 1fr;
+  }
+
+  .poitrine-constellation {
+    min-height: 15rem;
+  }
+
+  .poitrine-constellation > strong {
+    font-size: 4.5rem;
+  }
+
+  .poitrine-head {
+    width: 3.2rem;
+    height: 4.7rem;
+  }
+
+  .poitrine-head::before {
+    top: 1.4rem;
+    right: -2.4rem;
+    width: 3rem;
+    height: .9rem;
+  }
+
+  .poitrine-head.head-khn { left: 5%; }
+  .poitrine-head.head-klek { right: 5%; }
+
+  .micro-audio-vault iframe {
+    height: 310px;
+  }
+
+  .micro-tracklist > button {
+    grid-template-columns: 2rem 1fr;
+  }
+
+  .micro-tracklist button em {
+    display: none;
+  }
+
+  .recovered-overlay {
+    padding: 4.5rem .7rem 1rem;
+  }
+
+  .recovered-close {
+    top: .8rem;
+    right: .8rem;
+  }
+
+  .recovered-dossier {
+    padding: .55rem;
+  }
+
+  .recovered-fragments article {
+    width: 86%;
+  }
+
+  .recovered-authorized {
+    grid-template-columns: 1fr;
+  }
+
+  .recovered-authorized > a {
+    grid-column: 1;
+    grid-row: auto;
+    text-align: center;
+  }
+
+  .moonwalk-chase .corridor-door {
+    width: 4rem;
+    height: 11rem;
+  }
+
+  .hybrid-performer {
+    width: 7rem;
+  }
+
+  .chase-instruction {
+    left: 1rem;
+    right: 1rem;
+    bottom: 5rem;
+    text-align: center;
+  }
+
+  .chase-close {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    width: calc(100% - 2rem);
+  }
+
+  .micro-world {
+    padding: 5.5rem 1rem 1rem;
+  }
+
+  .micro-sequencer {
+    padding: .8rem;
+  }
+
+  .micro-keys {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .player-caption {
+    grid-template-columns: 1fr;
+    gap: .6rem;
+  }
+
+  .player-caption span {
+    grid-column: auto;
+  }
+
+  .hee-control-panel,
+  .hee-control-panel.evade-1,
+  .hee-control-panel.evade-2,
+  .hee-control-panel.evade-3,
+  .hee-control-panel.evade-4,
+  .hee-control-panel.evade-5 {
+    left: 50%;
+  }
+
+  .hee-control-panel {
+    top: 76%;
+  }
+
+  .hee-control-panel.evade-1 {
+    top: 24%;
+  }
+
+  .hee-control-panel.evade-2 {
+    top: 68%;
+  }
+
+  .hee-control-panel.evade-3 {
+    top: 31%;
+  }
+
+  .hee-control-panel.evade-4 {
+    top: 58%;
+  }
+
+  .hee-control-panel.evade-5 {
+    top: 22%;
+  }
+
+  .hee-control-copy {
+    grid-template-columns: 3.5rem 1fr;
+  }
+
+  .hee-control-copy > span {
+    font-size: 2.8rem;
+  }
+
+  .clap-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .final-frame {
+    padding: 6rem 1.2rem;
+  }
+
+  .final-frame h2 {
+    font-size: 4.7rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .mj-world,
+  .nolan-world {
+    min-height: auto;
+  }
+
+  .mj-stage {
+    height: 38rem;
+  }
+
+  .nolan-film-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .recovered-dossier {
+    width: min(46rem, 100%);
+    min-height: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .mj-stage {
+    height: 30rem;
+  }
+
+  .mj-era-selector {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mj-era-selector button:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .nolan-clock {
+    height: 24rem;
+    margin: 2.5rem 0 0;
+    transform: none;
+  }
+
+  .nolan-clock > span {
+    font-size: 4rem;
+  }
+
+  .nolan-clock > strong {
+    top: calc(50% + 3.25rem);
+    font-size: .56rem;
+  }
+
+  .ring-one { width: 21rem; height: 21rem; }
+  .ring-two { width: 16rem; height: 16rem; }
+  .ring-three { width: 11rem; height: 11rem; }
+
+  .nolan-film-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .nolan-method li {
+    grid-template-columns: 2rem 1fr;
+  }
+
+  .nolan-method li > p {
+    grid-column: 2;
+  }
+
+  .recovered-empty-state {
+    inset: .55rem;
+    padding: 1.2rem;
+  }
+
+  .recovered-empty-state > strong {
+    font-size: 4.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

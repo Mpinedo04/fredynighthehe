@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
+import "./pranks/pranks.css";
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -25,13 +26,13 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       type: "website",
       locale: "es_ES",
-      images: [{ url: "/og.png", width: 1672, height: 941 }],
+      images: [{ url: "/og.jpg", width: 1672, height: 941 }],
     },
     twitter: {
       card: "summary_large_image",
       title: "Premiere 22 — Raúl García",
       description,
-      images: ["/og.png"],
+      images: ["/og.jpg"],
     },
   };
 }

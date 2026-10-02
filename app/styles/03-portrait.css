@@ -1,0 +1,217 @@
+.portrait-section {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.9fr) 1.1fr;
+  gap: 5vw 7vw;
+  padding: 10rem 7vw;
+  background: #080b11;
+  border-top: 1px solid var(--line);
+}
+
+.section-number {
+  position: absolute;
+  top: 3.5rem;
+  right: 7vw;
+  color: rgba(255,255,255,.035);
+  font: 13rem/1 var(--font-display);
+}
+
+.portrait-frame {
+  position: relative;
+  min-height: 38rem;
+  background:
+    linear-gradient(145deg, transparent 20%, rgba(61, 106, 211, 0.22) 20% 45%, transparent 45%),
+    linear-gradient(20deg, #0e1521, #05070b);
+  border: 1px solid rgba(117, 154, 237, 0.28);
+  overflow: hidden;
+}
+
+.portrait-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 35%;
+  filter: saturate(.68) contrast(1.12) brightness(.78);
+  transform: scale(1.015);
+  transition: transform .8s cubic-bezier(.16,.8,.2,1), filter .8s;
+}
+
+.portrait-frame::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background:
+    linear-gradient(180deg, transparent 46%, rgba(4,7,11,.86)),
+    linear-gradient(120deg, rgba(38,91,213,.18), transparent 45%);
+  pointer-events: none;
+}
+
+.portrait-frame:hover .portrait-photo {
+  transform: scale(1.055);
+  filter: saturate(.85) contrast(1.08) brightness(.9);
+}
+
+.portrait-frame::after {
+  content: "22";
+  z-index: 2;
+  position: absolute;
+  right: -0.05em;
+  bottom: -0.18em;
+  color: rgba(255,255,255,.04);
+  font: 26rem/1 var(--font-display);
+}
+
+.camera-reticle {
+  position: absolute;
+  z-index: 3;
+  inset: 1.3rem;
+  border: 1px solid rgba(255,255,255,.1);
+}
+
+.camera-reticle::before,
+.camera-reticle::after {
+  content: "";
+  position: absolute;
+  background: rgba(255,255,255,.17);
+}
+
+.camera-reticle::before {
+  top: 50%;
+  left: 20%;
+  right: 20%;
+  height: 1px;
+}
+
+.camera-reticle::after {
+  left: 50%;
+  top: 28%;
+  bottom: 28%;
+  width: 1px;
+}
+
+.camera-reticle span {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  color: var(--red);
+  font: 0.58rem var(--font-mono);
+  letter-spacing: .1em;
+}
+
+.camera-reticle b {
+  position: absolute;
+  left: 1rem;
+  bottom: 2rem;
+  z-index: 1;
+  font: 6rem/0.8 var(--font-display);
+}
+
+.camera-reticle small {
+  position: absolute;
+  left: 1.2rem;
+  bottom: 0.7rem;
+  z-index: 1;
+  color: #69758b;
+  font: 0.47rem var(--font-mono);
+  letter-spacing: .16em;
+}
+
+.portrait-copy {
+  align-self: end;
+  padding-bottom: 2rem;
+}
+
+.portrait-copy h2,
+.section-heading h2,
+.friends-heading h2,
+.clapper-copy h2,
+.final-frame h2 {
+  margin: 0;
+  font: clamp(3.2rem, 6vw, 6.8rem)/0.94 var(--font-display);
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+
+.portrait-copy > p:not(.eyebrow) {
+  max-width: 41rem;
+  margin: 1.5rem 0 0;
+  color: #9ba5b7;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.credit-roll {
+  grid-column: 1 / -1;
+  margin-top: 2rem;
+  border-top: 1px solid var(--line);
+}
+
+.credit-roll > div {
+  display: grid;
+  grid-template-columns: 2.5rem 5.5rem minmax(8rem, auto) minmax(11rem, 18rem) 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  min-height: 82px;
+  border-bottom: 1px solid var(--line);
+}
+
+.credit-roll img {
+  width: 5.5rem;
+  height: 3.5rem;
+  border: 1px solid #293246;
+  background: #030406;
+  object-fit: cover;
+  filter: grayscale(.72) contrast(1.08);
+  transition: filter .25s, transform .25s;
+}
+
+.credit-roll > div:hover img {
+  filter: grayscale(0) contrast(1);
+  transform: scale(1.04);
+}
+
+.credit-roll span,
+.credit-roll small {
+  color: #5f6b7e;
+  font: 0.55rem var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.credit-roll b {
+  font: 1.45rem var(--font-display);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.credit-roll em {
+  color: #718096;
+  font: .51rem/1.45 var(--font-mono);
+  font-style: normal;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.credit-roll i {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,.16), transparent);
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 3rem;
+  margin-bottom: 4.5rem;
+}
+
+.section-heading > p {
+  max-width: 24rem;
+  margin: 0;
+  color: #778397;
+  font-size: 0.86rem;
+  line-height: 1.7;
+}

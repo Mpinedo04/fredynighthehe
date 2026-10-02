@@ -1,0 +1,353 @@
+/* Angine de Poitrine: el mundo cambia a papel, tinta, lunares y 24 pasos. */
+.micro-world {
+  grid-template-columns: minmax(18rem, .7fr) minmax(0, 1.3fr);
+  align-items: stretch;
+  background:
+    radial-gradient(circle at 12px 12px, #090909 0 4px, transparent 4.5px) 0 0 / 34px 34px,
+    #f2f0e8;
+  color: #080808;
+  overflow: hidden;
+}
+
+.micro-world::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1rem solid #090909;
+  mix-blend-mode: multiply;
+}
+
+.micro-world .idol-label {
+  border-color: #080808;
+  background: #080808;
+  color: #f2f0e8;
+}
+
+.micro-world .idol-label strong {
+  color: #f2f0e8;
+}
+
+.poitrine-constellation {
+  position: relative;
+  grid-column: 1 / -1;
+  min-height: 21rem;
+  margin: .8rem 0 0;
+  border: 4px solid #080808;
+  background:
+    linear-gradient(90deg, #080808 0 48%, transparent 48% 52%, #080808 52%),
+    #f2f0e8;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.poitrine-constellation::before,
+.poitrine-constellation::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  width: 28rem;
+  aspect-ratio: 1;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+.poitrine-constellation::before {
+  left: -9rem;
+  color: #f2f0e8;
+}
+
+.poitrine-constellation::after {
+  right: -9rem;
+  color: #080808;
+  background: #f2f0e8;
+}
+
+.poitrine-constellation > i {
+  --angle: calc(var(--dot) * 10deg);
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  display: block;
+  width: .72rem;
+  height: .72rem;
+  border-radius: 50%;
+  background: var(--dot-color, #f2f0e8);
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--angle))
+    translateX(10rem);
+  animation: poitrineDot 1.8s ease-in-out infinite alternate;
+  animation-delay: calc(var(--dot) * -45ms);
+}
+
+.poitrine-constellation > i:nth-child(even) {
+  --dot-color: #080808;
+  animation-direction: reverse;
+}
+
+.poitrine-constellation > i:nth-child(3n) {
+  width: 1.1rem;
+  height: 1.1rem;
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--angle))
+    translateX(7rem);
+}
+
+.poitrine-constellation > i:nth-child(4n) {
+  width: .42rem;
+  height: .42rem;
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--angle))
+    translateX(13rem);
+}
+
+.poitrine-constellation > strong {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  width: 100%;
+  transform: translate(-50%, -50%);
+  color: #f2f0e8;
+  text-align: center;
+  font: clamp(5rem, 10vw, 10rem)/.67 var(--font-display);
+  letter-spacing: -.08em;
+  mix-blend-mode: difference;
+}
+
+.poitrine-constellation > strong em {
+  font-style: normal;
+  letter-spacing: .08em;
+}
+
+.poitrine-head {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  width: 5.2rem;
+  height: 7.1rem;
+  border: 3px solid currentColor;
+  border-radius: 46% 42% 50% 48%;
+  background: #f2f0e8;
+  color: #080808;
+  transform: translateY(-50%) rotate(-5deg);
+  box-shadow: 0 0 0 .7rem #080808;
+}
+
+.poitrine-head::before {
+  content: "";
+  position: absolute;
+  top: 2.2rem;
+  right: -4rem;
+  width: 4.8rem;
+  height: 1.4rem;
+  border: 3px solid currentColor;
+  border-left: 0;
+  border-radius: 0 80% 50% 0;
+  background: inherit;
+  transform: rotate(-7deg);
+}
+
+.poitrine-head::after,
+.poitrine-head b {
+  content: "";
+  position: absolute;
+  top: 1.8rem;
+  width: .62rem;
+  height: .62rem;
+  border-radius: 50%;
+  background: #080808;
+}
+
+.poitrine-head::after { left: 1.1rem; }
+.poitrine-head b { right: 1rem; }
+.poitrine-head.head-khn { left: 11%; }
+.poitrine-head.head-klek {
+  right: 11%;
+  color: #f2f0e8;
+  background: #080808;
+  box-shadow: 0 0 0 .7rem #f2f0e8;
+  transform: translateY(-50%) rotate(7deg) scaleX(-1);
+}
+
+.poitrine-head.head-klek::after,
+.poitrine-head.head-klek b {
+  background: #f2f0e8;
+}
+
+.micro-copy {
+  padding: 2rem;
+  border: 4px solid #080808;
+  background: #f2f0e8;
+  color: #080808;
+}
+
+.micro-copy .eyebrow,
+.micro-copy h3,
+.micro-copy > p:not(.eyebrow) {
+  color: #080808 !important;
+}
+
+.micro-copy h3 {
+  font-size: clamp(3rem, 5vw, 5.4rem);
+}
+
+.tuning-readout {
+  border-color: #080808;
+}
+
+.tuning-readout span,
+.tuning-readout b {
+  color: #080808;
+}
+
+.tuning-readout b {
+  text-align: right;
+}
+
+.micro-sequencer {
+  border: 4px solid #080808;
+  background: #080808;
+  box-shadow: 1rem 1rem 0 rgba(8,8,8,.22);
+}
+
+.waveform {
+  border-color: #f2f0e8;
+  background:
+    linear-gradient(rgba(8,8,8,.13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8,8,8,.13) 1px, transparent 1px),
+    #f2f0e8;
+  background-size: 20px 20px;
+}
+
+.waveform i {
+  background: #080808;
+  opacity: 1;
+}
+
+.micro-keys {
+  grid-template-columns: repeat(12, 1fr);
+}
+
+.micro-keys button,
+.micro-keys button:nth-child(3n) {
+  border-color: #f2f0e8;
+  background: #080808;
+  color: #f2f0e8;
+}
+
+.micro-keys button:nth-child(even) {
+  background: #f2f0e8;
+  color: #080808;
+}
+
+.micro-keys button:hover,
+.micro-keys button.active {
+  border-color: #f2f0e8;
+  background: #e84136;
+  color: #fff;
+  box-shadow: .35rem .35rem 0 #f2f0e8;
+}
+
+.micro-sequencer > p {
+  color: #f2f0e8;
+}
+
+.microtonal-jukebox {
+  border-top: 4px solid #080808;
+}
+
+.micro-player {
+  border: 4px solid #080808;
+  background: #080808;
+  box-shadow: .8rem .8rem 0 rgba(8,8,8,.2);
+}
+
+.micro-tracklist {
+  border: 4px solid #080808;
+  background: #f2f0e8;
+}
+
+.micro-tracklist > div {
+  border-color: #080808;
+  background: #080808;
+}
+
+.micro-tracklist > div span,
+.micro-tracklist > div strong,
+.micro-tracklist > div p {
+  color: #f2f0e8;
+}
+
+.micro-tracklist > button {
+  border-color: #080808;
+  color: #080808;
+}
+
+.micro-tracklist > button:hover,
+.micro-tracklist > button.active {
+  background: #080808;
+  color: #f2f0e8;
+}
+
+.micro-tracklist > button > span:first-child,
+.micro-tracklist button small,
+.micro-tracklist button em {
+  color: currentColor;
+}
+
+.micro-audio-vault {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(17rem, .65fr) minmax(0, 1.35fr);
+  gap: 1rem;
+  padding: 1rem;
+  border: 4px solid #080808;
+  background: #f2f0e8;
+  box-shadow: 1rem 1rem 0 rgba(8,8,8,.22);
+}
+
+.micro-audio-vault > div {
+  padding: 1.3rem;
+  border: 2px dashed #080808;
+}
+
+.micro-audio-vault span,
+.micro-audio-vault a {
+  color: #080808;
+  font: .45rem var(--font-mono);
+  letter-spacing: .1em;
+}
+
+.micro-audio-vault h4 {
+  margin: 1rem 0 .7rem;
+  font: 2.4rem/.9 var(--font-display);
+}
+
+.micro-audio-vault p {
+  max-width: 28rem;
+  margin: 0 0 1.2rem;
+  font-size: .72rem;
+  line-height: 1.6;
+}
+
+.micro-audio-vault a {
+  display: inline-block;
+  padding-bottom: .3rem;
+  border-bottom: 2px solid #080808;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.micro-audio-vault iframe {
+  width: 100%;
+  height: 282px;
+  border: 0;
+  background: white;
+}

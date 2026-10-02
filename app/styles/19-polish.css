@@ -1,0 +1,1446 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   19 · PULIDO GENERAL
+   Tokens, reveals, HUD, and the upgraded sections. Loaded after the legacy
+   section files so it can refine them without rewriting them.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --z-hud: 100;
+  --z-toast: 280;
+  --z-modal: 300;
+  --z-scare: 420;
+  --gold: #e4b25f;
+  --green: #b7ff69;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::selection {
+  background: var(--red);
+  color: #fff;
+}
+
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--blue-soft);
+  outline-offset: 3px;
+}
+
+html {
+  scrollbar-color: #2a3346 #05070b;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The cursor light finally follows the cursor. */
+.cursor-light {
+  background: radial-gradient(
+    circle 30rem at var(--cx, 50%) var(--cy, 20%),
+    rgba(73, 126, 255, 0.075),
+    transparent 70%
+  );
+}
+
+/* ── Scene chips (ESC 01 … ESC 09) ─────────────────────────────────────── */
+.scene-chip {
+  display: inline-block;
+  margin-right: 0.55rem;
+  padding: 0.18rem 0.42rem;
+  border: 1px solid currentColor;
+  font: 700 0.5rem var(--font-mono);
+  letter-spacing: 0.14em;
+  vertical-align: 0.08em;
+}
+
+.scene-chip.dark {
+  border-color: rgba(18, 21, 27, 0.6);
+}
+
+/* ── Scroll reveals ────────────────────────────────────────────────────
+   Individual translate/scale/rotate properties are used on purpose: they
+   stack on top of each element's own transform (tilted photos, tickets…). */
+html.reveal-ready [data-reveal] {
+  opacity: 0;
+  translate: 0 28px;
+  transition:
+    opacity 0.9s var(--ease-out),
+    translate 0.9s var(--ease-out),
+    scale 1s var(--ease-out),
+    rotate 0.9s var(--ease-out),
+    filter 1.4s ease;
+  transition-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* A projector gate opening from the centre. (No clip-path: Chrome's
+   IntersectionObserver clips by it and would never see the element.) */
+html.reveal-ready [data-reveal="gate"] {
+  translate: none;
+  scale: 0.06 1;
+  filter: brightness(2.4);
+}
+
+html.reveal-ready [data-reveal="row"] {
+  translate: -24px 0;
+}
+
+html.reveal-ready [data-reveal="drop"] {
+  translate: 0 -34px;
+  rotate: -3deg;
+}
+
+html.reveal-ready [data-reveal="stamp"] {
+  translate: none;
+  scale: 2.6;
+  rotate: -16deg;
+  transition-duration: 0.45s;
+  transition-timing-function: cubic-bezier(0.5, 1.8, 0.5, 1);
+  transition-delay: 0.45s;
+}
+
+html.reveal-ready [data-reveal].is-revealed {
+  opacity: 1;
+  translate: none;
+  scale: none;
+  rotate: none;
+  filter: none;
+}
+
+html.reveal-ready [data-reveal="meters"] .meter-track i {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.4s var(--ease-out) 0.3s;
+}
+
+html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
+  transform: scaleX(1);
+}
+
+/* ── Topbar: active nav, sound volume and the film-strip progress ──────── */
+.topbar nav a.active {
+  color: #fff;
+  box-shadow: 0 1px 0 var(--red);
+}
+
+.sound-control {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sound-volume {
+  display: flex;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: width 0.3s var(--ease-out), opacity 0.3s;
+}
+
+.sound-control.on:hover .sound-volume,
+.sound-control.on:focus-within .sound-volume {
+  width: 5.5rem;
+  opacity: 1;
+}
+
+.sound-volume input {
+  width: 5rem;
+  accent-color: var(--red);
+}
+
+.scene-strip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  height: 3px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.scene-strip-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--blue), var(--red));
+  transform-origin: left;
+  transition: transform 0.25s linear;
+}
+
+.scene-strip a {
+  position: relative;
+  border-right: 1px solid rgba(5, 7, 11, 0.9);
+  pointer-events: auto;
+}
+
+.scene-strip a span,
+.scene-strip a b {
+  position: absolute;
+  top: 0.45rem;
+  left: 50%;
+  transform: translate(-50%, -4px);
+  opacity: 0;
+  color: #9ba7bc;
+  font: 0.42rem var(--font-mono);
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+}
+
+.scene-strip a b {
+  top: 1.1rem;
+  font-weight: 400;
+}
+
+.topbar:hover .scene-strip a span,
+.scene-strip a.active span {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.scene-strip a.active b {
+  opacity: 0.7;
+  transform: translate(-50%, 0);
+}
+
+.scene-strip a.active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 10px var(--red);
+  transform: translateX(-50%);
+}
+
+.night-objectives {
+  padding-left: 0.6rem;
+  border-left: 1px solid rgba(183, 255, 105, 0.25);
+  color: #e9ffd2;
+}
+
+@media (max-width: 900px) {
+  .scene-strip a span,
+  .scene-strip a b {
+    display: none;
+  }
+  .sound-volume {
+    display: none;
+  }
+}
+
+/* ── Cold open: skip link and film-leader countdown ────────────────────── */
+.opening-skip {
+  border: 0;
+  border-bottom: 1px solid #3a4456;
+  background: none;
+  color: #8692a8;
+  cursor: pointer;
+  font: 0.56rem var(--font-mono);
+  letter-spacing: 0.16em;
+}
+
+.opening-skip:hover {
+  color: #fff;
+}
+
+.leader-countdown {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background:
+    radial-gradient(circle, #b8b2a2 0 28%, #8d8778 29% 30%, #b8b2a2 31% 100%);
+  color: #111;
+  cursor: pointer;
+  filter: sepia(0.35) contrast(1.1);
+  animation: leaderFlicker 0.12s steps(2) infinite;
+}
+
+.leader-countdown::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 2px, rgba(0, 0, 0, 0.06) 2px 3px),
+    radial-gradient(circle, transparent 50%, rgba(0, 0, 0, 0.55) 100%);
+  pointer-events: none;
+}
+
+.leader-sweep {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: min(70vmin, 36rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(rgba(0, 0, 0, 0.42) var(--sweep, 0deg), transparent 0);
+  animation: leaderSweep 0.72s linear both;
+}
+
+.leader-cross {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(#222, #222) center / 2px 100% no-repeat,
+    linear-gradient(#222, #222) center / 100% 2px no-repeat;
+  opacity: 0.7;
+}
+
+.leader-rings {
+  position: absolute;
+  inset: 0;
+}
+
+.leader-rings i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border: 3px solid #f4f0e6;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.leader-rings i:first-child {
+  width: min(56vmin, 29rem);
+  height: min(56vmin, 29rem);
+}
+
+.leader-rings i:last-child {
+  width: min(64vmin, 33rem);
+  height: min(64vmin, 33rem);
+}
+
+.leader-countdown b {
+  position: relative;
+  grid-area: 1 / 1;
+  font: clamp(10rem, 40vmin, 22rem)/1 var(--font-display);
+  animation: leaderNumber 0.72s steps(3) both;
+}
+
+.leader-countdown small {
+  position: absolute;
+  bottom: 2rem;
+  font: 0.55rem var(--font-mono);
+  letter-spacing: 0.2em;
+  opacity: 0.6;
+}
+
+@property --sweep {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes leaderSweep {
+  to { --sweep: 360deg; }
+}
+
+@keyframes leaderNumber {
+  from { transform: scale(1.12); opacity: 0.6; }
+}
+
+@keyframes leaderFlicker {
+  50% { opacity: 0.94; }
+}
+
+/* ── Hero ───────────────────────────────────────────────────────────────
+   The secrets stylesheet sets [data-secret-anchor] { position: relative },
+   which silently pulled the still into the grid flow and pushed the title
+   off-screen. The still is an absolute backdrop again, as designed. */
+.hero-still[data-secret-anchor],
+.hero-still.secret-host-frame {
+  position: absolute;
+}
+
+.hero-still img {
+  filter: saturate(0.8) contrast(1.08) brightness(0.86);
+}
+
+.hero-still {
+  transform: rotate(1.2deg) translateY(calc(var(--hero-shift, 0) * 70px));
+}
+
+.hero-copy {
+  max-width: min(62rem, 100%);
+  transform: translateY(calc(var(--hero-shift, 0) * -40px));
+}
+
+.hero-ticket {
+  transition: transform 0.4s var(--ease-out);
+}
+
+.hero-ticket:hover {
+  transform: rotate(-2deg) translateY(-6px);
+}
+
+.hero-ticket .ticket-stub {
+  transition: transform 0.45s var(--ease-out);
+  transform-origin: right bottom;
+}
+
+.hero-ticket:hover .ticket-stub {
+  transform: translate(-10px, 8px) rotate(-7deg);
+}
+
+@media (min-width: 901px) and (max-width: 1320px) {
+  .title-card {
+    flex-wrap: wrap;
+    gap: 0.6rem 1.2rem;
+  }
+  .hero-ticket {
+    width: min(24rem, 34vw);
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-still {
+    opacity: 0.62;
+  }
+  .hero-copy {
+    transform: none;
+  }
+}
+
+/* On phones the evasive hee-hee panel keeps the joke but not the whole screen. */
+@media (max-width: 700px) {
+  .hee-control-panel {
+    width: calc(100vw - 1.5rem);
+    padding: 0.7rem;
+  }
+  .hee-control-panel .hee-control-copy p,
+  .hee-control-panel .hee-readouts > div:nth-child(n + 3),
+  .hee-control-panel .hee-footnote {
+    display: none;
+  }
+  .hee-control-panel .hee-readouts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── Credits roll ──────────────────────────────────────────────────────── */
+.credit-roll > div img {
+  transition: transform 0.35s var(--ease-out), filter 0.35s;
+}
+
+.credit-roll > div:hover img {
+  transform: scale(1.5);
+  filter: saturate(1.1);
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Filmography ───────────────────────────────────────────────────────── */
+.film-strip {
+  scroll-snap-type: x proximity;
+}
+
+.film-card {
+  scroll-snap-align: center;
+}
+
+.now-showing {
+  position: absolute;
+  z-index: 3;
+  top: 0.6rem;
+  right: 0.6rem;
+  padding: 0.22rem 0.45rem;
+  background: var(--red);
+  color: #fff;
+  font: 700 0.42rem var(--font-mono);
+  letter-spacing: 0.16em;
+  animation: nowShowing 1.4s steps(2) infinite;
+}
+
+@keyframes nowShowing {
+  50% { opacity: 0.55; }
+}
+
+.focus-copy {
+  animation: focusCopyIn 0.5s var(--ease-out) both;
+}
+
+@keyframes focusCopyIn {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+.focus-actions {
+  display: grid;
+  justify-items: end;
+  gap: 0.8rem;
+}
+
+.focus-stepper {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.focus-stepper button {
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 1px solid var(--line);
+  background: none;
+  color: #c9d2e3;
+  cursor: pointer;
+  font: 0.9rem var(--font-mono);
+}
+
+.focus-stepper button:hover {
+  border-color: var(--blue);
+  color: #fff;
+}
+
+/* ── Behind the scenes: lightbox ───────────────────────────────────────── */
+.photo-open {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  cursor: zoom-in;
+  font: 700 0.55rem var(--font-mono);
+  letter-spacing: 0.18em;
+  transition: background 0.25s, color 0.25s;
+}
+
+.photo-open:hover,
+.photo-open:focus-visible {
+  background: rgba(5, 7, 11, 0.45);
+  color: #fff;
+}
+
+.photo-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding: 4rem 5rem;
+  background: rgba(3, 4, 7, 0.94);
+  animation: lightboxIn 0.3s ease both;
+  touch-action: pan-y;
+}
+
+.photo-lightbox figure {
+  margin: 0;
+  max-width: min(72rem, 100%);
+  padding: 0.8rem 0.8rem 1.4rem;
+  background: #d9d6ce;
+  color: #11151e;
+  box-shadow: 0 40px 100px #000;
+  transform: rotate(-0.6deg);
+  animation: lightboxPhoto 0.45s var(--ease-out) both;
+}
+
+.photo-lightbox img {
+  display: block;
+  max-width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+}
+
+.photo-lightbox figcaption {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.9rem;
+  font: 0.6rem var(--font-mono);
+  letter-spacing: 0.1em;
+}
+
+.photo-lightbox figcaption strong {
+  font: 1.6rem var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+.lightbox-step,
+.lightbox-close {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(8, 10, 16, 0.85);
+  color: #fff;
+  cursor: pointer;
+  font: 0.68rem var(--font-mono);
+  letter-spacing: 0.14em;
+}
+
+.lightbox-step {
+  top: 50%;
+  width: 3rem;
+  height: 3rem;
+  transform: translateY(-50%);
+  font-size: 1.1rem;
+}
+
+.lightbox-step.prev { left: 1.2rem; }
+.lightbox-step.next { right: 1.2rem; }
+
+.lightbox-close {
+  top: 1.2rem;
+  right: 1.2rem;
+  padding: 0.7rem 0.9rem;
+}
+
+@keyframes lightboxIn {
+  from { opacity: 0; }
+}
+
+@keyframes lightboxPhoto {
+  from { opacity: 0; transform: rotate(-4deg) scale(0.92); }
+}
+
+@media (max-width: 700px) {
+  .photo-lightbox {
+    padding: 4rem 1rem;
+  }
+  .lightbox-step {
+    top: auto;
+    bottom: 1rem;
+    transform: none;
+  }
+}
+
+/* ── Dossier: declassify the black bars ────────────────────────────────── */
+.dossier-redactions {
+  margin-top: 2.6rem;
+  padding: 1.4rem 1.6rem;
+  border: 1px dashed rgba(18, 21, 27, 0.45);
+  background: rgba(18, 21, 27, 0.04);
+  color: #12151b;
+}
+
+.dossier-redactions header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  font: 700 0.55rem var(--font-mono);
+  letter-spacing: 0.14em;
+}
+
+.dossier-redactions header small {
+  color: #8a2a24;
+  font-weight: 400;
+}
+
+.dossier-redactions ul {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dossier-redactions li {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 1rem;
+  font: 0.62rem var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.redacted {
+  position: relative;
+  min-height: 1.6rem;
+  padding: 0.25rem 0.6rem;
+  border: 0;
+  background: #111;
+  color: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: 0.86rem var(--font-sans);
+  transition: background 0.5s ease, color 0.5s ease;
+}
+
+.redacted:not(.open):hover {
+  background: repeating-linear-gradient(-45deg, #111 0 6px, #2a2a2a 6px 12px);
+}
+
+.redacted.open {
+  background: rgba(255, 225, 77, 0.55);
+  color: #12151b;
+  cursor: default;
+}
+
+.redacted b {
+  font-weight: 600;
+}
+
+.dossier-leak {
+  margin: 1.1rem 0 0;
+  color: #8a2a24;
+  font: 700 0.6rem var(--font-mono);
+  letter-spacing: 0.14em;
+  animation: nightLowBlink 1s steps(2) 4;
+}
+
+@media (max-width: 700px) {
+  .dossier-redactions li {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+}
+
+/* ── Reference room: four worlds, one at a time ────────────────────────── */
+.world-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1.4rem;
+}
+
+.world-tab {
+  position: relative;
+  display: grid;
+  align-content: end;
+  gap: 0.25rem;
+  min-height: 9.5rem;
+  padding: 1rem;
+  border: 1px solid #283246;
+  background: #090d14;
+  color: #c4cbd8;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  transition: border-color 0.3s, transform 0.35s var(--ease-out), color 0.3s;
+}
+
+.world-tab img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  opacity: 0.32;
+  filter: grayscale(0.9) contrast(1.15);
+  transition: opacity 0.35s, filter 0.35s, transform 0.6s var(--ease-out);
+}
+
+.world-tab::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 20%, rgba(5, 7, 11, 0.92));
+}
+
+.world-tab > * {
+  position: relative;
+  z-index: 1;
+}
+
+.world-tab img {
+  z-index: 0;
+}
+
+.world-tab-number {
+  position: absolute !important;
+  top: 0.8rem;
+  left: 1rem;
+  color: rgba(255, 255, 255, 0.35);
+  font: 2.2rem/1 var(--font-display);
+}
+
+.world-tab strong {
+  font: 1.25rem/1 var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+.world-tab small {
+  color: #7f8ba0;
+  font: 0.46rem var(--font-mono);
+  letter-spacing: 0.14em;
+}
+
+.world-tab i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--tab-accent, var(--blue));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.45s var(--ease-out);
+}
+
+.world-tab:hover {
+  transform: translateY(-3px);
+  color: #fff;
+}
+
+.world-tab:hover img {
+  opacity: 0.5;
+  transform: scale(1.05);
+}
+
+.world-tab.active {
+  border-color: var(--tab-accent, var(--blue));
+  color: #fff;
+}
+
+.world-tab.active img {
+  opacity: 0.62;
+  filter: grayscale(0.1) contrast(1.05);
+}
+
+.world-tab.active i {
+  transform: scaleX(1);
+}
+
+.world-tab-mj { --tab-accent: #ff3d3d; }
+.world-tab-spielberg {
+  --tab-accent: var(--gold);
+  background:
+    radial-gradient(circle at 75% 25%, rgba(255, 220, 143, 0.28), transparent 7rem),
+    linear-gradient(155deg, #0a1830, #3b1d0e);
+}
+.world-tab-fnaf { --tab-accent: var(--green); }
+.world-tab-micro {
+  --tab-accent: #e84136;
+  background:
+    radial-gradient(circle, #111 0 0.32rem, transparent 0.35rem) 0 0 / 1.4rem 1.4rem,
+    #f2f0e8;
+  color: #111;
+}
+
+.world-tab-micro::after {
+  background: linear-gradient(180deg, transparent 30%, rgba(242, 240, 232, 0.92));
+}
+
+.world-tab-micro small,
+.world-tab-micro .world-tab-number {
+  color: #6b6b6b;
+}
+
+.world-tab-micro:hover,
+.world-tab-micro.active {
+  color: #000;
+}
+
+.idol-worlds.is-tabbed {
+  display: block;
+}
+
+.world-panel[hidden] {
+  display: none;
+}
+
+.world-panel.active {
+  animation: projectorIn 0.6s steps(6, end) both;
+}
+
+@keyframes projectorIn {
+  0% { opacity: 0; filter: brightness(2.2) contrast(0.6); }
+  30% { opacity: 1; filter: brightness(1.5); }
+  45% { opacity: 0.6; }
+  100% { opacity: 1; filter: none; }
+}
+
+.is-tabbed .idol-card {
+  min-height: 0;
+}
+
+/* MJ goes full width: stage left, console right. */
+.is-tabbed .mj-world {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  align-items: stretch;
+}
+
+.is-tabbed .mj-world .mj-stage {
+  height: auto;
+  min-height: 38rem;
+  margin-top: 3rem;
+}
+
+.is-tabbed .mj-world .idol-copy {
+  padding-top: 4.5rem;
+}
+
+.mj-world.on-beat .spotlight {
+  filter: blur(3px) brightness(1.8);
+}
+
+.mj-world.on-beat .mj-stage img {
+  filter: brightness(1.25) contrast(1.1);
+}
+
+.mj-world.on-beat .mj-stage-pulse i {
+  background: #ff3d3d;
+}
+
+button.mj-moonwalk-track {
+  padding: 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.25s, border-color 0.25s;
+}
+
+button.mj-moonwalk-track em {
+  position: absolute;
+  right: 0;
+  top: -1.4rem;
+  padding: 0.3rem 0.5rem;
+  background: rgba(255, 61, 61, 0.9);
+  color: #fff;
+  font: 700 0.42rem var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.16em;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.25s, transform 0.25s;
+}
+
+button.mj-moonwalk-track:hover,
+button.mj-moonwalk-track:focus-visible {
+  border-top-color: #ff5961;
+  color: #fff;
+}
+
+button.mj-moonwalk-track:hover em,
+button.mj-moonwalk-track:focus-visible em {
+  opacity: 1;
+  transform: none;
+}
+
+.room-answer small {
+  opacity: 0.6;
+}
+
+/* Spielberg: the 37 films as a horizontal reel. */
+.idol-copy .spielberg-decades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 1.4rem;
+}
+
+.idol-copy .spielberg-decades button {
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid #4a3a26;
+  background: rgba(14, 15, 18, 0.8);
+  color: #b89668;
+  font: 0.5rem var(--font-mono);
+}
+
+.idol-copy .spielberg-decades button.active {
+  border-color: var(--gold);
+  background: #4a2b15;
+  color: #fff2d4;
+}
+
+.spielberg-carousel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.idol-copy .spielberg-nav {
+  width: 2.2rem;
+  height: 2.2rem;
+  margin: 0;
+  padding: 0;
+  justify-content: center;
+  border: 1px solid #664a2c;
+  background: rgba(14, 15, 18, 0.85);
+  color: #e4b25f;
+  font: 0.9rem var(--font-mono);
+}
+
+.idol-copy .spielberg-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.spielberg-carousel .spielberg-film-strip {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(2, auto);
+  grid-auto-columns: 9.6rem;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+}
+
+.spielberg-carousel .spielberg-film-strip button {
+  scroll-snap-align: center;
+}
+
+.spielberg-projector span,
+.spielberg-projector strong {
+  animation: focusCopyIn 0.5s var(--ease-out) both;
+}
+
+.spielberg-hint {
+  display: block;
+  margin-top: 0.6rem;
+  color: var(--gold);
+  font: italic 0.8rem/1.4 var(--font-sans);
+}
+
+/* FNAF console uses the real power. */
+.power-readout small {
+  display: block;
+  margin-top: 0.3rem;
+  color: #5d6b54;
+  font: 0.42rem var(--font-mono);
+  letter-spacing: 0.12em;
+}
+
+.power-readout.low b,
+.power-readout.low span {
+  color: var(--red);
+  animation: nightLowBlink 1s steps(2) infinite;
+}
+
+.power-readout.low i {
+  background: var(--red) !important;
+}
+
+/* 24 TET: computer keyboard and idle iframes. */
+.micro-keys button {
+  position: relative;
+}
+
+.micro-keys kbd {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.25rem;
+  font: 0.42rem var(--font-mono);
+  opacity: 0.6;
+}
+
+.micro-keyboard-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.micro-keyboard-toggle button {
+  padding: 0.45rem 0.7rem;
+  border: 2px solid #080808;
+  background: #f2f0e8;
+  color: #080808;
+  cursor: pointer;
+  font: 700 0.5rem var(--font-mono);
+  letter-spacing: 0.1em;
+}
+
+.micro-keyboard-toggle button[aria-pressed="true"] {
+  background: #e84136;
+  color: #fff;
+}
+
+.iframe-standby {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 12rem;
+  background: repeating-linear-gradient(0deg, #111 0 2px, #181818 2px 4px);
+  color: #666;
+  font: 0.6rem var(--font-mono);
+  letter-spacing: 0.2em;
+}
+
+/* The 24 TET beacon only appears inside the microtonal world, and smaller. */
+.micro-discovery-beacon {
+  top: 62%;
+  width: 7.6rem;
+  animation: microBeaconBreath 1.7s ease-in-out infinite alternate, beaconIn 0.5s var(--ease-out) both;
+}
+
+@keyframes beaconIn {
+  from { transform: translate(110%, -50%); }
+}
+
+/* The FNAF fallback target is a small CCTV card, not a floating box. */
+.fnaf-secret-target.fallback {
+  right: 1rem;
+  bottom: 5.4rem;
+  width: min(9rem, 30vw);
+}
+
+@media (max-width: 900px) {
+  .world-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .world-tab {
+    min-height: 7rem;
+  }
+  .is-tabbed .mj-world {
+    grid-template-columns: 1fr;
+  }
+  .is-tabbed .mj-world .mj-stage {
+    min-height: 26rem;
+  }
+}
+
+/* ── Friends: the cast sheet ───────────────────────────────────────────── */
+.friends-callsheet {
+  margin: 1.4rem 0 0;
+  color: #6b6d70;
+  font: 700 0.55rem var(--font-mono);
+  letter-spacing: 0.16em;
+}
+
+.testimonials {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 3rem;
+}
+
+.testimonials article {
+  grid-template-columns: 9.5rem 1fr;
+  align-items: center;
+}
+
+.testimonials .avatar-placeholder {
+  width: 9.5rem;
+  height: 11.5rem;
+  box-shadow: 0.5rem 0.5rem 0 rgba(18, 21, 27, 0.12);
+  transform: rotate(-1.5deg);
+}
+
+.testimonials article:nth-child(even) .avatar-placeholder {
+  transform: rotate(1.5deg);
+}
+
+.testimonials article > div:last-child {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.9rem;
+}
+
+.testimonials article > div:last-child > span {
+  text-align: left;
+  color: #12151b;
+}
+
+.testimonials blockquote {
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+}
+
+.take-pending {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0.2rem 0.9rem;
+  padding: 0.9rem 1rem;
+  border: 2px dashed rgba(18, 21, 27, 0.35);
+  background: rgba(18, 21, 27, 0.04);
+}
+
+.take-pending-clapper {
+  grid-row: 1 / span 2;
+  display: flex;
+  width: 3rem;
+  height: 2.2rem;
+  border: 2px solid #12151b;
+  border-top-width: 0.6rem;
+  border-image: repeating-linear-gradient(-45deg, #12151b 0 6px, #f1eee7 6px 12px) 10;
+}
+
+.take-pending strong {
+  font: 1.3rem var(--font-display);
+  letter-spacing: 0.06em;
+}
+
+.take-pending small {
+  color: #6b6d70;
+  font: 0.5rem var(--font-mono);
+  letter-spacing: 0.12em;
+}
+
+@media (max-width: 900px) {
+  .testimonials {
+    grid-template-columns: 1fr;
+  }
+  .testimonials article {
+    grid-template-columns: 6.5rem 1fr;
+  }
+  .testimonials .avatar-placeholder {
+    width: 6.5rem;
+    height: 8rem;
+  }
+}
+
+/* ── Finale: letterbox, line-by-line message, actions ──────────────────── */
+.take-meter {
+  display: grid;
+  gap: 0.4rem;
+  max-width: 22rem;
+  margin-top: 1.4rem;
+  font: 0.55rem var(--font-mono);
+  letter-spacing: 0.14em;
+  color: #9ba7bc;
+}
+
+.take-meter i {
+  display: block;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.take-meter b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffe14d, var(--red));
+  transition: width 0.3s var(--ease-out);
+}
+
+.final-message {
+  position: relative;
+}
+
+.letterbox {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: #000;
+  pointer-events: none;
+  transition: transform 1.4s cubic-bezier(0.7, 0, 0.2, 1) 0.2s;
+}
+
+.letterbox.top { top: 0; }
+.letterbox.bottom { bottom: 0; }
+
+.final-message.revealed .letterbox.top { transform: translateY(-100%); }
+.final-message.revealed .letterbox.bottom { transform: translateY(100%); }
+
+.final-message.revealed .final-copy p {
+  animation: finalLine 1s var(--ease-out) both;
+}
+
+@keyframes finalLine {
+  from { opacity: 0; transform: translateY(12px); filter: blur(4px); }
+}
+
+.final-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 1.2rem;
+}
+
+.final-frame .final-actions button.ghost {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ── Footer rewind ─────────────────────────────────────────────────────── */
+.site-footer {
+  align-items: center;
+}
+
+.rewind-button {
+  border: 1px solid #2a3346;
+  background: none;
+  color: #8692a8;
+  cursor: pointer;
+  padding: 0.55rem 0.8rem;
+  font: 700 0.5rem var(--font-mono);
+  letter-spacing: 0.16em;
+}
+
+.rewind-button:hover {
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.vhs-rewind {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 2px, transparent 2px 6px),
+    rgba(10, 20, 60, 0.35);
+  animation: vhsJitter 0.08s steps(2) infinite, vhsFade 1.9s ease both;
+}
+
+.vhs-rewind b {
+  color: #fff;
+  font: 4rem var(--font-mono);
+  text-shadow: 3px 0 #ff3d3d, -3px 0 #2d6cff;
+}
+
+.vhs-rewind span {
+  position: absolute;
+  top: 2rem;
+  right: 2rem;
+  color: #fff;
+  font: 1.2rem var(--font-mono);
+}
+
+@keyframes vhsJitter {
+  50% { transform: translateX(3px) skewX(-1deg); }
+}
+
+@keyframes vhsFade {
+  0%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ── Video modal: previous / next ─────────────────────────────────────── */
+.player-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.player-nav button {
+  max-width: 16rem;
+  overflow: hidden;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: none;
+  color: #c9d2e3;
+  cursor: pointer;
+  font: 0.52rem var(--font-mono);
+  letter-spacing: 0.1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-nav button:hover {
+  border-color: var(--red);
+  color: #fff;
+}
+
+/* ── Shared toast stack ────────────────────────────────────────────────── */
+/* Top-right, under the topbar: the old night-shift HUD spot is now free. */
+.toast-stack {
+  position: fixed;
+  z-index: var(--z-toast);
+  top: 5.8rem;
+  right: 1rem;
+  display: grid;
+  gap: 0.5rem;
+  width: min(25rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .toast-stack {
+    top: 5.2rem;
+    left: 1rem;
+    width: auto;
+  }
+}
+
+.toast-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.65rem 0.7rem 0.65rem 0.8rem;
+  border: 1px solid rgba(241, 238, 231, 0.2);
+  border-left: 3px solid var(--toast-accent, #9ba7bc);
+  background: rgba(8, 10, 16, 0.95);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  color: #fff;
+  pointer-events: auto;
+  animation: toastIn 0.4s var(--ease-out) both;
+}
+
+.toast-card.tone-red { --toast-accent: var(--red); }
+.toast-card.tone-blue { --toast-accent: var(--blue-soft); }
+.toast-card.tone-green { --toast-accent: var(--green); }
+.toast-card.tone-amber { --toast-accent: var(--gold); }
+
+.toast-card img {
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border: 1px solid #252f40;
+}
+
+.toast-card > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-card small {
+  display: block;
+  color: var(--toast-accent, #9ba7bc);
+  font: 0.48rem var(--font-mono);
+  letter-spacing: 0.16em;
+}
+
+.toast-card strong {
+  display: block;
+  margin-top: 0.1rem;
+  font: 1rem/1.1 var(--font-display);
+  letter-spacing: 0.05em;
+}
+
+.toast-card p {
+  margin: 0.15rem 0 0;
+  color: #9ba7bc;
+  font: 0.76rem/1.35 var(--font-sans);
+}
+
+.toast-card button {
+  flex: none;
+  align-self: flex-start;
+  border: 0;
+  background: none;
+  color: #6b778c;
+  cursor: pointer;
+  font: 1rem var(--font-mono);
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(24px) scale(0.98); }
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .world-panel.active,
+  .leader-countdown,
+  .vhs-rewind,
+  .now-showing,
+  .focus-copy {
+    animation: none;
+  }
+  .hero-still,
+  .hero-copy {
+    transform: none;
+  }
+  .letterbox {
+    display: none;
+  }
+}

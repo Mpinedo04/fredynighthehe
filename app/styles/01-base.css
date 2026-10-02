@@ -1,0 +1,200 @@
+@font-face {
+  font-family: "Premiere Antonio";
+  src: url("/fonts/antonio-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Premiere Space Mono";
+  src: url("/fonts/space-mono-regular-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Premiere Space Mono";
+  src: url("/fonts/space-mono-bold-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Premiere Inter";
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --font-display: "Premiere Antonio";
+  --font-mono: "Premiere Space Mono";
+  --font-sans: "Premiere Inter";
+  --ink: #05070b;
+  --ink-soft: #0a0f18;
+  --paper: #f1eee7;
+  --blue: #2d6cff;
+  --blue-soft: #76a0ff;
+  --red: #ff3d3d;
+  --line: rgba(236, 242, 255, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--ink);
+}
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: #eef3ff;
+  font-family: var(--font-sans), sans-serif;
+  overflow-x: hidden;
+}
+
+button,
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+}
+
+::selection {
+  background: var(--red);
+  color: #fff;
+}
+
+.experience {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 75% 12%, rgba(45, 108, 255, 0.12), transparent 26rem),
+    var(--ink);
+}
+
+.grain {
+  position: fixed;
+  inset: 0;
+  opacity: 0.11;
+  pointer-events: none;
+  z-index: 100;
+  background-image:
+    repeating-radial-gradient(circle at 20% 30%, transparent 0 1px, rgba(255,255,255,.22) 1px 2px);
+  background-size: 5px 5px;
+  mix-blend-mode: soft-light;
+}
+
+.cursor-light {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 20%, rgba(73, 126, 255, 0.08), transparent 32rem);
+}
+
+.topbar {
+  position: fixed;
+  z-index: 90;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  height: 74px;
+  padding: 0 3vw;
+  border-bottom: 1px solid var(--line);
+  background: rgba(5, 7, 11, 0.76);
+  backdrop-filter: blur(18px);
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: 0.8s ease;
+}
+
+.started .topbar {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #fff;
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.13em;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-size: 1.35rem;
+}
+
+.brand small {
+  display: block;
+  margin-top: 0.12rem;
+  color: #71809c;
+  font: 0.43rem var(--font-mono);
+  letter-spacing: 0.18em;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 2rem;
+}
+
+.topbar nav a {
+  color: #9ba7bc;
+  text-decoration: none;
+  font: 0.64rem var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transition: color 0.2s;
+}
+
+.topbar nav a:hover {
+  color: #fff;
+}
+
+.sound-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  background: none;
+  color: #9ba7bc;
+  cursor: pointer;
+  font: 0.59rem var(--font-mono);
+  letter-spacing: 0.12em;
+}
+
+.sound-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #5c6270;
+}
+
+.sound-dot.live {
+  background: var(--red);
+  box-shadow: 0 0 12px var(--red);
+  animation: pulse 1.2s infinite;
+}

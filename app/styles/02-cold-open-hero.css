@@ -1,0 +1,313 @@
+.cold-open {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2.8rem;
+  padding: 2rem;
+  background: #020304;
+  transition: opacity 0.9s ease, visibility 0.9s;
+}
+
+.started .cold-open {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.leader-count {
+  position: absolute;
+  color: rgba(255,255,255,0.015);
+  font: 80vh/1 var(--font-display);
+  transform: scaleX(0.75);
+}
+
+.opening-lines {
+  position: relative;
+  text-align: center;
+  font: 0.72rem/2.15 var(--font-mono);
+  letter-spacing: 0.22em;
+}
+
+.opening-lines p {
+  margin: 0;
+  opacity: 0;
+  animation: openingLine 7.5s infinite;
+}
+
+.opening-lines p:nth-child(2) { animation-delay: 1.2s; }
+.opening-lines p:nth-child(3) { animation-delay: 2.4s; }
+.opening-lines p:nth-child(4) { animation-delay: 3.6s; color: var(--blue-soft); }
+
+.start-button,
+.trailer-title button,
+.final-frame button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  padding: 1.05rem 1.5rem;
+  border: 1px solid var(--blue);
+  background: var(--blue);
+  color: white;
+  cursor: pointer;
+  font: 700 0.68rem var(--font-mono);
+  letter-spacing: 0.15em;
+  box-shadow: 0 0 35px rgba(45, 108, 255, 0.28);
+  transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.start-button:hover,
+.trailer-title button:hover,
+.final-frame button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 45px rgba(45, 108, 255, 0.42);
+  background: #3d78ff;
+}
+
+.opening-hint {
+  color: #505766;
+  font: 0.56rem var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.hero {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 9rem 7vw 5rem;
+  overflow: hidden;
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(5,7,11,.2), var(--ink) 60%),
+    repeating-linear-gradient(90deg, transparent 0 12vw, rgba(255,255,255,.025) 12vw calc(12vw + 1px));
+  z-index: -1;
+}
+
+.hero-beam {
+  position: absolute;
+  z-index: -1;
+  top: -20%;
+  right: 7%;
+  width: 52vw;
+  height: 140%;
+  background: linear-gradient(105deg, transparent 25%, rgba(37, 91, 220, 0.28), transparent 71%);
+  transform: skewX(-14deg);
+  filter: blur(18px);
+  animation: beam 9s ease-in-out infinite alternate;
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 3;
+}
+
+.hero-still {
+  position: absolute;
+  z-index: 0;
+  top: 6.2rem;
+  right: 3vw;
+  bottom: 4.5rem;
+  width: min(46vw, 52rem);
+  margin: 0;
+  border: 1px solid rgba(145,165,208,.22);
+  background: #07090d;
+  overflow: hidden;
+  box-shadow: 0 2rem 6rem rgba(0,0,0,.55);
+  transform: rotate(1.2deg);
+}
+
+.hero-still::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, #05070b 0, rgba(5,7,11,.88) 11%, transparent 54%),
+    linear-gradient(180deg, transparent 52%, rgba(5,7,11,.93)),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.035) 3px 4px);
+}
+
+.hero-still img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 54% center;
+  filter: saturate(.72) contrast(1.08) brightness(.72);
+}
+
+.hero-still figcaption {
+  position: absolute;
+  z-index: 2;
+  left: 1.2rem;
+  right: 1.2rem;
+  bottom: 1.1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: #8d98aa;
+  font: .42rem var(--font-mono);
+  letter-spacing: .1em;
+}
+
+.hero-still figcaption strong {
+  color: #d6dce7;
+  font-weight: 500;
+}
+
+.eyebrow {
+  margin: 0 0 1.1rem;
+  color: var(--blue-soft);
+  font: 700 0.62rem var(--font-mono);
+  letter-spacing: 0.19em;
+  text-transform: uppercase;
+}
+
+.eyebrow.red {
+  color: var(--red);
+}
+
+.hero h1 {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  margin: 0;
+  font-family: var(--font-display);
+  letter-spacing: -0.06em;
+  line-height: 0.76;
+}
+
+.hero h1 span {
+  font-size: clamp(5rem, 15vw, 14rem);
+}
+
+.hero h1 strong {
+  margin-left: 0.04em;
+  color: transparent;
+  -webkit-text-stroke: 2px var(--red);
+  font-size: clamp(7rem, 23vw, 22rem);
+  font-weight: 700;
+  transform: translateY(0.025em);
+  text-shadow: 0 0 60px rgba(255, 61, 61, 0.12);
+}
+
+.title-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  font: 700 clamp(1rem, 2.2vw, 2rem) var(--font-mono);
+  letter-spacing: 0.13em;
+}
+
+.title-card p {
+  margin: 0;
+}
+
+.title-card p:last-child {
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--red);
+  color: #8590a4;
+}
+
+.hero-intro {
+  max-width: 38rem;
+  margin: 2.2rem 0 0;
+  color: #9da8ba;
+  font-size: clamp(0.95rem, 1.4vw, 1.18rem);
+  line-height: 1.7;
+}
+
+.hero-ticket {
+  position: absolute;
+  z-index: 4;
+  right: 6vw;
+  bottom: 9vh;
+  display: flex;
+  width: min(29rem, 40vw);
+  transform: rotate(-4deg);
+  filter: drop-shadow(0 18px 35px rgba(0,0,0,.6));
+}
+
+.ticket-stub,
+.ticket-main {
+  background: #e9e4d8;
+  color: #10131a;
+}
+
+.ticket-stub {
+  display: grid;
+  place-items: center;
+  width: 26%;
+  padding: 1rem;
+  border-right: 2px dashed #6d6e70;
+}
+
+.ticket-stub span {
+  font: 0.48rem var(--font-mono);
+}
+
+.ticket-stub b {
+  font: 3rem var(--font-display);
+}
+
+.ticket-main {
+  flex: 1;
+  padding: 1.2rem;
+  background-image: repeating-linear-gradient(135deg, transparent 0 12px, rgba(0,0,0,.025) 12px 13px);
+}
+
+.ticket-main span,
+.ticket-main p {
+  font: 0.48rem var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.ticket-main b {
+  display: block;
+  margin: 0.2rem 0 0.7rem;
+  font: 2.4rem var(--font-display);
+  letter-spacing: 0.03em;
+}
+
+.ticket-main p {
+  margin: 0;
+  border-top: 1px solid #aaa79f;
+  padding-top: 0.55rem;
+}
+
+.scroll-cue {
+  position: absolute;
+  left: 7vw;
+  bottom: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  color: #5f6a7d;
+  text-decoration: none;
+  font: 0.52rem var(--font-mono);
+  letter-spacing: 0.12em;
+}
+
+.scroll-cue i {
+  color: var(--red);
+  font-size: 1.1rem;
+  font-style: normal;
+  animation: bounce 1.5s infinite;
+}
+
+.section-pad {
+  position: relative;
+  z-index: 1;
+  padding: 8rem 7vw;
+}
