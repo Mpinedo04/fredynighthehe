@@ -24,7 +24,10 @@ export type AchievementId =
   | "word22"
   | "welcomeBack"
   | "moonwalk"
-  | "declassified";
+  | "declassified"
+  | "walkEscape"
+  | "walkDirectorsCut"
+  | "walkCaught";
 
 export interface Achievement {
   id: AchievementId;
@@ -97,3 +100,16 @@ export function detectClap(sample: {
 export function birthdayMelody(): BirthdayNote[];
 export const MICRO_KEYS: string;
 export function microKeyStep(key: string): number;
+export type ChaseSide = "left" | "right";
+export type ChaseStage = "approach" | "hat" | "head" | "detached";
+export const CHASE_STEP_GAIN: number;
+export const CHASE_RHYTHM_BONUS: number;
+export const CHASE_RHYTHM_WINDOW_MS: number;
+export function registerChaseStep(
+  previousSide: ChaseSide | null,
+  side: ChaseSide,
+  previousAt: number,
+  now: number,
+): { gain: number; stumble: boolean; rhythm: boolean };
+export function chaseThreatRate(elapsedSeconds: number): number;
+export function chaseStage(threat: number): ChaseStage;

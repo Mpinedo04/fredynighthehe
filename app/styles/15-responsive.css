@@ -395,7 +395,7 @@
   }
 
   .trailer-suite-header div span {
-    font-size: .43rem;
+    font-size: .606rem;
   }
 
   .trailer-screen {
@@ -420,7 +420,7 @@
 
   .trailer-cut-stack figcaption {
     padding: .3rem .4rem;
-    font-size: .38rem;
+    font-size: .588rem;
   }
 
   .trailer-scene-copy {
@@ -431,7 +431,7 @@
   }
 
   .trailer-scene-copy > p {
-    font-size: .45rem;
+    font-size: .613rem;
   }
 
   .trailer-scene-copy h2 {
@@ -445,14 +445,14 @@
   }
 
   .trailer-scene-copy > div p {
-    font-size: .64rem;
+    font-size: .679rem;
     line-height: 1.5;
   }
 
   .trailer-frame-meta {
     right: .7rem;
     left: .7rem;
-    font-size: .38rem;
+    font-size: .588rem;
   }
 
   .trailer-frame-meta-top span:last-child,
@@ -495,7 +495,7 @@
   }
 
   .opening-lines {
-    font-size: .56rem;
+    font-size: .651rem;
     letter-spacing: .08em;
   }
 
@@ -548,7 +548,7 @@
   }
 
   .credit-roll em {
-    font-size: .43rem;
+    font-size: .606rem;
   }
 
   .not-found {
@@ -846,7 +846,7 @@
 
   .nolan-clock > strong {
     top: calc(50% + 3.25rem);
-    font-size: .56rem;
+    font-size: .651rem;
   }
 
   .ring-one { width: 21rem; height: 21rem; }

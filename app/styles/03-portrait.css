@@ -22,7 +22,7 @@
   min-height: 38rem;
   background:
     linear-gradient(145deg, transparent 20%, rgba(61, 106, 211, 0.22) 20% 45%, transparent 45%),
-    linear-gradient(20deg, #0e1521, #05070b);
+    linear-gradient(20deg, #0e1521, var(--ink));
   border: 1px solid rgba(117, 154, 237, 0.28);
   overflow: hidden;
 }
@@ -98,7 +98,7 @@
   top: 1rem;
   left: 1rem;
   color: var(--red);
-  font: 0.58rem var(--font-mono);
+  font: .658rem var(--font-mono);
   letter-spacing: .1em;
 }
 
@@ -115,8 +115,8 @@
   left: 1.2rem;
   bottom: 0.7rem;
   z-index: 1;
-  color: #69758b;
-  font: 0.47rem var(--font-mono);
+  color: #768298;
+  font: .62rem var(--font-mono);
   letter-spacing: .16em;
 }
 
@@ -176,8 +176,8 @@
 
 .credit-roll span,
 .credit-roll small {
-  color: #5f6b7e;
-  font: 0.55rem var(--font-mono);
+  color: #748296;
+  font: .648rem var(--font-mono);
   letter-spacing: 0.08em;
 }
 
@@ -189,7 +189,7 @@
 
 .credit-roll em {
   color: #718096;
-  font: .51rem/1.45 var(--font-mono);
+  font: .634rem/1.45 var(--font-mono);
   font-style: normal;
   letter-spacing: .05em;
   text-transform: uppercase;

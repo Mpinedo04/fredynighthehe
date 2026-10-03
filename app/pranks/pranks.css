@@ -18,7 +18,7 @@
   border: 1px solid rgba(183, 255, 105, 0.22);
   background: rgba(3, 8, 4, 0.7);
   color: #b7ff69;
-  font: 0.58rem var(--font-mono);
+  font: .658rem var(--font-mono);
   letter-spacing: 0.14em;
   white-space: nowrap;
 }
@@ -38,7 +38,7 @@
 
 .night-clock small {
   color: #7f9a6a;
-  font-size: 0.5rem;
+  font-size: .63rem;
 }
 
 .night-clock i {
@@ -151,7 +151,7 @@ html.real-night body::after {
 .blackout-restored span {
   display: block;
   color: #7f9a6a;
-  font: 0.62rem var(--font-mono);
+  font: .672rem var(--font-mono);
   letter-spacing: 0.24em;
 }
 
@@ -213,7 +213,7 @@ html.real-night body::after {
 .tab-scare span {
   display: block;
   color: #9ba7bc;
-  font: 0.62rem var(--font-mono);
+  font: .672rem var(--font-mono);
   letter-spacing: 0.22em;
 }
 
@@ -228,7 +228,7 @@ html.real-night body::after {
 .hee-control-panel.director-broken button {
   position: relative;
   background:
-    linear-gradient(105deg, transparent 47%, #05070b 47.5% 52.5%, transparent 53%),
+    linear-gradient(105deg, transparent 47%, var(--ink) 47.5% 52.5%, transparent 53%),
     repeating-linear-gradient(-45deg, rgba(241, 238, 231, 0.28) 0 12px, rgba(0, 0, 0, 0.75) 12px 24px),
     #11151d;
   color: #fff;
@@ -265,7 +265,7 @@ html.real-night body::after {
 
 .director-mic-clapper i {
   flex: 1;
-  background: repeating-linear-gradient(-45deg, #f1eee7 0 14px, #111 14px 28px);
+  background: repeating-linear-gradient(-45deg, var(--paper) 0 14px, #111 14px 28px);
 }
 
 .director-mic-clapper i:nth-child(3) {
@@ -274,7 +274,7 @@ html.real-night body::after {
 
 .director-mic-card small {
   color: var(--red);
-  font: 0.56rem var(--font-mono);
+  font: .651rem var(--font-mono);
   letter-spacing: 0.2em;
 }
 
@@ -325,7 +325,7 @@ html.real-night body::after {
   background: var(--red);
   color: #fff;
   cursor: pointer;
-  font: 0.68rem var(--font-mono);
+  font: .693rem var(--font-mono);
   letter-spacing: 0.12em;
 }
 
@@ -381,7 +381,7 @@ html.real-night body::after {
 .director-mic-chip em {
   display: block;
   color: #9ba7bc;
-  font: 0.5rem var(--font-mono);
+  font: .63rem var(--font-mono);
   font-style: normal;
   letter-spacing: 0.16em;
 }
@@ -433,7 +433,7 @@ html.real-night body::after {
 .thriller-notice small {
   display: block;
   color: #e08cff;
-  font: 0.52rem var(--font-mono);
+  font: .637rem var(--font-mono);
   letter-spacing: 0.18em;
 }
 
@@ -449,7 +449,7 @@ html.real-night body::after {
   background: none;
   color: #e08cff;
   cursor: pointer;
-  font: 0.58rem var(--font-mono);
+  font: .658rem var(--font-mono);
   letter-spacing: 0.12em;
 }
 
@@ -500,7 +500,7 @@ html.real-night body::after {
 
 .take-callout small {
   display: block;
-  font: 0.55rem var(--font-mono);
+  font: .648rem var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -539,7 +539,7 @@ html.real-night body::after {
 
 .birthday-24tet span {
   color: #9ba7bc;
-  font: 0.58rem var(--font-mono);
+  font: .658rem var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -552,8 +552,8 @@ html.real-night body::after {
 .close-encounters-hint {
   display: block;
   margin-top: 0.4rem;
-  color: #66738a;
-  font: 0.5rem/1.5 var(--font-mono);
+  color: #758299;
+  font: .63rem/1.5 var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -564,7 +564,7 @@ html.real-night body::after {
   z-index: 380;
   overflow: hidden;
   background: #000;
-  color: #f1eee7;
+  color: var(--paper);
   text-align: center;
 }
 
@@ -586,7 +586,7 @@ html.real-night body::after {
 
 .end-credits-kicker {
   color: #8e97a8;
-  font: 0.62rem var(--font-mono);
+  font: .672rem var(--font-mono);
   letter-spacing: 0.3em;
 }
 
@@ -600,7 +600,7 @@ html.real-night body::after {
 
 .end-credits dt {
   color: #8e97a8;
-  font: 0.6rem var(--font-mono);
+  font: .665rem var(--font-mono);
   letter-spacing: 0.24em;
 }
 
@@ -624,7 +624,7 @@ html.real-night body::after {
 
 .hee-diploma small {
   display: block;
-  font: 0.55rem var(--font-mono);
+  font: .648rem var(--font-mono);
   letter-spacing: 0.24em;
 }
 
@@ -683,7 +683,7 @@ html.real-night body::after {
   justify-content: space-between;
   padding-top: 0.8rem;
   border-top: 1px solid rgba(59, 42, 16, 0.4);
-  font: 0.6rem var(--font-mono);
+  font: .665rem var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -694,8 +694,8 @@ html.real-night body::after {
   display: grid;
   gap: 0.4rem;
   text-align: left;
-  color: #5c6578;
-  font: 0.55rem var(--font-mono);
+  color: #798398;
+  font: .648rem var(--font-mono);
   letter-spacing: 0.18em;
 }
 
@@ -721,11 +721,11 @@ html.real-night body::after {
   right: 1rem;
   bottom: 1rem;
   padding: 0.9rem 1.1rem;
-  border: 1px solid #f1eee7;
-  background: #f1eee7;
-  color: #05070b;
+  border: 1px solid var(--paper);
+  background: var(--paper);
+  color: var(--ink);
   cursor: pointer;
-  font: 0.66rem var(--font-mono);
+  font: .686rem var(--font-mono);
   letter-spacing: 0.14em;
 }
 
@@ -764,7 +764,7 @@ html.real-night body::after {
 .achievement-toast small {
   display: block;
   color: #9cff6e;
-  font: 0.5rem var(--font-mono);
+  font: .63rem var(--font-mono);
   letter-spacing: 0.2em;
 }
 
@@ -803,7 +803,7 @@ html.real-night body::after {
 
 .secret-console-achievements header small {
   color: #9ba7bc;
-  font: 0.5rem var(--font-mono);
+  font: .63rem var(--font-mono);
   letter-spacing: 0.18em;
 }
 
@@ -850,7 +850,7 @@ html.real-night body::after {
 
 .secret-console-achievements li small {
   color: #8692a8;
-  font: 0.62rem/1.3 var(--font-sans);
+  font: .672rem/1.3 var(--font-sans);
 }
 
 /* ── Jurassic Park glass of water ──────────────────────────────────────── */
@@ -873,8 +873,8 @@ html.real-night body::after {
   left: 50%;
   top: calc(100% + 0.25rem);
   width: max-content;
-  color: #46526a;
-  font: 0.36rem var(--font-mono);
+  color: #7383a3;
+  font: .581rem var(--font-mono);
   letter-spacing: 0.14em;
   transform: translateX(-50%);
 }
@@ -967,7 +967,7 @@ html.real-night body::after {
   left: 50%;
   bottom: 1.4rem;
   color: #3a4252;
-  font: 0.55rem var(--font-mono);
+  font: .648rem var(--font-mono);
   letter-spacing: 0.3em;
   transform: translateX(-50%);
 }
@@ -1098,7 +1098,7 @@ html.real-night body::after {
 
 .close-encounters-copy small {
   color: #a8b8ff;
-  font: 0.62rem var(--font-mono);
+  font: .672rem var(--font-mono);
   letter-spacing: 0.4em;
 }
 
@@ -1196,7 +1196,7 @@ html.real-night body::after {
   top: 100%;
   width: max-content;
   color: #ffd27a;
-  font: 0.48rem var(--font-mono);
+  font: .623rem var(--font-mono);
   letter-spacing: 0.12em;
 }
 
@@ -1249,7 +1249,7 @@ html.real-night body::after {
   left: 50%;
   bottom: 13%;
   color: #c9d2e3;
-  font: 0.6rem var(--font-mono);
+  font: .665rem var(--font-mono);
   letter-spacing: 0.16em;
   transform: translateX(-50%);
   white-space: nowrap;
@@ -1287,7 +1287,7 @@ html.real-night body::after {
   background: rgba(8, 10, 16, 0.92);
   color: #9ba7bc;
   cursor: pointer;
-  font: 0.5rem var(--font-mono);
+  font: .63rem var(--font-mono);
   letter-spacing: 0.14em;
 }
 
@@ -1323,8 +1323,8 @@ html.real-night body::after {
 }
 
 .heat-fan.cooled {
-  border-color: #76a0ff;
-  color: #76a0ff;
+  border-color: var(--blue-soft);
+  color: var(--blue-soft);
 }
 
 @keyframes fanSpin {

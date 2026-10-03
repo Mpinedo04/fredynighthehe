@@ -522,6 +522,57 @@ export class SpatialAudioEngine {
     });
   }
 
+  /** Decodes an external sample (e.g. Subject M's hee-hee) in this context. */
+  async loadSample(url: string) {
+    const context = this.requireContext();
+    const response = await fetch(url);
+    const data = await response.arrayBuffer();
+    return context.decodeAudioData(data);
+  }
+
+  /** Plays a decoded sample from a positioned emitter (HRTF, distance, occlusion). */
+  playSampleAt(
+    emitterId: string,
+    buffer: AudioBuffer,
+    options: Readonly<{ gain?: number; playbackRate?: number }> = {},
+  ) {
+    if (this.context?.state !== "running") return false;
+    const emitter = this.requireEmitter(emitterId, { bus: "sfx" });
+    return this.playBuffer(buffer, emitter.panner, {
+      gain: options.gain ?? 1,
+      playbackRate: options.playbackRate ?? 1,
+    });
+  }
+
+  /** A short two-note chime on the SFX bus (tape recovered, exit unlocked). */
+  playChime(kind: "tape" | "unlock" | "locked" = "tape") {
+    const context = this.context;
+    const bus = this.buses.get("sfx");
+    if (!context || !bus || context.state !== "running") return false;
+    const notes =
+      kind === "unlock" ? [392, 523.25, 783.99] : kind === "locked" ? [196, 155.56] : [659.25, 987.77];
+    notes.forEach((frequency, index) => {
+      const at = context.currentTime + index * 0.11;
+      const oscillator = this.trackNode(context.createOscillator(), "OscillatorNode");
+      const gain = this.trackNode(context.createGain(), "GainNode");
+      oscillator.type = kind === "locked" ? "square" : "triangle";
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(SILENCE, at);
+      gain.gain.exponentialRampToValueAtTime(kind === "locked" ? 0.08 : 0.16, at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(SILENCE, at + 0.45);
+      oscillator.connect(gain);
+      gain.connect(bus);
+      oscillator.start(at);
+      oscillator.stop(at + 0.5);
+      oscillator.addEventListener("ended", () => {
+        gain.disconnect();
+        this.releaseNode(oscillator);
+        this.releaseNode(gain);
+      }, { once: true });
+    });
+    return true;
+  }
+
   playPlayerStep(gain = 0.18) {
     const bus = this.buses.get("sfx");
     if (!bus || this.context?.state !== "running") return false;

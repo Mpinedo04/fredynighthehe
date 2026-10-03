@@ -22,8 +22,8 @@
 
 .room-number {
   display: block;
-  color: #546074;
-  font: .52rem var(--font-mono);
+  color: #75839b;
+  font: .637rem var(--font-mono);
   letter-spacing: .1em;
 }
 
@@ -113,15 +113,15 @@
   left: .8rem;
   z-index: 2;
   color: var(--red);
-  font: .52rem var(--font-mono);
+  font: .637rem var(--font-mono);
 }
 
 .cctv small {
   position: absolute;
   right: .8rem;
   bottom: .7rem;
-  color: #596273;
-  font: .45rem var(--font-mono);
+  color: #788296;
+  font: .613rem var(--font-mono);
 }
 
 .secret-door {

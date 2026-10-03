@@ -84,7 +84,7 @@
   position: relative;
   z-index: 3;
   color: #afbdd7;
-  font: .45rem var(--font-mono);
+  font: .613rem var(--font-mono);
 }
 
 .photo-placeholder b {
@@ -102,14 +102,14 @@
   right: 1.5rem;
   bottom: 1.1rem;
   color: #b7c1d2;
-  font: .38rem var(--font-mono);
+  font: .588rem var(--font-mono);
   font-style: normal;
   letter-spacing: .08em;
 }
 
 .photo-placeholder figcaption {
   padding: .5rem .2rem 0;
-  font: .6rem var(--font-mono);
+  font: .665rem var(--font-mono);
 }
 
 .photo-1 { grid-column: 1 / 5; grid-row: 1; }
@@ -143,7 +143,7 @@
 }
 
 .tape-note span {
-  font: 700 .55rem var(--font-mono);
+  font: 700 .648rem var(--font-mono);
 }
 
 .tape-note p {

@@ -1,0 +1,659 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   21 · PASADIZO M00NW4LK
+   A 3D corridor (ChaseScene, three.js) framed like found footage: letterbox,
+   colour grade, camcorder HUD, film subtitles and a slate at the end.
+   --run (0→1) and --threat (0→1) are written by the mini-game loop.
+   ───────────────────────────────────────────────────────────────────────── */
+
+.moonwalk-chase.interactive {
+  z-index: 300;
+  /* clip (not hidden): focus changes must never scroll the stage. */
+  overflow: clip;
+  background: #000;
+  color: #f3efe6;
+  user-select: none;
+  touch-action: manipulation;
+  font-family: var(--font-mono), monospace;
+}
+
+.chase-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.scene-model .chase-canvas,
+.scene-fallback .chase-canvas {
+  opacity: 1;
+}
+
+.status-caught .chase-canvas {
+  animation: chaseJolt 0.09s steps(2) infinite;
+}
+
+/* ── Colour grade, grain and letterbox ─────────────────────────────────── */
+.chase-grade {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.78) 100%),
+    radial-gradient(ellipse at 50% 60%, transparent 30%, rgba(150, 0, 8, calc(var(--threat) * 0.55)) 100%),
+    linear-gradient(180deg, rgba(20, 40, 60, 0.18), rgba(40, 20, 0, 0.12));
+  mix-blend-mode: normal;
+}
+
+.chase-grade::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  opacity: 0.11;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  animation: filmGrain 0.8s steps(6) infinite;
+}
+
+.chase-grade::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(255, 255, 255, 0.025) 2px 3px);
+}
+
+.chase-letterbox {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  height: 9vh;
+  background: #000;
+  pointer-events: none;
+  transition: height 0.8s cubic-bezier(0.7, 0, 0.2, 1);
+}
+
+.chase-letterbox.top { top: 0; }
+.chase-letterbox.bottom { bottom: 0; }
+
+.status-run .chase-letterbox {
+  height: calc(9vh + var(--threat) * 4vh);
+}
+
+.status-won .chase-letterbox,
+.status-caught .chase-letterbox {
+  height: 18vh;
+  transition-duration: 1.4s;
+  transition-delay: 0.9s;
+}
+
+/* Keep the last frame visible, dimmed, behind the slate. */
+.status-won .chase-canvas,
+.status-caught .chase-canvas {
+  filter: brightness(0.55) saturate(0.7);
+  transition: filter 1.2s ease 1s, opacity 1.2s ease;
+}
+
+/* ── Camcorder HUD ─────────────────────────────────────────────────────── */
+.moonwalk-chase .chase-hud {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  height: 9vh;
+  min-height: 3.6rem;
+  padding: 0 1.4rem;
+  color: #f3efe6;
+  font: 0.72rem var(--font-mono), monospace;
+  letter-spacing: 0.14em;
+}
+
+.chase-rec {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.chase-rec i {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  background: #ff2a2a;
+  box-shadow: 0 0 12px #ff2a2a;
+  animation: recBlink 1s steps(1) infinite;
+}
+
+.chase-rec span:first-of-type {
+  color: #ff5a5a;
+  font-weight: 700;
+}
+
+.chase-title {
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  text-align: center;
+}
+
+.chase-title small {
+  color: #8f8a80;
+  font-size: 0.6rem;
+}
+
+.chase-title strong {
+  font: 1.6rem/1 var(--font-display);
+  letter-spacing: 0.32em;
+  text-shadow: 2px 0 rgba(255, 40, 40, 0.55), -2px 0 rgba(40, 140, 255, 0.55);
+}
+
+.moonwalk-chase .chase-close {
+  position: static;
+  white-space: nowrap;
+  justify-self: end;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid rgba(243, 239, 230, 0.35);
+  background: transparent;
+  color: #f3efe6;
+  cursor: pointer;
+  font: 700 0.66rem var(--font-mono), monospace;
+  letter-spacing: 0.14em;
+}
+
+.moonwalk-chase .chase-close:hover {
+  border-color: #ff3d3d;
+  color: #fff;
+}
+
+/* ── Loading ───────────────────────────────────────────────────────────── */
+.chase-loading {
+  position: absolute;
+  z-index: 25;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  color: #b8b2a4;
+  font: 0.75rem var(--font-mono), monospace;
+  letter-spacing: 0.24em;
+}
+
+.chase-loading i {
+  width: 12rem;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #d8f3e6, transparent);
+  box-shadow: 0 0 24px rgba(216, 243, 230, 0.7);
+  animation: tubeFlicker 1.4s steps(5) infinite;
+}
+
+/* ── Countdown ─────────────────────────────────────────────────────────── */
+.chase-countdown {
+  position: absolute;
+  z-index: 22;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+  width: min(34rem, calc(100vw - 2rem));
+  text-align: center;
+  transform: translate(-50%, -50%);
+  text-shadow: 0 2px 18px #000;
+}
+
+.chase-countdown b {
+  display: grid;
+  place-items: center;
+  width: 9rem;
+  height: 9rem;
+  border: 3px solid rgba(243, 239, 230, 0.85);
+  border-radius: 50%;
+  font: 6rem/1 var(--font-display);
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.7));
+  box-shadow: 0 0 0 10px rgba(0, 0, 0, 0.35), inset 0 0 30px rgba(0, 0, 0, 0.7);
+  animation: countdownPop 0.9s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.chase-countdown strong {
+  color: #ff4b4b;
+  font: 1.4rem var(--font-display);
+  letter-spacing: 0.22em;
+}
+
+.chase-countdown p {
+  margin: 0;
+  color: #d6d0c4;
+  font: 0.95rem/1.5 var(--font-sans), sans-serif;
+}
+
+.moonwalk-chase kbd {
+  display: inline-block;
+  min-width: 1.6rem;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid rgba(243, 239, 230, 0.55);
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.4);
+  font: 700 0.85rem var(--font-mono), monospace;
+  text-align: center;
+}
+
+/* ── Film subtitles ────────────────────────────────────────────────────── */
+.chase-subtitle {
+  position: absolute;
+  z-index: 21;
+  left: 50%;
+  bottom: calc(9vh + 7.4rem + var(--threat) * 4vh);
+  max-width: calc(100vw - 2rem);
+  margin: 0;
+  padding: 0.25rem 0.7rem;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff6d6;
+  font: italic 1.05rem/1.4 Georgia, "Times New Roman", serif;
+  text-align: center;
+  transform: translateX(-50%);
+  animation: subtitleIn 0.5s ease both;
+}
+
+/* ── Taunts, stumbles, jumpscare flash ─────────────────────────────────── */
+.moonwalk-chase .chase-taunt {
+  position: absolute;
+  z-index: 23;
+  left: 50%;
+  top: 40%;
+  color: #ff2f2f;
+  font: clamp(3.2rem, 13vw, 9rem) var(--font-display);
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 40px rgba(255, 30, 30, 0.8), 4px 0 rgba(40, 140, 255, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: tauntPop 1s ease-out both;
+}
+
+.moonwalk-chase .chase-stumble {
+  position: absolute;
+  z-index: 23;
+  left: 50%;
+  bottom: calc(9vh + 8.6rem);
+  padding: 0.45rem 0.9rem;
+  background: #ffe14d;
+  color: #111;
+  font: 700 0.78rem var(--font-mono), monospace;
+  letter-spacing: 0.12em;
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: stumbleIn 0.7s ease-out both;
+}
+
+.chase-jumpscare-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 19;
+  pointer-events: none;
+  background: #fff;
+  mix-blend-mode: difference;
+  animation: scareFlash 0.9s steps(6) forwards;
+}
+
+/* ── Controls: two big keys around a corridor minimap ──────────────────── */
+.chase-controls {
+  position: absolute;
+  z-index: 22;
+  left: 50%;
+  bottom: calc(9vh + 1rem);
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 26rem) auto;
+  align-items: center;
+  gap: 1rem;
+  width: min(46rem, calc(100vw - 2rem));
+  transform: translateX(-50%);
+}
+
+.chase-pad {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  width: 6.2rem;
+  height: 6.2rem;
+  align-content: center;
+  border: 1px solid rgba(243, 239, 230, 0.25);
+  border-radius: 1rem;
+  background: rgba(8, 9, 12, 0.7);
+  backdrop-filter: blur(6px);
+  color: #b9b3a6;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, transform 0.08s, box-shadow 0.2s;
+  touch-action: manipulation;
+}
+
+.chase-pad kbd {
+  min-width: 2.6rem;
+  font-size: 1.5rem;
+  border-color: currentColor;
+}
+
+.chase-pad small {
+  font: 700 0.58rem var(--font-mono), monospace;
+  letter-spacing: 0.16em;
+}
+
+.chase-pad.next {
+  border-color: #b7ff69;
+  color: #e9ffd2;
+  box-shadow: 0 0 28px rgba(183, 255, 105, 0.28);
+}
+
+.chase-pad:active {
+  transform: scale(0.94);
+}
+
+.chase-map {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.chase-map-track {
+  position: relative;
+  height: 1.6rem;
+  border: 1px solid rgba(243, 239, 230, 0.22);
+  border-radius: 1rem;
+  background:
+    repeating-linear-gradient(90deg, rgba(243, 239, 230, 0.08) 0 1px, transparent 1px 10%),
+    rgba(8, 9, 12, 0.72);
+  overflow: hidden;
+}
+
+.chase-map-track i {
+  position: absolute;
+  top: 50%;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.15s linear;
+}
+
+/* You are at "run" along the corridor; Subject M is behind you by (1 - threat). */
+.chase-map-you {
+  left: calc(8% + var(--run) * 80%);
+  background: #e9ffd2;
+  box-shadow: 0 0 14px #b7ff69;
+}
+
+.chase-map-threat {
+  left: calc(8% + var(--run) * 80% - (1 - var(--threat)) * 40%);
+  background: #ff2f2f;
+  box-shadow: 0 0 16px #ff2f2f;
+  animation: threatPulse 0.6s ease-in-out infinite alternate;
+}
+
+.chase-map-exit {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  color: #b7ff69;
+  font: 700 0.6rem var(--font-mono), monospace;
+  letter-spacing: 0.16em;
+  transform: translateY(-50%);
+}
+
+.chase-map-legend {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+}
+
+.chase-map-legend span:first-child { color: #ff6b6b; }
+.chase-map-legend span:last-child { color: #e9ffd2; }
+
+.chase-map-legend strong {
+  color: #f3efe6;
+  font: 1rem var(--font-display);
+  letter-spacing: 0.08em;
+}
+
+/* ── Result slate ──────────────────────────────────────────────────────── */
+.moonwalk-chase .chase-result {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  top: 50%;
+  width: min(32rem, calc(100vw - 2rem));
+  background: #f1eee7;
+  color: #111;
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.8);
+  transform: translate(-50%, -50%) rotate(-1.5deg);
+  animation: slateIn 0.7s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+.moonwalk-chase .chase-result.caught {
+  animation-delay: 1.5s;
+}
+
+.chase-result-slate {
+  display: flex;
+  height: 1.6rem;
+  background: #111;
+  transform-origin: left bottom;
+  animation: slateClap 0.5s 0.45s ease-in both;
+}
+
+.chase-result-slate i {
+  flex: 1;
+  background: repeating-linear-gradient(-45deg, #f1eee7 0 14px, #111 14px 28px);
+}
+
+.chase-result-body {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1.3rem 1.4rem 1.4rem;
+}
+
+.chase-result-body small {
+  color: #9a1414;
+  font: 700 0.62rem var(--font-mono), monospace;
+  letter-spacing: 0.2em;
+}
+
+.chase-result.won .chase-result-body small { color: #2f6b12; }
+
+.chase-result-body h2 {
+  margin: 0;
+  font: clamp(2.4rem, 7vw, 3.6rem)/0.9 var(--font-display);
+}
+
+.chase-result-body h2 strong { color: #c4161c; }
+.chase-result.won .chase-result-body h2 strong { color: #2f6b12; }
+
+.chase-result-body dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  border-top: 2px solid #111;
+  border-bottom: 2px solid #111;
+}
+
+.chase-result-body dl div {
+  padding: 0.5rem 0.6rem;
+  border-right: 1px solid rgba(17, 17, 17, 0.25);
+}
+
+.chase-result-body dl div:last-child { border-right: 0; }
+
+.chase-result-body dt {
+  font: 700 0.56rem var(--font-mono), monospace;
+  letter-spacing: 0.16em;
+  color: #55524b;
+}
+
+.chase-result-body dd {
+  margin: 0.15rem 0 0;
+  font: 1.25rem var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.chase-result-body p {
+  margin: 0;
+  color: #3a3833;
+  font: 0.88rem/1.5 var(--font-sans), sans-serif;
+}
+
+.chase-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.chase-result-actions button,
+.chase-result-actions a {
+  padding: 0.85rem 1.1rem;
+  border: 2px solid #111;
+  background: #111;
+  color: #f1eee7;
+  cursor: pointer;
+  font: 700 0.66rem var(--font-mono), monospace;
+  letter-spacing: 0.14em;
+  text-decoration: none;
+}
+
+.chase-result-actions a {
+  background: transparent;
+  color: #111;
+}
+
+/* ── CSS fallback corridor (no WebGL / model) ──────────────────────────── */
+.chase-fallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+
+.scene-fallback .chase-fallback {
+  display: block;
+}
+
+.scene-fallback .chase-canvas {
+  display: none;
+}
+
+.chase-fallback .hybrid-performer {
+  animation: performerGlide 0.9s ease-in-out infinite alternate;
+  bottom: calc(22% - var(--threat) * 17%);
+  transform: translateX(-50%);
+  scale: calc(0.24 + var(--threat) * 1.05);
+}
+
+.stage-head .chase-fallback .hybrid-head,
+.stage-detached .chase-fallback .hybrid-head {
+  transform: rotate(180deg);
+}
+
+.stage-hat .chase-fallback .hybrid-hat,
+.stage-head .chase-fallback .hybrid-hat,
+.stage-detached .chase-fallback .hybrid-hat {
+  animation: hatThrow 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+/* ── Keyframes ─────────────────────────────────────────────────────────── */
+@keyframes recBlink { 50% { opacity: 0.2; } }
+
+@keyframes tubeFlicker {
+  0%, 30%, 60%, 100% { opacity: 1; }
+  15%, 45% { opacity: 0.15; }
+}
+
+@keyframes countdownPop {
+  from { opacity: 0; transform: scale(1.8); }
+}
+
+@keyframes subtitleIn {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+}
+
+@keyframes tauntPop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6) rotate(-6deg); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1.12) rotate(3deg); }
+  100% { opacity: 0; transform: translate(-50%, -64%) scale(1) rotate(0); }
+}
+
+@keyframes stumbleIn {
+  0% { opacity: 0; transform: translate(-50%, 10px); }
+  20% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; }
+}
+
+@keyframes threatPulse {
+  to { box-shadow: 0 0 26px #ff2f2f, 0 0 4px #fff; }
+}
+
+@keyframes scareFlash {
+  0%, 40% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes chaseJolt {
+  50% { transform: translate(6px, -4px) scale(1.02); }
+}
+
+@keyframes slateIn {
+  from { opacity: 0; transform: translate(-50%, -40%) rotate(-8deg) scale(0.9); }
+}
+
+@keyframes slateClap {
+  from { transform: rotate(-24deg); }
+}
+
+@keyframes performerGlide {
+  from { translate: -1.4rem 0; rotate: -3deg; }
+  to { translate: 1.4rem 0; rotate: 3deg; }
+}
+
+@keyframes hatThrow {
+  0% { transform: none; opacity: 1; }
+  60% { transform: translate(-3rem, -6rem) rotate(-240deg) scale(2.2); opacity: 1; }
+  100% { transform: translate(-14rem, 4rem) rotate(-540deg) scale(5); opacity: 0; }
+}
+
+@media (max-width: 760px) {
+  .moonwalk-chase .chase-hud {
+    grid-template-columns: 1fr auto;
+  }
+  .chase-title {
+    display: none;
+  }
+  .chase-controls {
+    grid-template-columns: 1fr 1fr;
+    bottom: calc(9vh + 0.6rem);
+  }
+  .chase-map {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .chase-pad {
+    width: 100%;
+    height: 5.4rem;
+  }
+  .chase-subtitle {
+    bottom: calc(9vh + 12.6rem);
+    font-size: 0.92rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chase-grade::before,
+  .status-caught .chase-canvas,
+  .chase-map-threat,
+  .chase-fallback .hybrid-performer {
+    animation: none;
+  }
+}

@@ -37,8 +37,8 @@
 
 .player-caption span,
 .player-caption a {
-  color: #667389;
-  font: .5rem var(--font-mono);
+  color: #758298;
+  font: .63rem var(--font-mono);
   letter-spacing: .09em;
 }
 
@@ -174,7 +174,7 @@
 
 .hee-alert-line small,
 .hee-alert-line b {
-  font: .45rem var(--font-mono);
+  font: .613rem var(--font-mono);
   letter-spacing: .1em;
 }
 
@@ -220,7 +220,7 @@
 .hee-control-copy p {
   margin: .3rem 0 0;
   color: #777f8d;
-  font-size: .58rem;
+  font-size: .658rem;
   line-height: 1.45;
 }
 
@@ -244,12 +244,12 @@
 .hee-readouts span,
 .hee-readouts b {
   display: block;
-  font: .43rem var(--font-mono);
+  font: .606rem var(--font-mono);
 }
 
 .hee-readouts span {
   margin-bottom: .28rem;
-  color: #5f6877;
+  color: #7a8495;
 }
 
 .hee-readouts b {
@@ -285,7 +285,7 @@
   background: var(--red);
   color: white;
   cursor: pointer;
-  font: 700 .52rem var(--font-mono);
+  font: 700 .637rem var(--font-mono);
   letter-spacing: .08em;
   transition: background .2s, transform .2s;
 }
@@ -304,9 +304,9 @@
   position: relative;
   z-index: 2;
   margin: .65rem 0 0;
-  color: #4f5662;
+  color: #798393;
   text-align: center;
-  font: .4rem/1.4 var(--font-mono);
+  font: .595rem/1.4 var(--font-mono);
   letter-spacing: .05em;
 }
 
@@ -322,7 +322,7 @@
   border: 1px solid #263246;
   background: rgba(5,8,13,.92);
   color: #70809a;
-  font: .46rem var(--font-mono);
+  font: .616rem var(--font-mono);
   letter-spacing: .09em;
   transform: translateX(-50%);
   backdrop-filter: blur(12px);

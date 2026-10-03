@@ -2,6 +2,7 @@
 
 import { type ComponentType, useEffect, useState } from "react";
 import "./walk.css";
+import "./walk-upgrade.css";
 
 function LoadingScreen({ failed = false }: { failed?: boolean }) {
   return (

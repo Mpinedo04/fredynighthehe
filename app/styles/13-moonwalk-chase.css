@@ -74,8 +74,8 @@
   padding: .7rem;
   border: 1px solid #252d34;
   background: #07090b;
-  color: #404a51;
-  font: .45rem var(--font-mono);
+  color: #758692;
+  font: .613rem var(--font-mono);
 }
 
 .door-one { left: 4%; top: 15%; transform: skewY(7deg); }
@@ -106,8 +106,8 @@
   display: flex;
   justify-content: space-between;
   gap: 1rem;
-  color: #66717c;
-  font: .48rem var(--font-mono);
+  color: #77838f;
+  font: .623rem var(--font-mono);
   letter-spacing: .1em;
 }
 
@@ -404,14 +404,14 @@
 
 .chase-instruction small {
   color: var(--red);
-  font: .48rem var(--font-mono);
+  font: .623rem var(--font-mono);
   letter-spacing: .15em;
 }
 
 .chase-instruction p {
   margin: .4rem 0 0;
   color: #7a858d;
-  font: .62rem var(--font-mono);
+  font: .672rem var(--font-mono);
 }
 
 .chase-close {
@@ -424,7 +424,7 @@
   background: rgba(2,3,4,.78);
   color: #c4cbd0;
   cursor: pointer;
-  font: .5rem var(--font-mono);
+  font: .63rem var(--font-mono);
   letter-spacing: .1em;
 }
 

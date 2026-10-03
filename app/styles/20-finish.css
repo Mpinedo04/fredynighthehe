@@ -1,0 +1,430 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   20 · ACABADO
+   Global finish applied on top of every section: real film grain, a cinema
+   vignette, balanced typography, consistent interaction states and fluid
+   spacing. Low-specificity (:where) rules only fill gaps; they never fight
+   the section stylesheets.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --text-1: #eef3ff;
+  --text-2: #b6c0d2;
+  --text-3: #8591a6;
+  --line-strong: #2a3346;
+  --shadow-card: 0 1.6rem 4rem rgba(0, 0, 0, 0.45);
+  --topbar-h: 74px;
+}
+
+/* ── Typography ────────────────────────────────────────────────────────── */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-kerning: normal;
+  scroll-padding-top: calc(var(--topbar-h) + 0.5rem);
+}
+
+body {
+  line-height: 1.55;
+}
+
+:where(h1, h2, h3, h4) {
+  text-wrap: balance;
+}
+
+:where(p, blockquote, dd, figcaption, li) {
+  text-wrap: pretty;
+}
+
+:where(.section-heading > p, .portrait-copy > p, .hero-intro, .idol-copy > p, .micro-copy > p) {
+  line-height: 1.75;
+}
+
+.section-heading > p,
+.portrait-copy > p:not(.eyebrow) {
+  color: var(--text-2);
+}
+
+/* Counters, clocks and readouts never jitter while they change. */
+.night-clock,
+.hee-readouts b,
+.meter b,
+.power-readout b,
+.take-meter,
+.end-credits-hud,
+.trailer-suite-header span,
+.monitor-topline,
+.micro-live-readout,
+.duration-badge,
+.reel-code,
+.scene-strip a span {
+  font-variant-numeric: tabular-nums;
+}
+
+:where(a) {
+  text-underline-offset: 0.22em;
+  text-decoration-thickness: 1px;
+}
+
+/* ── Film grain: real noise instead of a dot pattern ───────────────────── */
+.grain {
+  inset: -50%;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 220px 220px;
+  mix-blend-mode: overlay;
+  animation: filmGrain 0.9s steps(6) infinite;
+}
+
+@keyframes filmGrain {
+  0% { transform: translate(0, 0); }
+  17% { transform: translate(-3%, 2%); }
+  33% { transform: translate(2%, -4%); }
+  50% { transform: translate(-1%, 3%); }
+  67% { transform: translate(4%, 1%); }
+  83% { transform: translate(-2%, -2%); }
+  100% { transform: translate(1%, 2%); }
+}
+
+/* A soft cinema vignette framing the whole projection. */
+.experience.started::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  pointer-events: none;
+  background: radial-gradient(ellipse 120% 90% at 50% 45%, transparent 62%, rgba(0, 0, 0, 0.38) 100%);
+}
+
+/* ── Interaction: one consistent feel for every control ────────────────── */
+:where(button, a, [role="tab"], summary) {
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.25s ease,
+    opacity 0.2s ease,
+    transform 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button:not(:disabled), [role="tab"]) {
+  cursor: pointer;
+}
+
+:where(button:active:not(:disabled)) {
+  transform: translateY(1px) scale(0.985);
+}
+
+:where(button:disabled) {
+  cursor: not-allowed;
+}
+
+/* Primary blue buttons get a crisper press and a sheen on hover. */
+.start-button,
+.trailer-title button,
+.final-frame button:not(.ghost) {
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.start-button::after,
+.trailer-title button::after,
+.final-frame button:not(.ghost)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform 0.7s var(--ease-out);
+}
+
+.start-button:hover::after,
+.trailer-title button:hover::after,
+.final-frame button:not(.ghost):hover::after {
+  transform: translateX(120%);
+}
+
+.start-button:active,
+.trailer-title button:active,
+.final-frame button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Nav links: an underline that draws itself. */
+.topbar nav a {
+  position: relative;
+  padding: 0.35rem 0;
+}
+
+.topbar nav a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.35s var(--ease-out);
+}
+
+.topbar nav a:hover::after,
+.topbar nav a.active::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.topbar nav a.active {
+  box-shadow: none;
+}
+
+/* ── Fluid spacing ─────────────────────────────────────────────────────── */
+.section-pad {
+  padding: clamp(5rem, 9vw, 8.5rem) clamp(1.2rem, 6vw, 7vw);
+}
+
+.section-heading {
+  margin-bottom: clamp(2.6rem, 5vw, 4.5rem);
+}
+
+section[id] {
+  scroll-margin-top: calc(var(--topbar-h) + 0.5rem);
+}
+
+/* Section hand-offs: a hairline so every scene starts like a new reel. */
+.filmography,
+.dossier,
+.reference-room,
+.trailer-section,
+.clapper {
+  border-top: 1px solid rgba(236, 242, 255, 0.07);
+}
+
+/* ── Images ────────────────────────────────────────────────────────────── */
+:where(img) {
+  max-width: 100%;
+}
+
+.film-visual img,
+.focus-still img,
+.credit-roll img,
+.production-frame img,
+.dossier-evidence img,
+.avatar-placeholder img,
+.trailer-photo {
+  transition: transform 0.6s var(--ease-out), filter 0.4s ease;
+}
+
+.film-card:hover .film-visual img,
+.focus-still:hover img,
+.dossier-evidence figure:hover img,
+.photo-placeholder:hover .production-frame img {
+  transform: scale(1.04);
+}
+
+/* ── Cards: consistent depth on hover ──────────────────────────────────── */
+.film-card,
+.photo-placeholder,
+.dossier-evidence figure,
+.world-tab,
+.scream-grid button {
+  transition:
+    transform 0.4s var(--ease-out),
+    box-shadow 0.4s ease,
+    border-color 0.25s ease;
+}
+
+.film-card:hover,
+.dossier-evidence figure:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card);
+}
+
+.photo-placeholder:hover {
+  box-shadow: 0 1.8rem 3.6rem rgba(0, 0, 0, 0.6);
+  z-index: 3;
+}
+
+/* ── Scrollbars (WebKit) ───────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--ink);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--line-strong);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3d4a63;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --topbar-h: 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grain {
+    animation: none;
+  }
+  :where(button:active:not(:disabled)) {
+    transform: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Ajustes de detalle encontrados al revisar cada sección
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Topbar: nothing wraps, and it degrades gracefully as the window narrows. */
+.topbar nav a,
+.sound-button,
+.brand,
+.night-clock {
+  white-space: nowrap;
+}
+
+.topbar nav {
+  gap: clamp(1rem, 2.2vw, 2rem);
+}
+
+@media (max-width: 1320px) {
+  .brand small,
+  .night-clock small {
+    display: none;
+  }
+  .night-clock span {
+    grid-template-columns: 3.4rem auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  .topbar nav {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .sound-button {
+    font-size: 0;
+    gap: 0;
+  }
+  .sound-button .sound-dot {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+/* Scene strip: the dot marks the scene; labels only appear on hover. */
+.scene-strip a.active span,
+.scene-strip a.active b {
+  opacity: 0;
+}
+
+.topbar:hover .scene-strip a span {
+  opacity: 1;
+}
+
+.topbar:hover .scene-strip a.active b {
+  opacity: 0.8;
+  transform: translate(-50%, 0);
+}
+
+/* Hero: the scroll cue no longer hides behind the EXTRAS dock. */
+.scroll-cue {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Jurassic glass label stays on screen. */
+.jurassic-glass small {
+  left: 0;
+  transform: none;
+}
+
+/* Contact sheet: captions fit, and "AMPLIAR" only shows on hover. */
+.contact-sheet {
+  grid-template-rows: repeat(2, 18.5rem);
+}
+
+.photo-placeholder {
+  padding-bottom: 3.1rem;
+}
+
+.photo-placeholder figcaption {
+  line-height: 1.35;
+}
+
+.photo-placeholder .photo-open span {
+  color: inherit;
+  font: 700 0.62rem var(--font-mono);
+  letter-spacing: 0.18em;
+}
+
+/* Dossier evidence: "PRUEBA A" never splits into two lines. */
+.dossier-evidence figcaption span {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* MJ: era names fit, and the moonwalk track sits above the photo credit. */
+.idol-copy .mj-era-selector button strong {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+}
+
+.mj-moonwalk-track {
+  bottom: 4.4rem;
+}
+
+.mj-stage figcaption {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+}
+
+/* Spielberg: titles are readable in the reel. */
+.spielberg-carousel .spielberg-film-strip {
+  grid-auto-columns: 11.5rem;
+}
+
+/* Friends: one column when two would squeeze the cards. */
+@media (max-width: 1150px) {
+  .testimonials {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Clapper copy breathes under the title. */
+.clapper-copy > p:not(.eyebrow) {
+  margin-top: 1.4rem;
+}
+
+/* Paper sections keep a crisp edge against the dark ones. */
+.friends,
+.dossier {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* Phones: the contact sheet is a swipeable reel that snaps photo by photo. */
+@media (max-width: 900px) {
+  .contact-sheet {
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+  }
+  .photo-placeholder {
+    scroll-snap-align: center;
+  }
+}

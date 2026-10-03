@@ -91,7 +91,7 @@
 
 .film-visual small {
   color: #9daccc;
-  font: 0.55rem var(--font-mono);
+  font: .648rem var(--font-mono);
 }
 
 .film-visual b {
@@ -108,7 +108,7 @@
   right: -2.6rem;
   padding: .35rem 3rem;
   background: var(--red);
-  font: 0.42rem var(--font-mono);
+  font: .602rem var(--font-mono);
   font-style: normal;
   letter-spacing: .08em;
   transform: rotate(35deg);
@@ -126,8 +126,8 @@
 
 .film-meta small {
   margin-bottom: .35rem;
-  color: #58657a;
-  font: .48rem var(--font-mono);
+  color: #74839b;
+  font: .623rem var(--font-mono);
   letter-spacing: .1em;
 }
 
@@ -175,6 +175,6 @@
   background: none;
   cursor: pointer;
   color: #dfe7f7;
-  font: 700 .58rem var(--font-mono);
+  font: 700 .658rem var(--font-mono);
   letter-spacing: .12em;
 }

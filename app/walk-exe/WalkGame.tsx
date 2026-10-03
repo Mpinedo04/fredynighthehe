@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import Link from "next/link";
@@ -19,6 +20,7 @@ import {
   WALL_HEIGHT,
   WALL_THICKNESS,
   chooseSpreadCells,
+  chooseTapeCells,
   corridorLineOfSight,
   createAcousticEvent,
   createMaze,
@@ -48,6 +50,21 @@ import {
   stepCapsuleController,
 } from "./capsule-controller";
 import { SpatialAudioEngine } from "./spatial-audio";
+import {
+  TAPES_TO_EXIT,
+  WALK_BEST_KEY,
+  WALK_TAPES,
+  fearLevel,
+  formatTimecode,
+  rateRun,
+  type RunGrade,
+} from "./run-report";
+import {
+  ACHIEVEMENT_STORAGE_KEY,
+  parseAchievementState,
+  unlockAchievement,
+  type AchievementId,
+} from "../prank-system.mjs";
 import {
   advanceVentTraversal,
   drainCctvBattery,
@@ -91,6 +108,50 @@ type RuntimeEcho = {
   cell: number;
   collected: boolean;
 };
+
+type RuntimeTape = {
+  mesh: THREE.Group;
+  cell: number;
+  index: number;
+  collected: boolean;
+};
+
+type RunStats = {
+  escaped: boolean;
+  seconds: number;
+  meters: number;
+  tapes: number[];
+  echoesUsed: number;
+  objectsThrown: number;
+  closeCalls: number;
+  peakBpm: number;
+  grade: RunGrade;
+  best: number | null;
+  record: boolean;
+};
+
+const BOOT_LINES = [
+  "> MONTANDO UNIDAD BODY-CAM ........ OK",
+  "> CARGANDO SUJETO M-22 ............ OK",
+  "> 5 CINTAS DE RAÚL DETECTADAS ...... DISPERSAS",
+  "> PUERTA DE EMERGENCIA ............ SIN ENERGÍA",
+  "> HEE-HEE ......................... ARMADO",
+];
+
+const tapeColor = (color: number) => `#${color.toString(16).padStart(6, "0")}`;
+
+/** Records an achievement in the premiere's shared store (shown on the home page). */
+function unlockPremiereAchievement(id: AchievementId) {
+  try {
+    const state = parseAchievementState(window.localStorage.getItem(ACHIEVEMENT_STORAGE_KEY));
+    const result = unlockAchievement(state, id);
+    if (result.isNew) {
+      window.localStorage.setItem(ACHIEVEMENT_STORAGE_KEY, JSON.stringify(result.state));
+    }
+  } catch {
+    // Storage can be unavailable; the run still counts.
+  }
+}
 
 type VentTrip = {
   sourceCell: number;
@@ -552,6 +613,45 @@ function createEcho(color = 0x87d9e9) {
   return ghost;
 }
 
+/** A VHS cassette from Raúl's archive, glowing in its label colour. */
+function createTape(color: number) {
+  const tape = new THREE.Group();
+  const shell = material(0x0d0d10, 0.42, 0.35);
+  const label = new THREE.MeshStandardMaterial({
+    color,
+    emissive: color,
+    emissiveIntensity: 0.9,
+    roughness: 0.4,
+  });
+  const reel = material(0xe8e4da, 0.5, 0.2);
+  const body = new THREE.Group();
+  body.position.y = 0.95;
+  body.rotation.x = -0.35;
+  body.scale.setScalar(1.35);
+  addMesh(body, new THREE.BoxGeometry(0.78, 0.46, 0.12), shell, [0, 0, 0]);
+  // Glowing label on both faces and a lit rim so the tape reads in the dark.
+  addMesh(body, new THREE.BoxGeometry(0.6, 0.16, 0.01), label, [0, 0.1, 0.065]);
+  addMesh(body, new THREE.BoxGeometry(0.6, 0.16, 0.01), label, [0, 0.1, -0.065]);
+  addMesh(body, new THREE.BoxGeometry(0.8, 0.025, 0.13), label, [0, 0.235, 0]);
+  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16), reel, [-0.17, -0.08, 0.065], [Math.PI / 2, 0, 0]);
+  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16), reel, [0.17, -0.08, 0.065], [Math.PI / 2, 0, 0]);
+  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16), reel, [-0.17, -0.08, -0.065], [Math.PI / 2, 0, 0]);
+  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16), reel, [0.17, -0.08, -0.065], [Math.PI / 2, 0, 0]);
+  tape.add(body);
+  const halo = new THREE.Mesh(
+    new THREE.RingGeometry(0.42, 0.5, 32),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
+  );
+  halo.rotation.x = -Math.PI / 2;
+  halo.position.y = 0.02;
+  tape.add(halo);
+  const light = new THREE.PointLight(color, 4.5, 4.5);
+  light.position.y = 1.1;
+  tape.add(light);
+  tape.userData.body = body;
+  return tape;
+}
+
 function createSecurityCamera() {
   const camera = new THREE.Group();
   const casing = material(0xaeb0a6, 0.44, 0.62);
@@ -615,7 +715,12 @@ export default function WalkExe() {
   const cctvEncounterRef = useRef<ScareMascot | null>(null);
   const cctvEncounterPhaseRef = useRef<CctvEncounterPhase>("idle");
   const audioRef = useRef<SpatialAudioEngine | null>(null);
+  const heeBufferRef = useRef<AudioBuffer | null>(null);
+  const timecodeRef = useRef<HTMLSpanElement | null>(null);
   const [phase, setPhase] = useState<GamePhase>("briefing");
+  const [tapes, setTapes] = useState<number[]>([]);
+  const [runStats, setRunStats] = useState<RunStats | null>(null);
+  const [bootStep, setBootStep] = useState(0);
   const [seed, setSeed] = useState(220722);
   const [echoes, setEchoes] = useState(0);
   const [bpm, setBpm] = useState(48);
@@ -702,6 +807,15 @@ export default function WalkExe() {
           maxDistance: 35,
           rolloffFactor: 1.55,
         });
+        // Subject M's signature: a positional hee-hee from the animatronic.
+        if (!heeBufferRef.current) {
+          void engine
+            .loadSample("/audio/michael-jackson-hee-hee.mp3")
+            .then((buffer) => {
+              heeBufferRef.current = buffer;
+            })
+            .catch(() => undefined);
+        }
       })
       .catch(() => {
         setMessage(
@@ -761,6 +875,17 @@ export default function WalkExe() {
     }
   }, []);
 
+  useEffect(() => {
+    if (phase !== "briefing") return;
+    const timers = BOOT_LINES.map((_, index) =>
+      window.setTimeout(() => setBootStep(index + 1), 260 + index * 320),
+    );
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      setBootStep(0);
+    };
+  }, [phase, seed]);
+
   const beginGame = useCallback(() => {
     startAudio();
     setGamePhase("playing");
@@ -780,6 +905,9 @@ export default function WalkExe() {
       audioRef.current = null;
     }
     setEchoes(0);
+    setTapes([]);
+    setRunStats(null);
+    heeBufferRef.current = null;
     setTraveled(0);
     setPower(96);
     setTabletOpen(false);
@@ -841,6 +969,16 @@ export default function WalkExe() {
       maze,
       [0, exitCell, ...spread.slice(2)],
       6,
+    );
+    const qaTapes = Number(new URLSearchParams(window.location.search).get("tapes") ?? 0);
+    const requiredTapes = qaMode
+      ? Math.max(0, Math.min(WALK_TAPES.length, Number.isFinite(qaTapes) ? qaTapes : 0))
+      : TAPES_TO_EXIT;
+    const tapeCells = chooseTapeCells(
+      maze,
+      seed,
+      [0, exitCell, enemyStart, ...spread, ...cctvCells],
+      WALK_TAPES.length,
     );
     setCameraMapPositions(
       cctvCells.map((cell) => ({
@@ -950,6 +1088,16 @@ export default function WalkExe() {
     let currentVentHeadingYaw = yaw;
     let traveledDistance = 0;
     let echoesHeld = 0;
+    let tapesHeld = 0;
+    const tapeIndices: number[] = [];
+    let runStartedAt = 0;
+    let echoesUsed = 0;
+    let objectsThrown = 0;
+    let closeCalls = 0;
+    let inCloseCall = false;
+    let peakBpm = 0;
+    let lastHeeAt = Number.NEGATIVE_INFINITY;
+    let nextGiggleAt = performance.now() + 20000;
     let nextHeartbeat = 0;
     let nextFootstep = 0;
     let nextEnemyStep = 0;
@@ -1431,6 +1579,7 @@ export default function WalkExe() {
     const exitLight = new THREE.PointLight(0xff1717, 34, 10, 1.8);
     exitLight.position.copy(exitPosition).add(new THREE.Vector3(0, 2.4, 0));
     scene.add(exitLight);
+    if (requiredTapes === 0) exitLight.color.setHex(0x35ff7a);
 
     // Reusable dropped hardware: one shared geometry/material and no allocations
     // during gameplay. Q throws a metal part that SUJETO M can hear.
@@ -1454,6 +1603,15 @@ export default function WalkExe() {
       mesh.position.set(center.x + (random() - 0.5), 0, center.z + (random() - 0.5));
       world.add(mesh);
       return { mesh, cell, collected: false };
+    });
+
+    const runtimeTapes: RuntimeTape[] = tapeCells.map((cell, index) => {
+      const mesh = createTape(WALK_TAPES[index].color);
+      const center = cellCenter(cell);
+      mesh.position.set(center.x + (random() - 0.5) * 0.8, 0, center.z + (random() - 0.5) * 0.8);
+      mesh.name = `RAUL_TAPE_${WALK_TAPES[index].code}`;
+      world.add(mesh);
+      return { mesh, cell, index, collected: false };
     });
 
     const ventMeshes: THREE.Group[] = [];
@@ -1948,6 +2106,46 @@ export default function WalkExe() {
       vibrateScare();
     };
 
+    const reportRun = (escapedRun: boolean, now: number) => {
+      const seconds = runStartedAt ? (now - runStartedAt) / 1000 : 0;
+      let best: number | null = null;
+      let record = false;
+      try {
+        const previous = Number.parseFloat(window.localStorage.getItem(WALK_BEST_KEY) ?? "");
+        best = Number.isFinite(previous) ? previous : null;
+        if (escapedRun && (best === null || seconds < best)) {
+          record = true;
+          best = seconds;
+          window.localStorage.setItem(WALK_BEST_KEY, seconds.toFixed(2));
+        }
+      } catch {
+        // Best time is optional.
+      }
+      if (escapedRun) unlockPremiereAchievement("walkEscape");
+      if (escapedRun && tapesHeld >= WALK_TAPES.length) unlockPremiereAchievement("walkDirectorsCut");
+      if (!escapedRun) unlockPremiereAchievement("walkCaught");
+      setRunStats({
+        escaped: escapedRun,
+        seconds,
+        meters: traveledDistance,
+        tapes: [...tapeIndices],
+        echoesUsed,
+        objectsThrown,
+        closeCalls,
+        peakBpm,
+        grade: rateRun({ escaped: escapedRun, tapes: tapesHeld, seconds }),
+        best,
+        record,
+      });
+    };
+
+    const playSubjectHee = (gain: number, rate: number) => {
+      const buffer = heeBufferRef.current;
+      const system = audioRef.current;
+      if (!buffer || !system?.isUnlocked) return false;
+      return system.playSampleAt("subject-m", buffer, { gain, playbackRate: rate });
+    };
+
     const triggerCaught = (now: number) => {
       if (caught || escaped) return;
       const mascot = mascotForCatch(
@@ -2015,6 +2213,7 @@ export default function WalkExe() {
       ghost.position.set(player.x, 0, player.z);
       world.add(ghost);
       echoesHeld -= 1;
+      echoesUsed += 1;
       setEchoes(echoesHeld);
       activeLure = {
         mesh: ghost,
@@ -2048,11 +2247,41 @@ export default function WalkExe() {
       reusable.activeUntil = now + 11500;
       emitNoise("metal-impact", positionCell(reusable.mesh.position), now);
       nextObjectDropAt = now + 1600;
+      objectsThrown += 1;
       playClank(reusable.mesh.position);
       setPrompt("Pieza metálica lanzada. Algo está investigando el golpe.");
     };
 
     const interact = (now: number) => {
+      const closeTape = runtimeTapes.find(
+        (tape) =>
+          !tape.collected &&
+          tape.mesh.position.distanceTo(player.clone().setY(0)) < 1.5,
+      );
+      if (closeTape) {
+        closeTape.collected = true;
+        closeTape.mesh.visible = false;
+        tapesHeld += 1;
+        tapeIndices.push(closeTape.index);
+        setTapes([...tapeIndices]);
+        // Pulling a tape out of the dark is not silent.
+        emitNoise("crouch-step", closeTape.cell, now);
+        const title = WALK_TAPES[closeTape.index].title;
+        if (tapesHeld === requiredTapes) {
+          exitLight.color.setHex(0x35ff7a);
+          audioRef.current?.playChime("unlock");
+          setPrompt(`«${title}» RECUPERADA · LA SALIDA YA TIENE ENERGÍA`);
+          setMessage("Tres cintas: la puerta de emergencia se ha encendido en verde.");
+        } else if (tapesHeld === WALK_TAPES.length) {
+          audioRef.current?.playChime("unlock");
+          setPrompt(`«${title}» · LAS 5 CINTAS · DIRECTOR’S CUT DESBLOQUEADO`);
+        } else {
+          audioRef.current?.playChime("tape");
+          setPrompt(`CINTA «${title}» RECUPERADA · ${tapesHeld}/${WALK_TAPES.length}`);
+        }
+        return;
+      }
+
       const closeEcho = runtimeEchoes.find(
         (echo) =>
           !echo.collected &&
@@ -2128,6 +2357,16 @@ export default function WalkExe() {
       }
 
       if (cellCenter(exitCell).distanceTo(player.clone().setY(0)) < 1.55) {
+        if (tapesHeld < requiredTapes) {
+          const missing = requiredTapes - tapesHeld;
+          audioRef.current?.playChime("locked");
+          playClank(exitPosition);
+          emitNoise("metal-impact", exitCell, now);
+          setPrompt(
+            `SALIDA BLOQUEADA · FALTAN ${missing} CINTA${missing === 1 ? "" : "S"} DE RAÚL`,
+          );
+          return;
+        }
         escaped = true;
         escapeSequence = {
           startedAt: now,
@@ -2175,6 +2414,37 @@ export default function WalkExe() {
       pitch = 0;
       interact(simulationTime);
       return Boolean(ventTrip);
+    };
+
+    const teleportForQa = (x: number, z: number) => {
+      player.set(x, PLAYER_HEIGHT, z);
+      capsuleState = createCapsuleState(capsuleWorld, { x: player.x, z: player.z }, false);
+    };
+
+    const stageTapeForQa = (index = 0, pick = true) => {
+      if (!qaMode) return false;
+      const tape = runtimeTapes[THREE.MathUtils.clamp(Math.trunc(index), 0, runtimeTapes.length - 1)];
+      if (!tape || tape.collected) return false;
+      if (!pick) {
+        // Stand a step away from the tape, looking at it.
+        const center = cellCenter(tape.cell);
+        const open = openingDirection(maze[tape.cell]);
+        teleportForQa(center.x + open.x * 3.4, center.z + open.z * 3.4);
+        yaw = Math.atan2(player.x - tape.mesh.position.x, player.z - tape.mesh.position.z);
+        pitch = -0.18;
+        return true;
+      }
+      teleportForQa(tape.mesh.position.x, tape.mesh.position.z);
+      interact(simulationTime);
+      return tape.collected;
+    };
+
+    const stageExitForQa = () => {
+      if (!qaMode) return false;
+      const center = cellCenter(exitCell);
+      teleportForQa(center.x, center.z);
+      interact(simulationTime);
+      return Boolean(escapeSequence);
     };
 
     const openCctvForQa = (cameraIndex = 0) => {
@@ -2486,6 +2756,7 @@ export default function WalkExe() {
         if (caughtTiming.done) {
           caughtSequence = null;
           setActiveJumpscare(null);
+          reportRun(false, tickNow);
           setGamePhase("caught");
         }
         return;
@@ -2518,6 +2789,7 @@ export default function WalkExe() {
         lastAppliedVelocity = { x: 0, z: 0 };
         if (escapeTiming.done) {
           escapeSequence = null;
+          reportRun(true, tickNow);
           setGamePhase("escaped");
           setMessage(
             "La puerta se ha cerrado detrás de ti. El pasadizo sigue cambiando.",
@@ -2814,11 +3086,27 @@ export default function WalkExe() {
         currentEnemyMode = nextEnemyMode;
         setEnemyMode(nextEnemyMode);
         transitionEnemyAnimation(nextEnemyMode);
+        if (nextEnemyMode === "chase" && tickNow - lastHeeAt > 5200) {
+          if (playSubjectHee(1.6, 0.9 + random() * 0.16)) {
+            lastHeeAt = tickNow;
+            setPrompt("HEE-HEE · SUJETO M TE HA VISTO · ¡CORRE!");
+          }
+        }
         if (
           nextEnemyMode === "investigate" &&
           lastHeardKind === "sprint-step"
         ) {
           setPrompt("TE HA OÍDO CORRER · está anticipando tu siguiente cruce");
+        }
+      }
+      if (
+        currentEnemyMode !== "chase" &&
+        currentPlayerDistance < 16 &&
+        tickNow > nextGiggleAt
+      ) {
+        // A distant, slowed-down giggle somewhere in the corridors.
+        if (playSubjectHee(0.95, 0.72 + random() * 0.1)) {
+          nextGiggleAt = tickNow + 14000 + random() * 12000;
         }
       }
 
@@ -3042,6 +3330,19 @@ export default function WalkExe() {
         lastQaUpdate = now;
       }
 
+      if (phaseRef.current === "playing" && runStartedAt === 0) runStartedAt = now;
+      if (runStartedAt && !escaped && !caught && timecodeRef.current) {
+        timecodeRef.current.textContent = formatTimecode(now - runStartedAt);
+      }
+      runtimeTapes.forEach((tape, index) => {
+        if (tape.collected) return;
+        const body = tape.mesh.userData.body as THREE.Group | undefined;
+        if (body && !reducedMotion) {
+          body.position.y = 0.95 + Math.sin(now * 0.002 + index * 1.7) * 0.1;
+          body.rotation.y += delta * 0.9;
+        }
+      });
+
       runtimeEchoes.forEach((echo, index) => {
         if (echo.collected) return;
         echo.mesh.position.y = reducedMotion
@@ -3158,6 +3459,13 @@ export default function WalkExe() {
           setDistance(Math.max(1, Math.round(currentPlayerDistance)));
           setTraveled(traveledDistance);
           setBpm(currentBpm);
+          peakBpm = Math.max(peakBpm, currentBpm);
+          if (currentPlayerDistance < 3.4) {
+            inCloseCall = true;
+          } else if (inCloseCall && currentPlayerDistance > 6.5) {
+            inCloseCall = false;
+            closeCalls += 1;
+          }
           setSector(
             `${String.fromCharCode(65 + Math.floor(row / 4))}-${String(
               column + 1,
@@ -3173,6 +3481,11 @@ export default function WalkExe() {
           decorGroups.forEach((group) => {
             group.visible =
               group.position.distanceToSquared(detailOrigin) < 28 * 28;
+          });
+          runtimeTapes.forEach((tape) => {
+            tape.mesh.visible =
+              !tape.collected &&
+              tape.mesh.position.distanceToSquared(detailOrigin) < 30 * 30;
           });
           runtimeEchoes.forEach((echo) => {
             echo.mesh.visible =
@@ -3211,6 +3524,11 @@ export default function WalkExe() {
               ),
           );
 
+          const closeTape = runtimeTapes.find(
+            (tape) =>
+              !tape.collected &&
+              tape.mesh.position.distanceTo(player.clone().setY(0)) < 1.6,
+          );
           const closeEcho = runtimeEchoes.some(
             (echo) =>
               !echo.collected &&
@@ -3227,10 +3545,16 @@ export default function WalkExe() {
             cellCenter(exitCell).distanceTo(player.clone().setY(0)) < 1.55;
           if (ventTrip) {
             setPrompt("EN CONDUCTO · W/S RECORRE · A/D O RATÓN MIRA");
+          } else if (closeTape) {
+            setPrompt(`E · RECOGER CINTA «${WALK_TAPES[closeTape.index].title}»`);
           } else if (closeEcho) setPrompt("E · ESTABILIZAR ECO ESPECTRAL");
           else if (closeVent) setPrompt("E · ENTRAR EN CONDUCTO");
           else if (closeExit) {
-            setPrompt("E · ABRIR SALIDA DE EMERGENCIA");
+            setPrompt(
+              tapesHeld < requiredTapes
+                ? `SALIDA SIN ENERGÍA · NECESITAS ${requiredTapes} CINTAS (${tapesHeld}/${requiredTapes})`
+                : "E · ABRIR SALIDA DE EMERGENCIA",
+            );
           }
           lastHudUpdate = now;
         }
@@ -3451,6 +3775,8 @@ export default function WalkExe() {
         return true;
       },
       stageVent: stageVentForQa,
+      stageTape: stageTapeForQa,
+      stageExit: stageExitForQa,
       openCctv: openCctvForQa,
       snapshot: () => {
         const sortedFrames = [...frameTimes].sort(
@@ -3497,6 +3823,13 @@ export default function WalkExe() {
           sequences: {
             escape: Boolean(escapeSequence),
             caught: Boolean(caughtSequence),
+          },
+          tapes: {
+            held: tapesHeld,
+            required: requiredTapes,
+            cells: runtimeTapes.map((tape) => tape.cell),
+            collected: [...tapeIndices],
+            heeLoaded: Boolean(heeBufferRef.current),
           },
           noiseObjects: {
             pooled: noiseObjects.length,
@@ -3841,10 +4174,20 @@ export default function WalkExe() {
   };
 
   return (
-    <main className={`walk-game phase-${phase} enemy-${enemyMode}`}>
+    <main
+      className={`walk-game phase-${phase} enemy-${enemyMode}`}
+      style={{ "--fear": phase === "playing" ? fearLevel(bpm).toFixed(3) : 0 } as CSSProperties}
+    >
       <div ref={mountRef} className="walk-stage" aria-label="Laberinto tridimensional M00NW4LK.EXE" />
       <div className="walk-noise" aria-hidden="true" />
       <div className="walk-vignette" aria-hidden="true" />
+      <div className="walk-fear" aria-hidden="true" />
+      {phase === "playing" && (
+        <div className="walk-vhs" aria-hidden="true">
+          <i className="vhs-tracking" />
+          <span className="vhs-play">▶ PLAY · SP</span>
+        </div>
+      )}
       {activeJumpscare && (
         <div
           className={`mascot-jumpscare mascot-${activeJumpscare.id}`}
@@ -3874,7 +4217,10 @@ export default function WalkExe() {
           <span className="rec-dot" />
           BODY CAM · M00NW4LK.EXE
         </div>
-        <span>SEMILLA {seed}</span>
+        <span className="walk-timecode">
+          <b ref={timecodeRef}>00:00:00:00</b>
+          <small>SEMILLA {seed}</small>
+        </span>
       </header>
 
       {phase === "playing" && (
@@ -3899,13 +4245,40 @@ export default function WalkExe() {
               <strong>{String(echoes).padStart(2, "0")}</strong>
               <small>G · PROYECTAR SEÑUELO</small>
             </div>
+            <div className={`hud-block tapes-block ${tapes.length >= TAPES_TO_EXIT ? "unlocked" : ""}`}>
+              <span>CINTAS DE RAÚL</span>
+              <strong>
+                {tapes.length}
+                <small>/{WALK_TAPES.length}</small>
+              </strong>
+              <div className="tape-slots" aria-hidden="true">
+                {WALK_TAPES.map((tape, index) => (
+                  <i
+                    key={tape.code}
+                    className={tapes.includes(index) ? "got" : ""}
+                    style={{ "--tape": tapeColor(tape.color) } as CSSProperties}
+                  />
+                ))}
+              </div>
+              <small>
+                {tapes.length >= TAPES_TO_EXIT
+                  ? "SALIDA CON ENERGÍA"
+                  : `SALIDA · FALTAN ${TAPES_TO_EXIT - tapes.length}`}
+              </small>
+            </div>
           </section>
 
           <div className="crosshair" aria-hidden="true"><i /><i /></div>
 
           <aside className="objective-card">
             <span>OBJETIVO ACTUAL</span>
-            <strong>ENCUENTRA LA SALIDA</strong>
+            <strong>
+              {tapes.length < TAPES_TO_EXIT
+                ? `RECUPERA ${TAPES_TO_EXIT} CINTAS DE RAÚL`
+                : tapes.length < WALK_TAPES.length
+                  ? "ENCUENTRA LA SALIDA · O LAS 5 CINTAS"
+                  : "ESCAPA · DIRECTOR’S CUT"}
+            </strong>
             <p>{prompt}</p>
           </aside>
 
@@ -4061,7 +4434,11 @@ export default function WalkExe() {
       )}
 
       {phase === "briefing" && (
-        <section className="game-overlay briefing">
+        <section className={`game-overlay briefing boot-${bootStep >= BOOT_LINES.length ? "done" : "running"}`}>
+          <pre className="boot-terminal" aria-hidden="true">
+            {BOOT_LINES.slice(0, bootStep).join("\n")}
+            {bootStep < BOOT_LINES.length && <i className="boot-caret" />}
+          </pre>
           <div className="briefing-kicker">
             <span>EXPERIENCIA 3D · PROCEDURAL</span>
             <span>ARCHIVO CLASIFICADO 22</span>
@@ -4088,6 +4465,23 @@ export default function WalkExe() {
               <strong>GENERACIÓN ÚNICA</strong>
               <small>Pasillos, cruces, cámaras y conductos variables</small>
             </div>
+          </div>
+          <div className="briefing-tapes" aria-label="Las cinco cintas de Raúl">
+            <span className="briefing-roster-title">
+              OBJETIVO · RECUPERA {TAPES_TO_EXIT} DE LAS {WALK_TAPES.length} CINTAS PARA DAR ENERGÍA A LA SALIDA
+            </span>
+            <div>
+              {WALK_TAPES.map((tape) => (
+                <figure key={tape.code} style={{ "--tape": tapeColor(tape.color) } as CSSProperties}>
+                  <img src={tape.thumbnail} alt="" loading="lazy" />
+                  <figcaption>
+                    <small>{tape.code}</small>
+                    {tape.title}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+            <small>Las cinco juntas desbloquean el final secreto: DIRECTOR&apos;S CUT.</small>
           </div>
           <div className="briefing-roster" aria-label="Archivo de animatrónicos">
             <span className="briefing-roster-title">
@@ -4180,6 +4574,7 @@ export default function WalkExe() {
           <span className="result-code">ERROR_CERVICAL_180</span>
           <h2>TE HA<br />ENCONTRADO.</h2>
           <p>{message}</p>
+          {runStats && <RunReport stats={runStats} />}
           <button type="button" onClick={restart}>GENERAR OTRO LABERINTO</button>
           <Link href="/">ABANDONAR ARCHIVO</Link>
         </section>
@@ -4190,6 +4585,7 @@ export default function WalkExe() {
           <span className="result-code">SALIDA_DE_EMERGENCIA_ABIERTA</span>
           <h2>HAS SALIDO.<br /><strong>ÉL TAMBIÉN.</strong></h2>
           <p>{message}</p>
+          {runStats && <RunReport stats={runStats} />}
           <button type="button" onClick={restart}>ENTRAR EN OTRA RUTA</button>
           <Link href="/">VOLVER A LA PREMIERE</Link>
         </section>
@@ -4301,5 +4697,64 @@ export default function WalkExe() {
         </div>
       )}
     </main>
+  );
+}
+
+/** The take report shown when a run ends: the director grades it. */
+function RunReport({ stats }: { stats: RunStats }) {
+  const minutes = Math.floor(stats.seconds / 60);
+  const seconds = Math.floor(stats.seconds % 60);
+  return (
+    <div className={`run-report grade-${stats.grade.grade}`}>
+      <div className="run-grade" aria-label={`Nota ${stats.grade.grade}`}>
+        <b>{stats.grade.grade}</b>
+        <span>{stats.grade.title}</span>
+      </div>
+      <p className="run-line">{stats.grade.line}</p>
+      <dl className="run-stats">
+        <div>
+          <dt>TIEMPO</dt>
+          <dd>{minutes}:{String(seconds).padStart(2, "0")}</dd>
+        </div>
+        <div>
+          <dt>RECORRIDO</dt>
+          <dd>{stats.meters.toFixed(0)} m</dd>
+        </div>
+        <div>
+          <dt>CINTAS</dt>
+          <dd>{stats.tapes.length}/{WALK_TAPES.length}</dd>
+        </div>
+        <div>
+          <dt>SUSTOS ESQUIVADOS</dt>
+          <dd>{stats.closeCalls}</dd>
+        </div>
+        <div>
+          <dt>ECOS USADOS</dt>
+          <dd>{stats.echoesUsed}</dd>
+        </div>
+        <div>
+          <dt>PULSO MÁXIMO</dt>
+          <dd>{stats.peakBpm} BPM</dd>
+        </div>
+      </dl>
+      {stats.escaped && stats.best !== null && (
+        <p className="run-best">
+          {stats.record ? "¡NUEVO RÉCORD!" : "MEJOR TIEMPO"} ·{" "}
+          {Math.floor(stats.best / 60)}:{String(Math.floor(stats.best % 60)).padStart(2, "0")}
+        </p>
+      )}
+      <div className="run-tapes" aria-label="Cintas recuperadas">
+        {WALK_TAPES.map((tape, index) => (
+          <span
+            key={tape.code}
+            className={stats.tapes.includes(index) ? "got" : ""}
+            style={{ "--tape": tapeColor(tape.color) } as CSSProperties}
+            title={tape.title}
+          >
+            {tape.code}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

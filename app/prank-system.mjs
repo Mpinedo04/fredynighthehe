@@ -27,8 +27,11 @@ export const ACHIEVEMENTS = [
   { id: "wordFreddy", title: "PALABRA SECRETA · FREDDY", detail: "Freddy se ha reído contigo." },
   { id: "word22", title: "PALABRA SECRETA · 22", detail: "Confeti reglamentario." },
   { id: "welcomeBack", title: "HAS VUELTO", detail: "Freddy te echaba de menos." },
-  { id: "moonwalk", title: "PASADIZO M00NW4LK", detail: "Te persiguió un animatrónico en moonwalk." },
+  { id: "moonwalk", title: "PASADIZO M00NW4LK", detail: "Escapaste del pasadizo haciendo moonwalk." },
   { id: "declassified", title: "EXPEDIENTE FILTRADO", detail: "Quitaste todas las barras negras." },
+  { id: "walkEscape", title: "SALISTE DE M00NW4LK.EXE", detail: "Encontraste la puerta de emergencia del laberinto." },
+  { id: "walkDirectorsCut", title: "DIRECTOR’S CUT", detail: "Recuperaste las 5 cintas de Raúl y escapaste." },
+  { id: "walkCaught", title: "ERROR CERVICAL 180", detail: "Sujeto M te encontró en el laberinto." },
 ];
 
 export const ACHIEVEMENT_IDS = ACHIEVEMENTS.map((achievement) => achievement.id);
@@ -228,4 +231,35 @@ export const MICRO_KEYS = "1234567890qwertyuiopasdf";
 export function microKeyStep(key) {
   if (typeof key !== "string" || key.length !== 1) return -1;
   return MICRO_KEYS.indexOf(key.toLowerCase());
+}
+
+// ── Pasadizo M00NW4LK (home page mini-game) ────────────────────────────────
+// You flee in moonwalk: alternate left/right to slide backwards towards the
+// exit while Subject M moonwalks after you.
+export const CHASE_STEP_GAIN = 2.6;
+export const CHASE_RHYTHM_BONUS = 0.7;
+export const CHASE_RHYTHM_WINDOW_MS = 260;
+
+export function registerChaseStep(previousSide, side, previousAt, now) {
+  if (side !== "left" && side !== "right") return { gain: 0, stumble: false, rhythm: false };
+  if (previousSide === side) return { gain: 0, stumble: true, rhythm: false };
+  const rhythm = previousAt > 0 && now - previousAt <= CHASE_RHYTHM_WINDOW_MS;
+  return {
+    gain: CHASE_STEP_GAIN + (rhythm ? CHASE_RHYTHM_BONUS : 0),
+    stumble: false,
+    rhythm,
+  };
+}
+
+/** Threat gained per second: slow at first, then the animatronic speeds up. */
+export function chaseThreatRate(elapsedSeconds) {
+  const t = Math.max(0, elapsedSeconds);
+  return Math.min(0.2, 0.06 + t * 0.0085);
+}
+
+export function chaseStage(threat) {
+  if (threat >= 0.85) return "detached";
+  if (threat >= 0.6) return "head";
+  if (threat >= 0.35) return "hat";
+  return "approach";
 }

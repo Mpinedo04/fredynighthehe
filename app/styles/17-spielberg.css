@@ -147,7 +147,7 @@
 .spielberg-projector > small {
   bottom: 3.2rem;
   color: #b9925f;
-  font: .46rem/1.6 var(--font-mono);
+  font: .616rem/1.6 var(--font-mono);
   letter-spacing: .12em;
 }
 
@@ -187,7 +187,7 @@
   padding: .62rem;
   border: 1px solid #30291f;
   background: rgba(14, 15, 18, .92);
-  color: #88775e;
+  color: #917f64;
   text-align: left;
 }
 
@@ -207,8 +207,8 @@
   white-space: nowrap;
 }
 
-.spielberg-film-strip button span { color: #d19a54; font-size: .41rem; }
-.spielberg-film-strip button strong { font-size: .44rem; }
+.spielberg-film-strip button span { color: #d19a54; font-size: .599rem; }
+.spielberg-film-strip button strong { font-size: .609rem; }
 
 .spielberg-film-readout {
   display: grid;
@@ -225,9 +225,9 @@
 .spielberg-film-readout span,
 .spielberg-film-readout strong,
 .spielberg-film-readout small { font-family: var(--font-mono); }
-.spielberg-film-readout span { grid-column: 1 / -1; color: #8b6b45; font-size: .4rem; letter-spacing: .12em; }
+.spielberg-film-readout span { grid-column: 1 / -1; color: #9f7b4f; font-size: .595rem; letter-spacing: .12em; }
 .spielberg-film-readout strong { color: #ffe2ad; font-size: .72rem; letter-spacing: .08em; }
-.spielberg-film-readout small { color: #cc9654; font-size: .43rem; }
+.spielberg-film-readout small { color: #cc9654; font-size: .606rem; }
 
 .spielberg-method {
   display: grid;
@@ -250,10 +250,10 @@
 }
 
 .spielberg-method li > span,
-.spielberg-method li > strong { font: .47rem var(--font-mono); }
+.spielberg-method li > strong { font: .62rem var(--font-mono); }
 .spielberg-method li > span { color: #be8040; }
 .spielberg-method li > strong { color: #ebc791; letter-spacing: .12em; }
-.spielberg-method li > p { grid-column: 1 / -1; margin: 0; color: #90816d; font: .56rem/1.5 var(--font-mono); }
+.spielberg-method li > p { grid-column: 1 / -1; margin: 0; color: #90816d; font: .651rem/1.5 var(--font-mono); }
 
 /* The easter egg turns the real document upside down; the HUD stays readable. */
 .experience.spielberg-inverted {
@@ -319,9 +319,9 @@ html.spielberg-inversion-active {
   transform: translateX(-50%);
 }
 
-.spielberg-inversion-copy > small { color: #f3b85e; font: .5rem var(--font-mono); letter-spacing: .2em; }
+.spielberg-inversion-copy > small { color: #f3b85e; font: .63rem var(--font-mono); letter-spacing: .2em; }
 .spielberg-inversion-copy h2 { margin: .45rem 0 .35rem; font: clamp(2.6rem, 6vw, 5rem)/.84 var(--font-display); letter-spacing: -.035em; }
-.spielberg-inversion-copy > p { margin: 0 0 .7rem; color: #d9c39e; font: .5rem var(--font-mono); letter-spacing: .13em; }
+.spielberg-inversion-copy > p { margin: 0 0 .7rem; color: #d9c39e; font: .63rem var(--font-mono); letter-spacing: .13em; }
 
 .spielberg-inversion-copy > div {
   display: grid;
@@ -331,7 +331,7 @@ html.spielberg-inversion-active {
   max-width: 32rem;
   margin: 0 auto .7rem;
   color: #f5bc64;
-  font: .48rem var(--font-mono);
+  font: .623rem var(--font-mono);
 }
 
 .spielberg-inversion-copy > div i { height: 2px; background: #3a2d1d; overflow: hidden; }
@@ -347,7 +347,7 @@ html.spielberg-inversion-active {
   background: rgba(78, 45, 18, .62);
   color: #fff2d6;
   cursor: pointer;
-  font: .52rem var(--font-mono);
+  font: .637rem var(--font-mono);
   letter-spacing: .11em;
 }
 
@@ -358,7 +358,7 @@ html.spielberg-inversion-active {
   border: 1px solid currentColor;
   background: rgba(4, 8, 14, .8);
   color: #ffd181;
-  font: .48rem var(--font-mono);
+  font: .623rem var(--font-mono);
   letter-spacing: .12em;
   pointer-events: none;
   animation: spielbergDirectionHint 1.2s ease-in-out infinite alternate;

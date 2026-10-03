@@ -145,3 +145,29 @@ test("every scene in the topbar film strip has a section with that id", async ()
     assert.match(all, new RegExp(`id="${id}"`), `missing section #${id}`);
   }
 });
+
+test("the moonwalk passage rewards alternating steps and punishes repeats", async () => {
+  const { registerChaseStep, chaseThreatRate, chaseStage, CHASE_STEP_GAIN } = await import("../app/prank-system.mjs");
+  assert.equal(registerChaseStep(null, "left", 0, 100).gain, CHASE_STEP_GAIN);
+  const rhythm = registerChaseStep("left", "right", 1000, 1200);
+  assert.equal(rhythm.rhythm, true);
+  assert.ok(rhythm.gain > CHASE_STEP_GAIN);
+  assert.equal(registerChaseStep("left", "right", 1000, 1600).rhythm, false);
+  const stumble = registerChaseStep("right", "right", 1000, 1100);
+  assert.equal(stumble.stumble, true);
+  assert.equal(stumble.gain, 0);
+  assert.ok(chaseThreatRate(10) > chaseThreatRate(0));
+  assert.ok(chaseThreatRate(999) <= 0.2);
+  assert.equal(chaseStage(0.1), "approach");
+  assert.equal(chaseStage(0.4), "hat");
+  assert.equal(chaseStage(0.7), "head");
+  assert.equal(chaseStage(0.9), "detached");
+  // A steady player (7 alternating steps per second) reaches the door in time.
+  let progress = 0;
+  let threat = 0;
+  for (let ms = 0; ms < 20000 && progress < 100 && threat < 1; ms += 1000 / 7) {
+    progress += registerChaseStep(null, "left", 0, ms).gain;
+    threat += chaseThreatRate(ms / 1000) / 7;
+  }
+  assert.ok(progress >= 100 && threat < 1, "a steady runner escapes");
+});

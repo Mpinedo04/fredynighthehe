@@ -25,7 +25,7 @@
 }
 
 html {
-  scrollbar-color: #2a3346 #05070b;
+  scrollbar-color: #2a3346 var(--ink);
 }
 
 .sr-only {
@@ -52,7 +52,7 @@ html {
   margin-right: 0.55rem;
   padding: 0.18rem 0.42rem;
   border: 1px solid currentColor;
-  font: 700 0.5rem var(--font-mono);
+  font: 700 .63rem var(--font-mono);
   letter-spacing: 0.14em;
   vertical-align: 0.08em;
 }
@@ -184,7 +184,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   transform: translate(-50%, -4px);
   opacity: 0;
   color: #9ba7bc;
-  font: 0.42rem var(--font-mono);
+  font: .602rem var(--font-mono);
   letter-spacing: 0.14em;
   white-space: nowrap;
   transition: opacity 0.25s, transform 0.25s;
@@ -243,7 +243,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   background: none;
   color: #8692a8;
   cursor: pointer;
-  font: 0.56rem var(--font-mono);
+  font: .651rem var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -331,7 +331,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
 .leader-countdown small {
   position: absolute;
   bottom: 2rem;
-  font: 0.55rem var(--font-mono);
+  font: .648rem var(--font-mono);
   letter-spacing: 0.2em;
   opacity: 0.6;
 }
@@ -457,7 +457,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   padding: 0.22rem 0.45rem;
   background: var(--red);
   color: #fff;
-  font: 700 0.42rem var(--font-mono);
+  font: 700 .602rem var(--font-mono);
   letter-spacing: 0.16em;
   animation: nowShowing 1.4s steps(2) infinite;
 }
@@ -511,7 +511,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   background: transparent;
   color: transparent;
   cursor: zoom-in;
-  font: 700 0.55rem var(--font-mono);
+  font: 700 .648rem var(--font-mono);
   letter-spacing: 0.18em;
   transition: background 0.25s, color 0.25s;
 }
@@ -556,7 +556,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   display: grid;
   gap: 0.2rem;
   margin-top: 0.9rem;
-  font: 0.6rem var(--font-mono);
+  font: .665rem var(--font-mono);
   letter-spacing: 0.1em;
 }
 
@@ -572,7 +572,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   background: rgba(8, 10, 16, 0.85);
   color: #fff;
   cursor: pointer;
-  font: 0.68rem var(--font-mono);
+  font: .693rem var(--font-mono);
   letter-spacing: 0.14em;
 }
 
@@ -627,7 +627,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   justify-content: space-between;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  font: 700 0.55rem var(--font-mono);
+  font: 700 .648rem var(--font-mono);
   letter-spacing: 0.14em;
 }
 
@@ -649,7 +649,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr);
   align-items: center;
   gap: 1rem;
-  font: 0.62rem var(--font-mono);
+  font: .672rem var(--font-mono);
   letter-spacing: 0.08em;
 }
 
@@ -683,7 +683,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
 .dossier-leak {
   margin: 1.1rem 0 0;
   color: #8a2a24;
-  font: 700 0.6rem var(--font-mono);
+  font: 700 .665rem var(--font-mono);
   letter-spacing: 0.14em;
   animation: nightLowBlink 1s steps(2) 4;
 }
@@ -762,7 +762,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
 
 .world-tab small {
   color: #7f8ba0;
-  font: 0.46rem var(--font-mono);
+  font: .616rem var(--font-mono);
   letter-spacing: 0.14em;
 }
 
@@ -802,7 +802,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
   transform: scaleX(1);
 }
 
-.world-tab-mj { --tab-accent: #ff3d3d; }
+.world-tab-mj { --tab-accent: var(--red); }
 .world-tab-spielberg {
   --tab-accent: var(--gold);
   background:
@@ -824,7 +824,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
 
 .world-tab-micro small,
 .world-tab-micro .world-tab-number {
-  color: #6b6b6b;
+  color: #4d4d4d;
 }
 
 .world-tab-micro:hover,
@@ -881,7 +881,7 @@ html.reveal-ready [data-reveal="meters"].is-revealed .meter-track i {
 }
 
 .mj-world.on-beat .mj-stage-pulse i {
-  background: #ff3d3d;
+  background: var(--red);
 }
 
 button.mj-moonwalk-track {
@@ -901,7 +901,7 @@ button.mj-moonwalk-track em {
   padding: 0.3rem 0.5rem;
   background: rgba(255, 61, 61, 0.9);
   color: #fff;
-  font: 700 0.42rem var(--font-mono);
+  font: 700 .602rem var(--font-mono);
   font-style: normal;
   letter-spacing: 0.16em;
   opacity: 0;
@@ -940,7 +940,7 @@ button.mj-moonwalk-track:focus-visible em {
   border: 1px solid #4a3a26;
   background: rgba(14, 15, 18, 0.8);
   color: #b89668;
-  font: 0.5rem var(--font-mono);
+  font: .63rem var(--font-mono);
 }
 
 .idol-copy .spielberg-decades button.active {
@@ -1005,8 +1005,8 @@ button.mj-moonwalk-track:focus-visible em {
 .power-readout small {
   display: block;
   margin-top: 0.3rem;
-  color: #5d6b54;
-  font: 0.42rem var(--font-mono);
+  color: #76886a;
+  font: .602rem var(--font-mono);
   letter-spacing: 0.12em;
 }
 
@@ -1029,7 +1029,7 @@ button.mj-moonwalk-track:focus-visible em {
   position: absolute;
   top: 0.2rem;
   right: 0.25rem;
-  font: 0.42rem var(--font-mono);
+  font: .602rem var(--font-mono);
   opacity: 0.6;
 }
 
@@ -1047,7 +1047,7 @@ button.mj-moonwalk-track:focus-visible em {
   background: #f2f0e8;
   color: #080808;
   cursor: pointer;
-  font: 700 0.5rem var(--font-mono);
+  font: 700 .63rem var(--font-mono);
   letter-spacing: 0.1em;
 }
 
@@ -1063,8 +1063,8 @@ button.mj-moonwalk-track:focus-visible em {
   height: 100%;
   min-height: 12rem;
   background: repeating-linear-gradient(0deg, #111 0 2px, #181818 2px 4px);
-  color: #666;
-  font: 0.6rem var(--font-mono);
+  color: #828282;
+  font: .665rem var(--font-mono);
   letter-spacing: 0.2em;
 }
 
@@ -1105,7 +1105,7 @@ button.mj-moonwalk-track:focus-visible em {
 .friends-callsheet {
   margin: 1.4rem 0 0;
   color: #6b6d70;
-  font: 700 0.55rem var(--font-mono);
+  font: 700 .648rem var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -1164,7 +1164,7 @@ button.mj-moonwalk-track:focus-visible em {
   height: 2.2rem;
   border: 2px solid #12151b;
   border-top-width: 0.6rem;
-  border-image: repeating-linear-gradient(-45deg, #12151b 0 6px, #f1eee7 6px 12px) 10;
+  border-image: repeating-linear-gradient(-45deg, #12151b 0 6px, var(--paper) 6px 12px) 10;
 }
 
 .take-pending strong {
@@ -1173,8 +1173,8 @@ button.mj-moonwalk-track:focus-visible em {
 }
 
 .take-pending small {
-  color: #6b6d70;
-  font: 0.5rem var(--font-mono);
+  color: #55575b;
+  font: .63rem var(--font-mono);
   letter-spacing: 0.12em;
 }
 
@@ -1197,7 +1197,7 @@ button.mj-moonwalk-track:focus-visible em {
   gap: 0.4rem;
   max-width: 22rem;
   margin-top: 1.4rem;
-  font: 0.55rem var(--font-mono);
+  font: .648rem var(--font-mono);
   letter-spacing: 0.14em;
   color: #9ba7bc;
 }
@@ -1269,7 +1269,7 @@ button.mj-moonwalk-track:focus-visible em {
   color: #8692a8;
   cursor: pointer;
   padding: 0.55rem 0.8rem;
-  font: 700 0.5rem var(--font-mono);
+  font: 700 .63rem var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -1294,7 +1294,7 @@ button.mj-moonwalk-track:focus-visible em {
 .vhs-rewind b {
   color: #fff;
   font: 4rem var(--font-mono);
-  text-shadow: 3px 0 #ff3d3d, -3px 0 #2d6cff;
+  text-shadow: 3px 0 var(--red), -3px 0 var(--blue);
 }
 
 .vhs-rewind span {
@@ -1329,7 +1329,7 @@ button.mj-moonwalk-track:focus-visible em {
   background: none;
   color: #c9d2e3;
   cursor: pointer;
-  font: 0.52rem var(--font-mono);
+  font: .637rem var(--font-mono);
   letter-spacing: 0.1em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1396,7 +1396,7 @@ button.mj-moonwalk-track:focus-visible em {
 .toast-card small {
   display: block;
   color: var(--toast-accent, #9ba7bc);
-  font: 0.48rem var(--font-mono);
+  font: .623rem var(--font-mono);
   letter-spacing: 0.16em;
 }
 
@@ -1418,7 +1418,7 @@ button.mj-moonwalk-track:focus-visible em {
   align-self: flex-start;
   border: 0;
   background: none;
-  color: #6b778c;
+  color: #788498;
   cursor: pointer;
   font: 1rem var(--font-mono);
 }

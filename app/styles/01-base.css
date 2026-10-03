@@ -152,7 +152,7 @@ button {
   display: block;
   margin-top: 0.12rem;
   color: #71809c;
-  font: 0.43rem var(--font-mono);
+  font: .606rem var(--font-mono);
   letter-spacing: 0.18em;
 }
 
@@ -164,7 +164,7 @@ button {
 .topbar nav a {
   color: #9ba7bc;
   text-decoration: none;
-  font: 0.64rem var(--font-mono);
+  font: .679rem var(--font-mono);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   transition: color 0.2s;
@@ -182,7 +182,7 @@ button {
   background: none;
   color: #9ba7bc;
   cursor: pointer;
-  font: 0.59rem var(--font-mono);
+  font: .662rem var(--font-mono);
   letter-spacing: 0.12em;
 }
 

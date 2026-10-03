@@ -54,7 +54,7 @@
   background: var(--blue);
   color: white;
   cursor: pointer;
-  font: 700 0.68rem var(--font-mono);
+  font: 700 .693rem var(--font-mono);
   letter-spacing: 0.15em;
   box-shadow: 0 0 35px rgba(45, 108, 255, 0.28);
   transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
@@ -69,8 +69,8 @@
 }
 
 .opening-hint {
-  color: #505766;
-  font: 0.56rem var(--font-mono);
+  color: #788195;
+  font: .651rem var(--font-mono);
   letter-spacing: 0.08em;
 }
 
@@ -133,7 +133,7 @@
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, #05070b 0, rgba(5,7,11,.88) 11%, transparent 54%),
+    linear-gradient(90deg, var(--ink) 0, rgba(5,7,11,.88) 11%, transparent 54%),
     linear-gradient(180deg, transparent 52%, rgba(5,7,11,.93)),
     repeating-linear-gradient(0deg, transparent 0 3px, rgba(255,255,255,.035) 3px 4px);
 }
@@ -156,7 +156,7 @@
   justify-content: space-between;
   gap: 1rem;
   color: #8d98aa;
-  font: .42rem var(--font-mono);
+  font: .602rem var(--font-mono);
   letter-spacing: .1em;
 }
 
@@ -168,7 +168,7 @@
 .eyebrow {
   margin: 0 0 1.1rem;
   color: var(--blue-soft);
-  font: 700 0.62rem var(--font-mono);
+  font: 700 .672rem var(--font-mono);
   letter-spacing: 0.19em;
   text-transform: uppercase;
 }
@@ -254,7 +254,7 @@
 }
 
 .ticket-stub span {
-  font: 0.48rem var(--font-mono);
+  font: .623rem var(--font-mono);
 }
 
 .ticket-stub b {
@@ -269,7 +269,7 @@
 
 .ticket-main span,
 .ticket-main p {
-  font: 0.48rem var(--font-mono);
+  font: .623rem var(--font-mono);
   letter-spacing: 0.08em;
 }
 
@@ -293,9 +293,9 @@
   display: flex;
   align-items: center;
   gap: 0.8rem;
-  color: #5f6a7d;
+  color: #778398;
   text-decoration: none;
-  font: 0.52rem var(--font-mono);
+  font: .637rem var(--font-mono);
   letter-spacing: 0.12em;
 }
 

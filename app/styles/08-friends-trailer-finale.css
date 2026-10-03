@@ -65,7 +65,7 @@
 .testimonials p,
 .testimonials span {
   margin: 0;
-  font: 700 .53rem/1.5 var(--font-mono);
+  font: 700 .641rem/1.5 var(--font-mono);
   letter-spacing: .08em;
 }
 
@@ -131,7 +131,7 @@
   display: flex;
   justify-content: space-between;
   color: #7f8a9d;
-  font: .53rem var(--font-mono);
+  font: .641rem var(--font-mono);
   letter-spacing: .12em;
 }
 
@@ -140,7 +140,7 @@
 }
 
 .trailer-title small {
-  font: .58rem var(--font-mono);
+  font: .658rem var(--font-mono);
   letter-spacing: .2em;
 }
 
@@ -250,7 +250,7 @@
 }
 
 .clap-body small {
-  font: .52rem var(--font-mono);
+  font: .637rem var(--font-mono);
 }
 
 .clap-body b {
@@ -269,7 +269,7 @@
   margin-top: 1rem;
   text-align: center;
   color: #555;
-  font: .55rem var(--font-mono);
+  font: .648rem var(--font-mono);
   letter-spacing: .15em;
 }
 
@@ -346,7 +346,7 @@
   display: block;
   margin-bottom: 2rem;
   color: var(--red);
-  font: .68rem var(--font-mono);
+  font: .693rem var(--font-mono);
   letter-spacing: .2em;
 }
 
@@ -395,8 +395,8 @@
 
 .post-credits span,
 .post-credits small {
-  color: #576174;
-  font: .55rem var(--font-mono);
+  color: #78849a;
+  font: .648rem var(--font-mono);
   letter-spacing: .15em;
 }
 
@@ -419,8 +419,8 @@ footer {
   padding: 2rem 7vw;
   border-top: 1px solid var(--line);
   background: #030406;
-  color: #4f596b;
-  font: .48rem var(--font-mono);
+  color: #76839a;
+  font: .623rem var(--font-mono);
   letter-spacing: .1em;
 }
 

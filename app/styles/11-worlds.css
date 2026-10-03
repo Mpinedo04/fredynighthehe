@@ -2,7 +2,7 @@
   background:
     radial-gradient(circle at 20% 28%, rgba(177,20,25,.1), transparent 28rem),
     radial-gradient(circle at 80% 68%, rgba(45,108,255,.11), transparent 30rem),
-    #05070b;
+    var(--ink);
 }
 
 .idol-worlds {
@@ -30,7 +30,7 @@
   padding: 1rem 1.2rem;
   border-bottom: 1px solid rgba(255,255,255,.12);
   color: #9ca7ba;
-  font: .48rem var(--font-mono);
+  font: .623rem var(--font-mono);
   letter-spacing: .12em;
 }
 
@@ -75,7 +75,7 @@
   background: none;
   cursor: pointer;
   color: inherit;
-  font: 700 .55rem var(--font-mono);
+  font: 700 .648rem var(--font-mono);
   letter-spacing: .1em;
   text-decoration: none;
 }
@@ -205,7 +205,7 @@
   padding: .38rem .55rem;
   border: 1px solid #5f1d21;
   color: #df7377;
-  font: .46rem var(--font-mono);
+  font: .616rem var(--font-mono);
   letter-spacing: .09em;
 }
 
@@ -235,8 +235,8 @@
 .nolan-clock > small {
   position: absolute;
   bottom: 3.5rem;
-  color: #60749d;
-  font: .5rem var(--font-mono);
+  color: #6f82a7;
+  font: .63rem var(--font-mono);
   letter-spacing: .2em;
 }
 
@@ -280,7 +280,7 @@
   border: 1px solid rgba(117,156,255,.2);
   color: #6e82ab;
   text-align: center;
-  font: .47rem var(--font-mono);
+  font: .62rem var(--font-mono);
   letter-spacing: .16em;
 }
 
@@ -353,7 +353,7 @@
   justify-content: space-between;
   gap: .8rem;
   color: #a5b3a3;
-  font: .47rem var(--font-mono);
+  font: .62rem var(--font-mono);
   letter-spacing: .08em;
 }
 
@@ -370,7 +370,7 @@
   display: flex;
   justify-content: space-between;
   color: rgba(186,204,184,.45);
-  font: .36rem var(--font-mono);
+  font: .581rem var(--font-mono);
   letter-spacing: .09em;
 }
 
@@ -453,7 +453,7 @@
   border: .18rem solid #090a09;
   background: #36372f;
   color: #9ea697;
-  font: 700 .42rem var(--font-mono);
+  font: 700 .602rem var(--font-mono);
   transform: rotate(-4deg);
 }
 
@@ -484,7 +484,7 @@
   border: .3rem solid #252b26;
   background: linear-gradient(90deg, #101411, #20251f 48% 52%, #101411);
   color: #788176;
-  font: .34rem var(--font-mono);
+  font: .574rem var(--font-mono);
 }
 
 .party-pennants {
@@ -553,7 +553,7 @@
   background: #171b17;
   color: #7f887c;
   text-align: center;
-  font: .32rem var(--font-mono);
+  font: .567rem var(--font-mono);
 }
 
 .party-table {
@@ -689,7 +689,7 @@
   right: 1.2rem;
   bottom: .6rem;
   color: #9aa399;
-  font: .52rem/1.5 var(--font-mono);
+  font: .637rem/1.5 var(--font-mono);
 }
 
 .camera-evidence-strip {
@@ -705,7 +705,7 @@
   border-left: 2px solid #8c9a88;
   background: rgba(2,5,3,.76);
   color: #9ca998;
-  font: .38rem var(--font-mono);
+  font: .588rem var(--font-mono);
   letter-spacing: .06em;
   backdrop-filter: blur(3px);
 }
@@ -859,7 +859,7 @@
   border: 1px solid var(--red);
   background: #210708;
   color: #e5b6b6;
-  font: .35rem var(--font-mono);
+  font: .578rem var(--font-mono);
 }
 
 .map-wire {
@@ -900,7 +900,7 @@
 .camera-map span,
 .camera-map small {
   display: block;
-  font: .5rem var(--font-mono);
+  font: .63rem var(--font-mono);
 }
 
 .camera-map small {
@@ -910,7 +910,7 @@
 
 .power-readout {
   color: #849080;
-  font: .47rem var(--font-mono);
+  font: .62rem var(--font-mono);
 }
 
 .power-readout > div {
@@ -965,11 +965,11 @@
 
 .tuning-readout span,
 .tuning-readout b {
-  font: .53rem var(--font-mono);
+  font: .641rem var(--font-mono);
 }
 
 .tuning-readout span {
-  color: #5e6e8e;
+  color: #7382a2;
 }
 
 .tuning-readout b {
@@ -1036,7 +1036,7 @@
 .micro-keys span,
 .micro-keys small {
   display: block;
-  font: .48rem var(--font-mono);
+  font: .623rem var(--font-mono);
 }
 
 .micro-keys small {
@@ -1046,9 +1046,9 @@
 
 .micro-sequencer > p {
   margin: 1rem 0 0;
-  color: #52617e;
+  color: #7384a4;
   text-align: center;
-  font: .45rem var(--font-mono);
+  font: .613rem var(--font-mono);
   letter-spacing: .1em;
 }
 
@@ -1102,7 +1102,7 @@
 .mj-stage figcaption span,
 .mj-stage figcaption a {
   color: #ccd0d8;
-  font: .43rem var(--font-mono);
+  font: .606rem var(--font-mono);
   letter-spacing: .08em;
 }
 
@@ -1170,7 +1170,7 @@
   grid-template-columns: repeat(4, 1fr);
   border-top: 1px solid rgba(255,255,255,.28);
   color: rgba(255,255,255,.58);
-  font: .36rem var(--font-mono);
+  font: .581rem var(--font-mono);
 }
 
 .mj-moonwalk-track span {
@@ -1202,7 +1202,7 @@
   padding: .65rem .45rem;
   border: 1px solid #4b2023;
   background: #0e0809;
-  color: #8c5a5d;
+  color: #a57477;
   text-align: left;
 }
 
@@ -1223,12 +1223,12 @@
 
 .mj-era-selector span {
   margin-bottom: .32rem;
-  color: #c7484f;
-  font: .4rem var(--font-mono);
+  color: #ce5f66;
+  font: .595rem var(--font-mono);
 }
 
 .mj-era-selector strong {
-  font: .45rem var(--font-mono);
+  font: .613rem var(--font-mono);
   white-space: nowrap;
 }
 
@@ -1253,8 +1253,8 @@
 }
 
 .mj-era-console > span {
-  color: #764448;
-  font-size: .4rem;
+  color: #ae7277;
+  font-size: .595rem;
   letter-spacing: .12em;
 }
 
@@ -1271,7 +1271,7 @@
   max-width: 31rem;
   margin: 0;
   color: #a99396;
-  font: .63rem/1.55 var(--font-mono);
+  font: .675rem/1.55 var(--font-mono);
 }
 
 .mj-era-console > div {
@@ -1390,11 +1390,11 @@
 
 .nolan-film-strip button span {
   color: #7897d3;
-  font-size: .43rem;
+  font-size: .606rem;
 }
 
 .nolan-film-strip button strong {
-  font-size: .48rem;
+  font-size: .623rem;
 }
 
 .nolan-film-readout {
@@ -1417,8 +1417,8 @@
 
 .nolan-film-readout span {
   grid-column: 1 / -1;
-  color: #5d7199;
-  font-size: .4rem;
+  color: #7184a9;
+  font-size: .595rem;
   letter-spacing: .12em;
 }
 
@@ -1430,7 +1430,7 @@
 
 .nolan-film-readout small {
   color: #7799da;
-  font-size: .43rem;
+  font-size: .606rem;
 }
 
 .nolan-method {
@@ -1452,16 +1452,16 @@
 
 .nolan-method li > span,
 .nolan-method li > strong {
-  font: .47rem var(--font-mono);
+  font: .62rem var(--font-mono);
 }
 
-.nolan-method li > span { color: #5573ad; }
+.nolan-method li > span { color: #6681b5; }
 .nolan-method li > strong { color: #a7bee8; letter-spacing: .12em; }
 
 .nolan-method li > p {
   margin: 0;
   color: #71809b;
-  font: .57rem/1.5 var(--font-mono);
+  font: .655rem/1.5 var(--font-mono);
 }
 
 @keyframes mjMeter {
@@ -1519,15 +1519,15 @@
 
 .scream-heading span,
 .scream-heading small {
-  color: #6f796d;
-  font-size: .46rem;
+  color: #798477;
+  font-size: .616rem;
   letter-spacing: .1em;
 }
 
 .scream-heading strong {
   margin-top: .25rem;
   color: #c7d2c3;
-  font-size: .65rem;
+  font-size: .683rem;
   letter-spacing: .08em;
 }
 
@@ -1597,8 +1597,8 @@
 }
 
 .scream-grid button > span:nth-child(2) small {
-  color: #5e685c;
-  font: .42rem var(--font-mono);
+  color: #798676;
+  font: .602rem var(--font-mono);
 }
 
 .scream-grid button > span:nth-child(2) strong {
@@ -1610,14 +1610,14 @@
   display: block;
   margin-top: .3rem;
   color: #768671;
-  font: .34rem var(--font-mono);
+  font: .574rem var(--font-mono);
   font-style: normal;
   letter-spacing: .06em;
 }
 
 .scream-grid em {
-  color: #667064;
-  font: .4rem var(--font-mono);
+  color: #7a8677;
+  font: .595rem var(--font-mono);
   font-style: normal;
 }
 
@@ -1648,7 +1648,7 @@
 .fnaf-game-locked small {
   flex-basis: 100%;
   color: #7c8879;
-  font: .4rem var(--font-mono);
+  font: .595rem var(--font-mono);
   letter-spacing: .13em;
 }
 
@@ -1661,7 +1661,7 @@
 
 .fnaf-game-locked {
   border-color: #2d312b !important;
-  color: #596057 !important;
+  color: #7c8579 !important;
   cursor: not-allowed !important;
   opacity: .72;
 }
@@ -1720,21 +1720,21 @@
 }
 
 .micro-tracklist > div span {
-  color: #5872a5;
-  font-size: .45rem;
+  color: #6b83b0;
+  font-size: .613rem;
   letter-spacing: .1em;
 }
 
 .micro-tracklist > div strong {
   margin-top: .3rem;
   color: #bdcbed;
-  font-size: .65rem;
+  font-size: .683rem;
 }
 
 .micro-tracklist > div p {
   margin: .7rem 0 0;
-  color: #66738e;
-  font-size: .66rem;
+  color: #76839d;
+  font-size: .686rem;
   line-height: 1.55;
 }
 
@@ -1760,7 +1760,7 @@
 }
 
 .micro-tracklist > button > span:first-child {
-  color: #49679d;
+  color: #6683b8;
   font: 1.3rem var(--font-display);
 }
 
@@ -1770,14 +1770,14 @@
 }
 
 .micro-tracklist button strong {
-  font: .68rem var(--font-mono);
+  font: .693rem var(--font-mono);
 }
 
 .micro-tracklist button small,
 .micro-tracklist button em {
   margin-top: .22rem;
-  color: #53617a;
-  font: .42rem var(--font-mono);
+  color: #7484a0;
+  font: .602rem var(--font-mono);
   font-style: normal;
 }
 

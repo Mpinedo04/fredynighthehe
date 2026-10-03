@@ -15,7 +15,7 @@
   left: 4rem;
   padding: .9rem 2rem;
   background: #b5ae9e;
-  font: 700 .6rem var(--font-mono);
+  font: 700 .665rem var(--font-mono);
   letter-spacing: .12em;
 }
 
@@ -30,7 +30,7 @@
 
 .dossier-header p {
   margin: 0 0 .7rem;
-  font: 700 .55rem var(--font-mono);
+  font: 700 .648rem var(--font-mono);
   letter-spacing: .14em;
 }
 
@@ -89,7 +89,7 @@
   justify-content: space-between;
   gap: .7rem;
   color: #252a32;
-  font: 700 .45rem var(--font-mono);
+  font: 700 .613rem var(--font-mono);
   letter-spacing: .08em;
 }
 
@@ -117,7 +117,7 @@
 }
 
 .identity-file dt {
-  font: 700 .52rem var(--font-mono);
+  font: 700 .637rem var(--font-mono);
   letter-spacing: .08em;
 }
 
@@ -145,7 +145,7 @@
   display: flex;
   justify-content: space-between;
   margin-bottom: .5rem;
-  font: 700 .62rem var(--font-mono);
+  font: 700 .672rem var(--font-mono);
 }
 
 .meter-track {
@@ -165,7 +165,7 @@
   gap: 1rem;
   padding: .7rem 0;
   border-top: 1px solid rgba(17,21,27,.2);
-  font: .52rem/1.4 var(--font-mono);
+  font: .637rem/1.4 var(--font-mono);
 }
 
 .not-found b {

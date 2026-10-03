@@ -724,3 +724,30 @@ export function decideEnemyState(stimulus: EnemyStimulus): EnemyState {
   if (stimulus.lastSeenAgeMs < 9000) return "recover";
   return "patrol";
 }
+
+/**
+ * Picks well-spread, reachable cells for the tapes that do not collide with
+ * the start, the exit, Subject M's spawn or any cell already in use.
+ */
+export function chooseTapeCells(
+  maze: MazeCell[],
+  seed: number,
+  used: number[],
+  count = 5,
+  size = MAZE_SIZE,
+) {
+  const blocked = new Set(used);
+  const distances = mazeDistances(maze, 0, size);
+  const result: number[] = [];
+  const candidates = chooseSpreadCells(maze, seed ^ 0x7a9e, count * 4, size);
+  for (const cell of candidates) {
+    if (result.length >= count) break;
+    if (blocked.has(cell) || result.includes(cell) || distances[cell] < 3) continue;
+    result.push(cell);
+  }
+  // Fallback: walk outwards from the start if the spread ran short.
+  for (let cell = 0; result.length < count && cell < maze.length; cell += 1) {
+    if (!blocked.has(cell) && !result.includes(cell) && distances[cell] >= 3) result.push(cell);
+  }
+  return result;
+}
