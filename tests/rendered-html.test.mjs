@@ -48,6 +48,10 @@ test("server-renders the Premiere 22 home route", async () => {
   assert.match(html, /Live on KEXP/i);
   assert.match(html, /Material recuperado/i);
   assert.match(html, /producci(?:ó|Ã³)n real/i);
+  assert.match(html, /Mary On A Cross/i);
+  assert.match(html, /PROGRAMA DE MANO/i);
+  assert.match(html, /SESI(?:Ó|Ã“)N GOLFA/i);
+  assert.doesNotMatch(html, /TOMA PENDIENTE/i);
   assert.doesNotMatch(html, /Your site is taking shape/i);
 });
 

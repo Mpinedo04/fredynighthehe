@@ -35,6 +35,10 @@ function SpielbergWorld() {
   };
 
   const decades = Array.from(new Set(spielbergFilms.map((item) => `${item.year.slice(0, 3)}0`)));
+  const clueTitles = new Set(["CLOSE ENCOUNTERS", "JURASSIC PARK", "E.T."]);
+  const clueIndices = spielbergFilms
+    .map((item, idx) => (clueTitles.has(item.title) ? idx : -1))
+    .filter((idx) => idx >= 0);
 
   return (
     <article className="idol-card spielberg-world">
@@ -72,6 +76,17 @@ function SpielbergWorld() {
               {decade.slice(2)}s
             </button>
           ))}
+          <button
+            type="button"
+            className={`spielberg-clue-jump ${clueTitles.has(current.title) ? "active" : ""}`}
+            onClick={() => {
+              const nextClue = clueIndices.find((idx) => idx > film) ?? clueIndices[0];
+              if (nextClue !== undefined) setFilm(nextClue);
+            }}
+            title="Saltar a películas con pistas ocultas"
+          >
+            ✦ PISTAS
+          </button>
         </div>
         <div className="spielberg-carousel">
           <button type="button" className="spielberg-nav" onClick={() => move(-1)} aria-label="Película anterior" disabled={film === 0}>←</button>
@@ -89,11 +104,11 @@ function SpielbergWorld() {
                 }}
                 aria-current={film === index ? "true" : undefined}
                 tabIndex={film === index ? 0 : -1}
-                className={film === index ? "active" : ""}
+                className={`${film === index ? "active" : ""} ${clueTitles.has(item.title) ? "has-clue" : ""}`}
                 onClick={() => setFilm(index)}
                 key={item.title}
               >
-                <span>{item.year}</span>
+                <span>{item.year}{clueTitles.has(item.title) ? " ✦" : ""}</span>
                 <strong>{item.title}</strong>
               </button>
             ))}
@@ -113,7 +128,7 @@ function SpielbergWorld() {
             <em className="spielberg-hint">Cuando el vaso de agua de la esquina tiemble, algo se acerca.</em>
           )}
           {current.title === "E.T." && (
-            <em className="spielberg-hint">Pasa el cursor por las fotos de los amigos.</em>
+            <em className="spielberg-hint">Vuelve a mirar las fotos de Detrás de las Cámaras después de bajar.</em>
           )}
         </div>
         <ol className="spielberg-method" aria-label="Método cinematográfico de Steven Spielberg">

@@ -67,65 +67,6 @@ export const credits = [
   },
 ] as const;
 
-/**
- * TESTIMONIOS DEL REPARTO · cómo rellenarlos
- * ------------------------------------------
- * Cambia `name` por el nombre real, escribe la frase en `quote` y pon
- * `pending: false`. Mientras `pending` sea true, la ficha se muestra como
- * «TOMA PENDIENTE» con una claqueta, sin frases de relleno a la vista.
- * Las fotos viven en /public/archive (puedes sustituirlas por otras).
- */
-export type FriendTestimonial = {
-  number: string;
-  name: string;
-  role: string;
-  quote: string;
-  image: string;
-  alt: string;
-  pending: boolean;
-};
-
-export const friendTestimonials: FriendTestimonial[] = [
-  {
-    number: "01",
-    name: "NOMBRE DEL AMIGO 01",
-    role: "AYUDANTE DE DIRECCIÓN EMOCIONAL",
-    quote:
-      "Aquí irá ese mensaje que consigue hacerte reír y emocionarte en la misma frase.",
-    image: "/archive/friends-01.webp",
-    alt: "Raúl conversando con su equipo durante un evento",
-    pending: true,
-  },
-  {
-    number: "02",
-    name: "NOMBRE DEL AMIGO 02",
-    role: "PRODUCTOR DE MOMENTOS ABSURDOS",
-    quote:
-      "Testigo oficial de ideas que empezaron como una broma y terminaron teniendo créditos.",
-    image: "/archive/friends-02.webp",
-    alt: "Raúl y su equipo en un festival de cortometrajes",
-    pending: true,
-  },
-  {
-    number: "03",
-    name: "NOMBRE DEL AMIGO 03",
-    role: "TÉCNICO DE RECUERDOS",
-    quote: "Responsable de conservar las tomas que nunca deberían borrarse.",
-    image: "/archive/friends-03.webp",
-    alt: "Equipo de Raúl celebrando junto en un parque",
-    pending: true,
-  },
-  {
-    number: "04",
-    name: "NOMBRE DEL AMIGO 04",
-    role: "AMIGO RECURRENTE",
-    quote: "Presente desde la primera temporada. Renovado indefinidamente.",
-    image: "/archive/friends-04.webp",
-    alt: "Rodaje de una escena en una cocina",
-    pending: true,
-  },
-];
-
 export const projects = [
   {
     title: "EL PAN TA’ DURO",
@@ -618,15 +559,51 @@ export const heeMultiplierForDepth = (depth: number) => {
 
 /** The film strip in the topbar: one frame per scene of the premiere. */
 export const scenes = [
-  { id: "premiere", number: "01", label: "PREMIERE" },
-  { id: "reparto", number: "02", label: "REPARTO" },
-  { id: "filmografia", number: "03", label: "VIDEOTECA" },
-  { id: "detras", number: "04", label: "DETRÁS" },
-  { id: "expediente", number: "05", label: "EXPEDIENTE" },
-  { id: "referentes", number: "06", label: "REFERENTES" },
-  { id: "amigos", number: "07", label: "AMIGOS" },
-  { id: "escena-22", number: "08", label: "CORTE 22" },
-  { id: "final", number: "09", label: "FINAL" },
+  { id: "premiere", number: "01", label: "PREMIERE", act: 1 },
+  { id: "reparto", number: "02", label: "REPARTO", act: 1 },
+  { id: "filmografia", number: "03", label: "VIDEOTECA", act: 1 },
+  { id: "detras", number: "04", label: "DETRÁS", act: 1 },
+  { id: "expediente", number: "05", label: "EXPEDIENTE", act: 1 },
+  { id: "referentes", number: "06", label: "MULTIVERSO", act: 2 },
+  { id: "ghost", number: "07", label: "GHOST", act: 2 },
+  { id: "juegos", number: "08", label: "JUEGOS", act: 3 },
+  { id: "final", number: "09", label: "FINAL", act: 4 },
+] as const;
+
+/** The 4 clear acts shown in the Premiere Program and Topbar navigation. */
+export const premiereActs = [
+  {
+    number: "ACTO I",
+    id: "reparto",
+    href: "#reparto",
+    title: "EL DIRECTOR",
+    subtitle: "Reparto, 7 vídeos de @Raaulinhoo, rodajes y el Expediente RG-22.",
+    tag: "HOMENAJE · ARCHIVO",
+  },
+  {
+    number: "ACTO II",
+    id: "referentes",
+    href: "#referentes",
+    title: "MULTIVERSO & GHOST",
+    subtitle: "MJ, Spielberg, Five Nights, 24 TET y la catedral de Ghost (Mary On A Cross).",
+    tag: "5 OBSESIONES · INTERACTIVO",
+  },
+  {
+    number: "ACTO III",
+    id: "juegos",
+    href: "#juegos",
+    title: "SESIÓN GOLFA · JUEGOS",
+    subtitle: "Montaje Corte 22, Huida en Moonwalk 3D, Lab 24 TET y M00NW4LK.EXE.",
+    tag: "2 JUEGOS 3D · PLATO FUERTE",
+  },
+  {
+    number: "ACTO IV",
+    id: "final",
+    href: "#final",
+    title: "TU ESCENA 22",
+    subtitle: "Claqueta de rodaje, mensaje de cumpleaños, 24 TET y Diploma del Hee-Hee.",
+    tag: "CLÍMAX · POSTCRÉDITOS",
+  },
 ] as const;
 
 export type WorldId = "mj" | "spielberg" | "fnaf" | "micro";
@@ -644,10 +621,102 @@ export const worlds: ReadonlyArray<{
   { id: "micro", number: "04", title: "24 TET", subtitle: "ANGINE DE POITRINE" },
 ];
 
+/** Ghost (The Clergy) — eras, official tracks and ritual candles. */
+export const ghostEras = [
+  {
+    year: "1969",
+    papa: "PAPA NIHIL",
+    album: "SEVEN INCHES OF SATANIC PANIC",
+    anthem: "MARY ON A CROSS · KISS THE GO-GOAT",
+    detail:
+      "El mito del single perdido de 1969: psicodelia pop, órgano hipnótico y un estribillo que se queda grabado para siempre.",
+  },
+  {
+    year: "2010",
+    papa: "PAPA EMERITUS I",
+    album: "OPUS EPONYMOUS",
+    anthem: "RITUAL · CON CLAVI CON DIO",
+    detail:
+      "El nacimiento del Clero: riffs clásicos de los 70, órgano litúrgico y la idea de convertir un concierto en una misa teatral.",
+  },
+  {
+    year: "2013",
+    papa: "PAPA EMERITUS II",
+    album: "INFESTISSUMAM",
+    anthem: "YEAR ZERO · MONSTRANCE CLOCK",
+    detail:
+      "Coros monumentales, escala operística y solemnidad oscura hecha para llenar catedrales de humo y focos.",
+  },
+  {
+    year: "2015",
+    papa: "PAPA EMERITUS III",
+    album: "MELIORA · POPESTAR",
+    anthem: "SQUARE HAMMER · CIRICE",
+    detail:
+      "Precisión de relojería, arquitectura art-déco y estribillos gigantescos: el equilibrio perfecto entre teatro y rock.",
+  },
+  {
+    year: "2018",
+    papa: "CARDINAL COPIA",
+    album: "PREQUELLE",
+    anthem: "DANCE MACABRE · RATS",
+    detail:
+      "Baile macabro, humor teatral y melodías ochenteras que te hacen sonreír en medio del apocalipsis.",
+  },
+  {
+    year: "2022",
+    papa: "PAPA EMERITUS IV",
+    album: "IMPERA",
+    anthem: "SPILLWAYS · CALL ME LITTLE SUNSHINE",
+    detail:
+      "Rock de estadios con alma de película clásica: grandeza, nostalgia y puro espectáculo en escena.",
+  },
+] as const;
+
+export const ghostTracks = [
+  {
+    code: "SIDE B · 1969",
+    title: "Mary On A Cross",
+    subtitle: "Seven Inches of Satanic Panic · Official Audio",
+    videoId: "k5mX3NkA7jM",
+    note: "YOUR BEAUTY NEVER EVER SCARED ME",
+  },
+  {
+    code: "LIVE · 2022",
+    title: "Mary On A Cross (Live in Tampa)",
+    subtitle: "Ritual en directo · Imperatour",
+    videoId: "g4_IK4z9y0c",
+    note: "CORO DE ESTADIO",
+  },
+  {
+    code: "POPESTAR · 2016",
+    title: "Square Hammer",
+    subtitle: "Official Music Video · cine expresionista",
+    videoId: "VqbdgghoWnM",
+    note: "ARE YOU ON THE SQUARE?",
+  },
+  {
+    code: "PREQUELLE · 2018",
+    title: "Dance Macabre",
+    subtitle: "Official Music Video · fiesta gótica",
+    videoId: "7Gr63DiEUxw",
+    note: "JUST WANNA BE WITH YOU IN THE MOONLIGHT",
+  },
+] as const;
+
+export const ghostCandles = [
+  { label: "I", note: "1969", freq: 293.66 },
+  { label: "II", note: "MARY", freq: 329.63 },
+  { label: "III", note: "CROSS", freq: 349.23 },
+  { label: "IV", note: "SQUARE", freq: 440.0 },
+  { label: "V", note: "RITUAL 22", freq: 523.25 },
+] as const;
+
 /** Redacted lines of the dossier: click the black bar to declassify. */
 export const dossierRedactions = [
   { label: "TOMAS NECESARIAS PARA DARLA POR BUENA", secret: "Una más. Siempre una más." },
   { label: "HORAS DE SUEÑO EN SEMANA DE RODAJE", secret: "Dato no recuperable." },
   { label: "PELÍCULA QUE LE HACE LLORAR", secret: "Todas las de Spielberg. Lo niega." },
+  { label: "CANCIÓN QUE CANTA A GRITO PELADO", secret: "Mary On A Cross (versión 1969, con falsete de Papa Nihil)." },
   { label: "CONTRASEÑA DEL DISCO DURO", secret: "hee-hee (no se lo digas)." },
 ] as const;

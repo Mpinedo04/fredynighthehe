@@ -19,7 +19,7 @@ import {
 } from "../prank-system.mjs";
 import { playHeeVoice } from "../audio/engine";
 import { showToast } from "../ui/Toasts";
-import { playGlassBreak, playShipTones, playThud } from "./audio";
+import { playGhostRitualChord, playGlassBreak, playShipTones, playThud } from "./audio";
 import {
   qaSpeed,
   readStorage,
@@ -42,10 +42,10 @@ type Note = { title: string; body: string; image?: string; tone?: "red" | "blue"
 type ConfettiPiece = { id: number; left: number; delay: number; hue: number; spin: number; glyph: string };
 type Crack = { x: number; y: number; id: number };
 
-const IDLE_MS = 20_000;
-const HEAT_MS = 35_000;
+const IDLE_MS = 45_000;
+const HEAT_MS = 55_000;
 const FLASHLIGHT_RELIGHT_MS = 6_000;
-const HAUNTED_PHOTOS = [0, 3];
+const HAUNTED_PHOTOS = [1, 3];
 const HAUNT_IMAGES = ["/animatronics/velvet-r.webp", "/animatronics/avis-3.webp"];
 
 function reducedMotion() {
@@ -84,6 +84,7 @@ export default function HauntedExtras({
   const [ship, setShip] = useState<number[] | null>(null);
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([]);
   const [freddyEyes, setFreddyEyes] = useState(false);
+  const [ghostVision, setGhostVision] = useState<string | null>(null);
   const [breadHits, setBreadHits] = useState(0);
   const [breadShake, setBreadShake] = useState(0);
   const [crack, setCrack] = useState<Crack | null>(null);
@@ -242,10 +243,10 @@ export default function HauntedExtras({
   // ── Photos that change when you look again ───────────────────────────────
   useEffect(() => {
     if (!started) return;
-    const articles = Array.from(document.querySelectorAll<HTMLElement>(".testimonials article"));
-    const targets = HAUNTED_PHOTOS.map((index) =>
-      articles[index]?.querySelector<HTMLElement>(".avatar-placeholder"),
-    ).filter((element): element is HTMLElement => Boolean(element));
+    const frames = Array.from(document.querySelectorAll<HTMLElement>(".contact-sheet .production-frame"));
+    const targets = HAUNTED_PHOTOS.map((index) => frames[index]).filter(
+      (element): element is HTMLElement => Boolean(element),
+    );
     const state = new Map<Element, { phase: "unseen" | "seen" | "armed" | "done"; since: number; image: string }>();
     targets.forEach((target, index) =>
       state.set(target, { phase: "unseen", since: 0, image: HAUNT_IMAGES[index % HAUNT_IMAGES.length] }),
@@ -399,6 +400,15 @@ export default function HauntedExtras({
         setFreddyEyes(true);
         later(() => setFreddyEyes(false), 1900);
         unlock("wordFreddy");
+      } else if (word === "ghost" || word === "mary") {
+        playGhostRitualChord();
+        setGhostVision(
+          word === "mary"
+            ? "YOU GO DOWN JUST LIKE HOLY MARY · MARY ON A CROSS"
+            : "IF YOU HAVE GHOSTS, YOU HAVE EVERYTHING · RITUAL 22",
+        );
+        later(() => setGhostVision(null), 4200);
+        unlock("wordGhost");
       } else if (word === "22") {
         const pieces = Array.from({ length: 96 }, (_, index) => ({
           id: Date.now() + index,
@@ -473,7 +483,12 @@ export default function HauntedExtras({
       }
       const viewport = window.innerHeight;
       const dominant = Array.from(document.querySelectorAll<HTMLElement>("main.experience > section"))
-        .filter((section) => !section.classList.contains("cold-open"))
+        .filter(
+          (section) =>
+            !section.classList.contains("cold-open") &&
+            !section.classList.contains("final-message") &&
+            section.id !== "final",
+        )
         .find((section) => {
           const rect = section.getBoundingClientRect();
           const visible = Math.min(rect.bottom, viewport) - Math.max(rect.top, 0);
@@ -613,6 +628,15 @@ export default function HauntedExtras({
         <div className="freddy-laugh" aria-hidden="true">
           <i /><i />
           <span>HAR HAR HAR</span>
+        </div>
+      )}
+
+      {ghostVision && (
+        <div className="ghost-secret-vision" role="status" data-hee-control>
+          <div className="ghost-vision-glass" aria-hidden="true" />
+          <small>THE CLERGY · SEVEN INCHES · 1969</small>
+          <strong>{ghostVision}</strong>
+          <span>FELIZ CUMPLEAÑOS, RAÚL · PAPA EMERITUS XXII</span>
         </div>
       )}
 

@@ -1,3 +1,11 @@
+export type AchievementCategoryId = "hee" | "night" | "ghost" | "gags";
+
+export interface AchievementCategory {
+  id: AchievementCategoryId;
+  label: string;
+  hint: string;
+}
+
 export type AchievementId =
   | "mute5"
   | "director"
@@ -21,16 +29,21 @@ export type AchievementId =
   | "wordHehe"
   | "wordAnnie"
   | "wordFreddy"
+  | "wordGhost"
   | "word22"
   | "welcomeBack"
   | "moonwalk"
   | "declassified"
   | "walkEscape"
   | "walkDirectorsCut"
-  | "walkCaught";
+  | "walkCaught"
+  | "walkGhostRelic"
+  | "ghostRitual"
+  | "squareHammer";
 
 export interface Achievement {
   id: AchievementId;
+  category: AchievementCategoryId;
   title: string;
   detail: string;
 }
@@ -40,7 +53,7 @@ export interface AchievementStateV1 {
   unlocked: AchievementId[];
 }
 
-export type SecretWord = "hehe" | "annie" | "freddy" | "22";
+export type SecretWord = "hehe" | "annie" | "freddy" | "ghost" | "mary" | "22";
 export type DirectorCommand = "cut" | "action";
 
 export interface BirthdayNote {
@@ -53,6 +66,7 @@ export interface BirthdayNote {
 export const ACHIEVEMENT_STORAGE_KEY: string;
 export const HEE_COUNT_STORAGE_KEY: string;
 export const VISIT_STORAGE_KEY: string;
+export const ACHIEVEMENT_CATEGORIES: AchievementCategory[];
 export const ACHIEVEMENTS: Achievement[];
 export const ACHIEVEMENT_IDS: AchievementId[];
 export function achievementById(id: string): Achievement | null;
@@ -67,6 +81,8 @@ export function parseHeeCount(serialized: string | null): number;
 export function heePlaybackRate(depth: number, index?: number): number;
 export const TAKE_REASONS: string[];
 export const FINAL_TAKE: number;
+export const CLAPPER_SEQUENCE: number[];
+export function nextClapperTake(currentTake: number): number;
 export function takeReason(take: number): string | null;
 export const NIGHT_MS_PER_HOUR: number;
 export const POWER_FULL_DRAIN_MS: number;

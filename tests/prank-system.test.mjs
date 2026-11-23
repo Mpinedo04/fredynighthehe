@@ -62,6 +62,8 @@ test("secret words match the end of the typed buffer", () => {
   assert.equal(matchSecretWord("xxHeHe"), "hehe");
   assert.equal(matchSecretWord("hola annie"), "annie");
   assert.equal(matchSecretWord("freddy"), "freddy");
+  assert.equal(matchSecretWord("papa ghost"), "ghost");
+  assert.equal(matchSecretWord("holy mary"), "mary");
   assert.equal(matchSecretWord("toma 22"), "22");
   assert.equal(matchSecretWord("hehe "), null);
 });

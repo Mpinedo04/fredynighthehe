@@ -46,17 +46,21 @@ function Finale({
       <section className={clapped ? "clapper clapped" : "clapper"} id="final">
         <div className="clapper-copy" data-reveal>
           <p className="eyebrow">
-            <span className="scene-chip">ESC 09</span> ÚLTIMA ESCENA / PRIMERA TOMA
+            <span className="scene-chip">ESC 09 · ACTO IV</span> ÚLTIMA ESCENA / PRIMERA TOMA
           </p>
           <h2>Todo preparado.<br />Solo falta cerrar la claqueta.</h2>
           <p>
-            Un gesto para terminar esta proyección y desbloquear el comienzo de
-            la escena 22. Bueno, un gesto… o los que hagan falta.
+            Un gesto para terminar esta proyección y desbloquear tu mensaje de la
+            escena 22. Bueno, un gesto… o varias tomas hasta que el director la dé
+            por buena.
           </p>
-          {!clapped && take > 1 && (
+          {!clapped && (
             <div className="take-meter" aria-hidden="true">
-              <span>TOMA {String(take).padStart(2, "0")} / {FINAL_TAKE}</span>
-              <i><b style={{ width: `${((take - 1) / (FINAL_TAKE - 1)) * 100}%` }} /></i>
+              <span>
+                TOMA {String(take).padStart(2, "0")} / {FINAL_TAKE}
+                {take === 1 ? " · PULSA LA CLAQUETA" : " · SIGUE RODANDO"}
+              </span>
+              <i><b style={{ width: `${Math.max(5, ((take - 1) / (FINAL_TAKE - 1)) * 100)}%` }} /></i>
             </div>
           )}
         </div>

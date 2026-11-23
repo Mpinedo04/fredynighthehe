@@ -44,6 +44,7 @@ export default function EndCredits({
     ["COREOGRAFÍA", "MOONWALK HACIA ATRÁS, COMO EL MONTAJE"],
     ["AFINACIÓN", "ANGINE DE POITRINE · NINGUNA NOTA EN SU SITIO"],
     ["EFECTOS ESPECIALES", "STEVEN SPIELBERG (NO HA CONFIRMADO)"],
+    ["RITUAL DEL CLERO", "GHOST · MARY ON A CROSS (1969)"],
     ["SEGURIDAD NOCTURNA", "RAÚL · DE 12 AM A 6 AM"],
     ["PANADERÍA", "EL PAN TA' DURO S.L."],
     ["CLIMATIZACIÓN", "¿QUÉ CALOREH? · VENTILADOR DE OFICINA"],
@@ -174,6 +175,7 @@ export default function EndCredits({
           <div className="hee-diploma-signatures">
             <span>FIRMADO: M. J.</span>
             <span>SELLO: F. FAZBEAR</span>
+            <span>BENDICIÓN: PAPA EMERITUS XXII</span>
           </div>
         </div>
       </div>
