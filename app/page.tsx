@@ -20,6 +20,7 @@ import {
   FINAL_TAKE,
   HEE_COUNT_STORAGE_KEY,
   heePlaybackRate,
+  nextClapperTake,
   parseHeeCount,
   takeReason,
 } from "./prank-system.mjs";
@@ -35,24 +36,42 @@ import {
   unlock,
   writeStorage,
 } from "./pranks/bus";
+import ArcadeHub from "./sections/ArcadeHub";
 import Behind from "./sections/Behind";
 import ColdOpen from "./sections/ColdOpen";
 import Dossier from "./sections/Dossier";
 import Filmography from "./sections/Filmography";
 import Finale from "./sections/Finale";
-import Friends from "./sections/Friends";
+import GhostSection from "./sections/GhostSection";
 import Hero from "./sections/Hero";
 import Portrait from "./sections/Portrait";
+import PremiereMap from "./sections/PremiereMap";
 import ReferenceRoom from "./sections/ReferenceRoom";
 import SiteFooter from "./sections/SiteFooter";
-import TrailerTeaser from "./sections/TrailerTeaser";
 import ToastStack from "./ui/Toasts";
 import { useRevealAll } from "./ui/useReveal";
 
+const MATERIAL_READ_KEY = "premiere22.material-read.v1";
+const MOONWALK_BEST_KEY = "premiere22.moonwalk-best.v1";
+const WALK_BEST_KEY = "premiere22.walk-best.v1";
+const INTRO_SEEN_KEY = "premiere22.intro-seen.v1";
+
+function formatWalkBest(raw: string | null): string | null {
+  const seconds = Number.parseFloat(raw ?? "");
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
 /**
- * PREMIERE 22 · orchestrator. Sections live in app/sections, texts in
- * app/content.ts, audio in app/audio/engine.ts. This file only owns the state
- * that several parts of the premiere share (hee-hee, modals, finale, modes).
+ * PREMIERE 22 · orchestrator.
+ * Structured into 4 intuitive acts:
+ *   Hero + Premiere Program
+ *   Act I:   El Director (Portrait, Filmography, Behind, Dossier)
+ *   Act II:  Multiverso (4 Worlds) + Ghost Cathedral (Ritual 22)
+ *   Act III: Sesión Golfa / ArcadeHub (M00NW4LK.EXE, Corte 22, Huida Moonwalk, Lab 24 TET)
+ *   Act IV:  Escena Final (Clapperboard, Birthday Letter, 24 TET Song, End Credits, Rewind)
  */
 export default function Home() {
   const [started, setStarted] = useState(false);
@@ -65,6 +84,11 @@ export default function Home() {
   const [materialRead, setMaterialRead] = useState(false);
   const [chaseOpen, setChaseOpen] = useState(false);
   const [activeWorld, setActiveWorld] = useState<WorldId>("mj");
+  const [visitedWorlds, setVisitedWorlds] = useState<WorldId[]>(["mj"]);
+  const [ghostLit, setGhostLit] = useState(false);
+  const [extrasOpen, setExtrasOpen] = useState(false);
+  const [moonwalkBest, setMoonwalkBest] = useState<string | null>(null);
+  const [walkBest, setWalkBest] = useState<string | null>(null);
   const [referenceInView, setReferenceInView] = useState(false);
   const [heeReady, setHeeReady] = useState(false);
   const [heeMuted, setHeeMuted] = useState(false);
@@ -88,8 +112,16 @@ export default function Home() {
 
   const modalOpen = activeVideo !== null || trailerOpen || recovered || chaseOpen;
   const prankExclusive = nightExclusive || hauntedExclusive || creditsOpen;
-  // The hee-hee also rests while a video or the montage is playing.
-  const heePaused = secretExclusive || prankExclusive || activeVideo !== null || trailerOpen;
+  // Let Raúl read his birthday letter peacefully once he closes the finale clapperboard.
+  const finalePeace = clapped && scrollDepth >= 88;
+  // The hee-hee also rests while a video, montage, Extras drawer, or birthday letter is in focus.
+  const heePaused =
+    secretExclusive ||
+    prankExclusive ||
+    activeVideo !== null ||
+    trailerOpen ||
+    extrasOpen ||
+    finalePeace;
 
   const scrollDepthRef = useRef(0);
   const heeTotalRef = useRef(0);
@@ -104,6 +136,35 @@ export default function Home() {
   const cursorLightRef = useRef<HTMLDivElement | null>(null);
 
   useRevealAll(started);
+
+  // Hydrate persistent progress & seamlessly resume when returning from /walk-exe (#juegos / #final).
+  useEffect(() => {
+    const hydrate = window.setTimeout(() => {
+      if (readStorage(MATERIAL_READ_KEY) === "1") setMaterialRead(true);
+      const mb = readStorage(MOONWALK_BEST_KEY);
+      if (mb && Number.isFinite(Number.parseFloat(mb))) setMoonwalkBest(mb);
+      setWalkBest(formatWalkBest(readStorage(WALK_BEST_KEY)));
+
+      const hash = window.location.hash;
+      if (hash && hash !== "#premiere" && readStorage(INTRO_SEEN_KEY) === "1") {
+        setStarted(true);
+        window.setTimeout(() => {
+          document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: "smooth" });
+        }, 220);
+      }
+    }, 0);
+    return () => window.clearTimeout(hydrate);
+  }, []);
+
+  // Refresh personal records when MoonwalkChase closes.
+  useEffect(() => {
+    if (chaseOpen) return;
+    const timer = window.setTimeout(() => {
+      const mb = readStorage(MOONWALK_BEST_KEY);
+      if (mb && Number.isFinite(Number.parseFloat(mb))) setMoonwalkBest(mb);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [chaseOpen]);
 
   // ── Hee-hee engine ──────────────────────────────────────────────────────
   const countHee = useCallback(() => {
@@ -222,7 +283,7 @@ export default function Home() {
   }, [playHee]);
 
   useEffect(() => {
-    if (!heeReady || heeMuted || heePaused || scrollBand < 3) return;
+    if (!heeReady || heeMuted || heePaused || scrollBand < 5) return;
     const timer = window.setInterval(playHee, heeDelayForDepth(scrollBand / 20));
     return () => window.clearInterval(timer);
   }, [heeReady, heeMuted, heePaused, playHee, scrollBand]);
@@ -276,22 +337,34 @@ export default function Home() {
     }, 350);
   }, [soundOn]);
 
-  // ── Modals and worlds ───────────────────────────────────────────────────
+  // ── Modals, worlds and games ─────────────────────────────────────────────
+  const handleWorldChange = useCallback((world: WorldId) => {
+    setActiveWorld(world);
+    setVisitedWorlds((current) => (current.includes(world) ? current : [...current, world]));
+  }, []);
+
   const closeVideo = useCallback(() => setActiveVideo(null), []);
   const openTrailer = useCallback(() => setTrailerOpen(true), []);
   const closeTrailer = useCallback(() => setTrailerOpen(false), []);
   const openRecovered = useCallback(() => setRecovered(true), []);
   const closeRecovered = useCallback(() => setRecovered(false), []);
-  const completeRecovered = useCallback(() => setMaterialRead(true), []);
+  const completeRecovered = useCallback(() => {
+    setMaterialRead(true);
+    writeStorage(MATERIAL_READ_KEY, "1");
+  }, []);
   const openChase = useCallback(() => setChaseOpen(true), []);
   const closeChase = useCallback(() => setChaseOpen(false), []);
+  const openMicroLab = useCallback(() => {
+    window.dispatchEvent(new Event("premiere22:open-micro-lab"));
+  }, []);
+  const handleRitualComplete = useCallback(() => setGhostLit(true), []);
+  const toggleExtras = useCallback(() => setExtrasOpen((open) => !open), []);
+  const openExtras = useCallback(() => setExtrasOpen(true), []);
 
+  // From Corte 22 modal, jump directly into Material Recuperado without scrolling backwards.
   const goToRecovered = useCallback(() => {
     setTrailerOpen(false);
-    setActiveWorld("fnaf");
-    window.setTimeout(() => {
-      document.getElementById("material-recuperado")?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 160);
+    window.setTimeout(() => setRecovered(true), 120);
   }, []);
 
   // ── ¡CORTEN! and the silence that never lasts ─────────────────────────────
@@ -369,7 +442,7 @@ export default function Home() {
 
   const silenceFromKeyboard = useCallback(() => silenceHee(), [silenceHee]);
 
-  // ── Finale: Toma 22, birthday song and credits ──────────────────────────
+  // ── Finale: Toma 22 (condensed hilarious montage), birthday song & credits ─
   const startBirthday = useCallback(() => {
     birthdayStopRef.current?.();
     birthdayStopRef.current = playBirthday((index, detune) =>
@@ -384,7 +457,7 @@ export default function Home() {
     const reason = takeReason(take);
     if (reason) {
       setTakeCallout({ take, reason });
-      setTake(take + 1);
+      setTake(nextClapperTake(take));
     } else {
       setTakeCallout({ take: FINAL_TAKE, reason: "¡CORTEN! TOMA BUENA" });
       setClapped(true);
@@ -403,7 +476,14 @@ export default function Home() {
 
   const closeCredits = useCallback(() => setCreditsOpen(false), []);
 
-  const otherBlocked = activeVideo !== null || trailerOpen || recovered || chaseOpen || creditsOpen;
+  const otherBlocked =
+    activeVideo !== null ||
+    trailerOpen ||
+    recovered ||
+    chaseOpen ||
+    creditsOpen ||
+    extrasOpen ||
+    finalePeace;
 
   return (
     <main className={started ? "experience started" : "experience"}>
@@ -415,24 +495,54 @@ export default function Home() {
         scrollDepth={scrollDepth}
         onToggleSound={toggleSound}
         nightSlotRef={setNightSlot}
+        extrasOpen={extrasOpen}
+        onToggleExtras={toggleExtras}
+        achievementCount={achievements.unlocked.length}
+        achievementTotal={ACHIEVEMENT_TOTAL}
       />
 
       <ColdOpen onBegin={begin} />
       <Hero />
+      <PremiereMap
+        visitedWorlds={visitedWorlds.length}
+        ghostLit={ghostLit}
+        materialRead={materialRead}
+        clapped={clapped}
+        unlockedAchievements={achievements.unlocked.length}
+        achievementTotal={ACHIEVEMENT_TOTAL}
+        onOpenExtras={openExtras}
+      />
+
+      {/* ACTO I · EL DIRECTOR */}
       <Portrait />
       <Filmography onPlay={setActiveVideo} breadSlotRef={setBreadSlot} />
       <Behind />
       <Dossier />
+
+      {/* ACTO II · EL MULTIVERSO & EL CLERO */}
       <ReferenceRoom
         activeWorld={activeWorld}
-        onWorldChange={setActiveWorld}
+        visitedWorlds={visitedWorlds}
+        onWorldChange={handleWorldChange}
         onInViewChange={setReferenceInView}
         materialRead={materialRead}
         onOpenRecovered={openRecovered}
         onMoonwalk={openChase}
       />
-      <Friends />
-      <TrailerTeaser onOpen={openTrailer} />
+      <GhostSection onRitualComplete={handleRitualComplete} />
+
+      {/* ACTO III · SESIÓN GOLFA · JUEGOS */}
+      <ArcadeHub
+        materialRead={materialRead}
+        moonwalkBest={moonwalkBest}
+        walkBest={walkBest}
+        onOpenTrailer={openTrailer}
+        onOpenChase={openChase}
+        onOpenRecovered={openRecovered}
+        onOpenMicroLab={openMicroLab}
+      />
+
+      {/* ACTO IV · TU ESCENA 22 */}
       <Finale
         clapped={clapped}
         take={take}
@@ -450,6 +560,8 @@ export default function Home() {
         soundOn={soundOn}
         blocked={modalOpen || prankExclusive}
         beaconVisible={activeWorld === "micro" && referenceInView}
+        panelOpen={extrasOpen}
+        onPanelOpenChange={setExtrasOpen}
         onExclusiveChange={setSecretExclusive}
       />
 

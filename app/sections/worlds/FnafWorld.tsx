@@ -203,21 +203,14 @@ function FnafWorld({ materialRead, onOpenRecovered }: FnafWorldProps) {
           type="button"
           onClick={onOpenRecovered}
         >
-          <small>PASO 01 · OBLIGATORIO</small>
+          <small>{materialRead ? "PASO 01 · LEÍDO ✓" : "PASO 01 · RECOMENDADO"}</small>
           LEER TARJETA “MATERIAL RECUPERADO”
           <span>↗</span>
         </button>
-        {materialRead ? (
-          <a className="fnaf-game-link unlocked" href="/walk-exe">
-            <small>PASO 02 · ACCESO AUTORIZADO</small>
-            ENTRAR AL PASADIZO M00NW4LK.EXE <span>→</span>
-          </a>
-        ) : (
-          <button className="fnaf-game-locked" type="button" disabled>
-            <small>PASO 02 · BLOQUEADO</small>
-            LEE PRIMERO EL MATERIAL RECUPERADO <span>⌁</span>
-          </button>
-        )}
+        <a className="fnaf-game-link unlocked" href="/walk-exe">
+          <small>{materialRead ? "PASO 02 · ACCESO AUTORIZADO" : "ACCESO DIRECTO AL LABERINTO"}</small>
+          ENTRAR AL JUEGO 3D M00NW4LK.EXE <span>→</span>
+        </a>
       </div>
     </article>
   );

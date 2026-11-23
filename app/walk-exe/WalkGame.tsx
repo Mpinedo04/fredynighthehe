@@ -90,6 +90,16 @@ import {
   subjectTextureAnisotropy,
   subjectTextureVariant,
 } from "./subject-materials";
+import {
+  computeObjectiveReading,
+  type ObjectiveReading,
+} from "./objective-tracker";
+import {
+  adaptiveEnemySpeed,
+  isFlashlightDazzle,
+  stepDetectionMeter,
+  type WalkDifficulty,
+} from "./perception";
 
 type GamePhase = "briefing" | "playing" | "caught" | "escaped";
 type QualityProfile = "low" | "medium" | "high" | "ultra";
@@ -652,6 +662,44 @@ function createTape(color: number) {
   return tape;
 }
 
+/** Secret Ghost 7-inch vinyl ("Seven Inches of Satanic Panic · 1969") hidden in the maze. */
+function createGhostRelic() {
+  const relic = new THREE.Group();
+  const vinyl = material(0x0b0710, 0.25, 0.5);
+  const gold = new THREE.MeshStandardMaterial({
+    color: 0xe8b84d,
+    emissive: 0xc98a22,
+    emissiveIntensity: 1.1,
+    roughness: 0.3,
+    metalness: 0.72,
+  });
+  const purple = new THREE.MeshStandardMaterial({
+    color: 0x6d2cff,
+    emissive: 0x9c5bff,
+    emissiveIntensity: 1.35,
+    roughness: 0.35,
+  });
+  const body = new THREE.Group();
+  body.position.y = 1.05;
+  addMesh(body, new THREE.CylinderGeometry(0.46, 0.46, 0.035, 28), vinyl, [0, 0, 0], [Math.PI / 2, 0, 0]);
+  addMesh(body, new THREE.CylinderGeometry(0.18, 0.18, 0.042, 20), gold, [0, 0, 0], [Math.PI / 2, 0, 0]);
+  addMesh(body, new THREE.TorusGeometry(0.52, 0.025, 8, 28), purple, [0, 0, 0]);
+  relic.add(body);
+  const halo = new THREE.Mesh(
+    new THREE.RingGeometry(0.44, 0.56, 32),
+    new THREE.MeshBasicMaterial({ color: 0xe8b84d, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
+  );
+  halo.rotation.x = -Math.PI / 2;
+  halo.position.y = 0.025;
+  relic.add(halo);
+  const light = new THREE.PointLight(0xd99b38, 5, 5.5);
+  light.position.y = 1.15;
+  relic.add(light);
+  relic.userData.body = body;
+  relic.name = "GHOST_RELIC_1969";
+  return relic;
+}
+
 function createSecurityCamera() {
   const camera = new THREE.Group();
   const casing = material(0xaeb0a6, 0.44, 0.62);
@@ -718,7 +766,19 @@ export default function WalkExe() {
   const heeBufferRef = useRef<AudioBuffer | null>(null);
   const timecodeRef = useRef<HTMLSpanElement | null>(null);
   const [phase, setPhase] = useState<GamePhase>("briefing");
+  const [difficulty, setDifficulty] = useState<WalkDifficulty>("estreno");
+  const difficultyRef = useRef<WalkDifficulty>("estreno");
   const [tapes, setTapes] = useState<number[]>([]);
+  const [ghostRelicFound, setGhostRelicFound] = useState(false);
+  const [objectiveReading, setObjectiveReading] = useState<ObjectiveReading | null>(null);
+  const [detectionPct, setDetectionPct] = useState(0);
+  const [stealthState, setStealthState] = useState<"hidden" | "dim" | "lit">("lit");
+  const [dazzled, setDazzled] = useState(false);
+  const [tapeMapMarkers, setTapeMapMarkers] = useState<
+    Array<{ code: string; color: string; left: number; top: number; collected: boolean }>
+  >([]);
+  const [exitMapMarker, setExitMapMarker] = useState<{ left: number; top: number } | null>(null);
+  const [relicMapMarker, setRelicMapMarker] = useState<{ left: number; top: number; found: boolean } | null>(null);
   const [runStats, setRunStats] = useState<RunStats | null>(null);
   const [bootStep, setBootStep] = useState(0);
   const [seed, setSeed] = useState(220722);
@@ -766,6 +826,10 @@ export default function WalkExe() {
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+
+  useEffect(() => {
+    difficultyRef.current = difficulty;
+  }, [difficulty]);
 
   const clearCctvEncounter = useCallback(() => {
     cctvEncounterGenerationRef.current += 1;
@@ -906,6 +970,10 @@ export default function WalkExe() {
     }
     setEchoes(0);
     setTapes([]);
+    setGhostRelicFound(false);
+    setObjectiveReading(null);
+    setDetectionPct(0);
+    setDazzled(false);
     setRunStats(null);
     heeBufferRef.current = null;
     setTraveled(0);
@@ -980,20 +1048,29 @@ export default function WalkExe() {
       [0, exitCell, enemyStart, ...spread, ...cctvCells],
       WALK_TAPES.length,
     );
-    setCameraMapPositions(
-      cctvCells.map((cell) => ({
-        left:
-          4 +
-          ((cell % MAZE_SIZE) / Math.max(1, MAZE_SIZE - 1)) * 88,
-        top:
-          4 +
-          (Math.floor(cell / MAZE_SIZE) /
-            Math.max(1, MAZE_SIZE - 1)) *
-            88,
-      })),
-    );
+    const ghostRelicCell = chooseTapeCells(
+      maze,
+      seed ^ 0x666,
+      [0, exitCell, enemyStart, ...spread, ...cctvCells, ...tapeCells],
+      1,
+    )[0] ?? tapeCells[0] ?? exitCell;
     const gridPercent = (coordinate: number) =>
       4 + (coordinate / Math.max(1, MAZE_SIZE - 1)) * 88;
+    const cellMapPosition = (cell: number) => ({
+      left: gridPercent(cell % MAZE_SIZE),
+      top: gridPercent(Math.floor(cell / MAZE_SIZE)),
+    });
+    setCameraMapPositions(cctvCells.map(cellMapPosition));
+    setTapeMapMarkers(
+      tapeCells.map((cell, index) => ({
+        code: WALK_TAPES[index].code,
+        color: tapeColor(WALK_TAPES[index].color),
+        ...cellMapPosition(cell),
+        collected: false,
+      })),
+    );
+    setExitMapMarker(cellMapPosition(exitCell));
+    setRelicMapMarker({ ...cellMapPosition(ghostRelicCell), found: false });
     const schematic: Array<{
       x1: number;
       y1: number;
@@ -1613,6 +1690,15 @@ export default function WalkExe() {
       world.add(mesh);
       return { mesh, cell, index, collected: false };
     });
+
+    const ghostRelicMesh = createGhostRelic();
+    const relicCenter = cellCenter(ghostRelicCell);
+    ghostRelicMesh.position.set(relicCenter.x, 0, relicCenter.z);
+    world.add(ghostRelicMesh);
+    let ghostRelicCollected = false;
+    let detectionMeter = 0;
+    let dazzledUntil = Number.NEGATIVE_INFINITY;
+    let dazzleCooldownUntil = Number.NEGATIVE_INFINITY;
 
     const ventMeshes: THREE.Group[] = [];
     const ductRoutes: THREE.Group[] = [];
@@ -2264,6 +2350,11 @@ export default function WalkExe() {
         tapesHeld += 1;
         tapeIndices.push(closeTape.index);
         setTapes([...tapeIndices]);
+        setTapeMapMarkers((current) =>
+          current.map((marker, markerIndex) =>
+            markerIndex === closeTape.index ? { ...marker, collected: true } : marker,
+          ),
+        );
         // Pulling a tape out of the dark is not silent.
         emitNoise("crouch-step", closeTape.cell, now);
         const title = WALK_TAPES[closeTape.index].title;
@@ -2279,6 +2370,26 @@ export default function WalkExe() {
           audioRef.current?.playChime("tape");
           setPrompt(`CINTA «${title}» RECUPERADA · ${tapesHeld}/${WALK_TAPES.length}`);
         }
+        return;
+      }
+
+      if (
+        !ghostRelicCollected &&
+        ghostRelicMesh.position.distanceTo(player.clone().setY(0)) < 1.6
+      ) {
+        ghostRelicCollected = true;
+        ghostRelicMesh.visible = false;
+        cctvPower = Math.min(100, cctvPower + 25);
+        lastReportedPower = Math.ceil(cctvPower);
+        setPower(lastReportedPower);
+        echoesHeld += 1;
+        setEchoes(echoesHeld);
+        setGhostRelicFound(true);
+        setRelicMapMarker((current) => (current ? { ...current, found: true } : null));
+        unlockPremiereAchievement("walkGhostRelic");
+        audioRef.current?.playChime("unlock");
+        setPrompt("SEVEN INCHES (1969) · BENDICIÓN DEL CLERO (+25% CCTV · +1 ECO)");
+        setMessage("If you have Ghosts, you have everything. Mary On A Cross te cubre la espalda.");
         return;
       }
 
@@ -3021,10 +3132,46 @@ export default function WalkExe() {
       currentPlayerDistance = subject.position.distanceTo(
         player.clone().setY(0),
       );
-      const lineOfSight =
+      const corridorSight =
         !ventTrip &&
-        currentPlayerDistance < 17 &&
+        currentPlayerDistance < 22 &&
         corridorLineOfSight(maze, enemyCell, playerCell);
+      const detectionStep = stepDetectionMeter({
+        current: detectionMeter,
+        lineOfSight: corridorSight,
+        distance: currentPlayerDistance,
+        flashlightOn: flashlightEnabled,
+        crouching: playerCrouching,
+        deltaSeconds: delta,
+        difficulty: difficultyRef.current,
+      });
+      detectionMeter = detectionStep.meter;
+      const lineOfSight = detectionStep.spotted;
+
+      const modelPreviewActive = tickNow < modelPreviewUntil;
+
+      // Flashlight dazzle ("Estatua"): shining directly at Subject M's eyes stalls him briefly.
+      if (
+        !modelPreviewActive &&
+        tickNow >= dazzleCooldownUntil &&
+        tickNow >= dazzledUntil &&
+        currentEnemyMode !== "ambush" &&
+        isFlashlightDazzle({
+          playerX: player.x,
+          playerZ: player.z,
+          playerYaw: yaw,
+          enemyX: subject.position.x,
+          enemyZ: subject.position.z,
+          distance: currentPlayerDistance,
+          flashlightOn: flashlightEnabled,
+          lineOfSight: corridorSight,
+        })
+      ) {
+        dazzledUntil = tickNow + 2200;
+        dazzleCooldownUntil = tickNow + 14000;
+        setPrompt("DESLUMBRADO · LINTERNA DIRECTA · ¡SUJETO M INMOVILIZADO 2 S!");
+      }
+      const isDazzled = tickNow < dazzledUntil;
       if (lineOfSight) {
         lastSeenAt = tickNow;
         lastSeenCell = playerCell;
@@ -3065,7 +3212,6 @@ export default function WalkExe() {
       const cctvSignalDistance =
         mazePath(maze, enemyCell, cctvSignalCell).length - 1;
 
-      const modelPreviewActive = tickNow < modelPreviewUntil;
       const nextEnemyMode = modelPreviewActive
         ? modelPreviewState
         : decideEnemyState({
@@ -3110,7 +3256,12 @@ export default function WalkExe() {
         }
       }
 
-      const patrolCells = spread.length ? spread : [exitCell, 0];
+      const patrolCells =
+        tapesHeld >= requiredTapes
+          ? [exitCell, ...(spread.length ? spread.slice(0, 4) : [0])]
+          : spread.length
+            ? spread
+            : [exitCell, 0];
       let targetCell: number;
       if (activeLure) {
         targetCell = activeLure.cell;
@@ -3175,8 +3326,13 @@ export default function WalkExe() {
             ? 0.24
             : 0.16
           : 0;
-      currentEnemySpeed = speeds[currentEnemyMode] + sprintPressure;
-      if (!modelPreviewActive && remaining > 0.09) {
+      const rawSpeed = adaptiveEnemySpeed(
+        speeds[currentEnemyMode] + sprintPressure,
+        tapesHeld,
+        difficultyRef.current,
+      );
+      currentEnemySpeed = isDazzled ? 0 : rawSpeed;
+      if (!modelPreviewActive && !isDazzled && remaining > 0.09) {
         direction.normalize();
         subject.position.addScaledVector(
           direction,
@@ -3343,6 +3499,14 @@ export default function WalkExe() {
         }
       });
 
+      if (!ghostRelicCollected) {
+        const relicBody = ghostRelicMesh.userData.body as THREE.Group | undefined;
+        if (relicBody && !reducedMotion) {
+          relicBody.position.y = 1.05 + Math.sin(now * 0.0024) * 0.11;
+          relicBody.rotation.y += delta * 1.15;
+        }
+      }
+
       runtimeEchoes.forEach((echo, index) => {
         if (echo.collected) return;
         echo.mesh.position.y = reducedMotion
@@ -3471,6 +3635,33 @@ export default function WalkExe() {
               column + 1,
             ).padStart(2, "0")}`,
           );
+          setDetectionPct(Math.round(detectionMeter * 100));
+          setDazzled(simulationTime < dazzledUntil);
+          setStealthState(
+            !flashlightEnabled && playerCrouching
+              ? "hidden"
+              : !flashlightEnabled || playerCrouching
+                ? "dim"
+                : "lit",
+          );
+          setObjectiveReading(
+            computeObjectiveReading({
+              maze,
+              playerCell: currentCell,
+              playerX: player.x,
+              playerZ: player.z,
+              playerYaw: yaw,
+              tapes: runtimeTapes.map((tape) => ({
+                cell: tape.cell,
+                code: WALK_TAPES[tape.index].code,
+                title: WALK_TAPES[tape.index].title,
+                collected: tape.collected,
+              })),
+              tapesHeld,
+              requiredTapes,
+              exitCell,
+            }),
+          );
           setMapPlayer({
             left: 4 + (column / Math.max(1, MAZE_SIZE - 1)) * 88,
             top: 4 + (row / Math.max(1, MAZE_SIZE - 1)) * 88,
@@ -3478,6 +3669,9 @@ export default function WalkExe() {
           const detailOrigin = tabletRef.current
             ? cellCenter(cctvCells[cctvIndexRef.current] ?? cctvCells[0])
             : player;
+          ghostRelicMesh.visible =
+            !ghostRelicCollected &&
+            ghostRelicMesh.position.distanceToSquared(detailOrigin) < 30 * 30;
           decorGroups.forEach((group) => {
             group.visible =
               group.position.distanceToSquared(detailOrigin) < 28 * 28;
@@ -4212,7 +4406,7 @@ export default function WalkExe() {
       )}
 
       <header className="walk-topbar">
-        <Link href="/" className="walk-back">← PREMIERE 22</Link>
+        <Link href="/#juegos" className="walk-back">← VOLVER A JUEGOS</Link>
         <div>
           <span className="rec-dot" />
           BODY CAM · M00NW4LK.EXE
@@ -4270,15 +4464,52 @@ export default function WalkExe() {
 
           <div className="crosshair" aria-hidden="true"><i /><i /></div>
 
-          <aside className="objective-card">
-            <span>OBJETIVO ACTUAL</span>
+          <aside className={`objective-card ${objectiveReading?.kind === "exit" ? "exit-ready" : ""}`}>
+            <div className="objective-head">
+              <span>OBJETIVO ACTUAL</span>
+              <span className={`stealth-pill stealth-${stealthState}`}>
+                {dazzled
+                  ? "⚡ M-22 DESLUMBRADO"
+                  : stealthState === "hidden"
+                    ? "● OCULTO EN SOMBRA"
+                    : stealthState === "dim"
+                      ? "◐ PERFIL BAJO"
+                      : "☀ VISIBLE (LINTERNA ON)"}
+              </span>
+            </div>
             <strong>
               {tapes.length < TAPES_TO_EXIT
-                ? `RECUPERA ${TAPES_TO_EXIT} CINTAS DE RAÚL`
+                ? `RECUPERA ${TAPES_TO_EXIT} CINTAS DE RAÚL (${tapes.length}/${TAPES_TO_EXIT})`
                 : tapes.length < WALK_TAPES.length
-                  ? "ENCUENTRA LA SALIDA · O LAS 5 CINTAS"
-                  : "ESCAPA · DIRECTOR’S CUT"}
+                  ? "SALIDA ABIERTA · ESCAPA O VE A POR LAS 5"
+                  : "DIRECTOR’S CUT · ESCAPA POR LA SALIDA"}
             </strong>
+            {objectiveReading && (
+              <div className={`signal-beacon strength-${objectiveReading.signalStrength}`}>
+                <b className="signal-arrow" aria-hidden="true">{objectiveReading.arrow}</b>
+                <div>
+                  <small>
+                    {objectiveReading.kind === "exit"
+                      ? "SEÑAL PUERTA DE EMERGENCIA"
+                      : `RASTREADOR VHS · ${objectiveReading.code}`}
+                  </small>
+                  <strong>{objectiveReading.label}</strong>
+                </div>
+                <span className="signal-dist">
+                  ~{objectiveReading.meters} m
+                </span>
+              </div>
+            )}
+            {detectionPct > 4 && (
+              <div className="detection-bar" role="status" aria-label={`Nivel de detección ${detectionPct}%`}>
+                <span>DETECCIÓN VISUAL</span>
+                <div><i style={{ width: `${detectionPct}%` }} /></div>
+                <b>{detectionPct}%</b>
+              </div>
+            )}
+            {ghostRelicFound && (
+              <small className="relic-badge">✦ SEVEN INCHES (1969) · BENDICIÓN DEL CLERO ACTIVA</small>
+            )}
             <p>{prompt}</p>
           </aside>
 
@@ -4393,6 +4624,49 @@ export default function WalkExe() {
                 >
                   YOU
                 </span>
+                {tapeMapMarkers.map(
+                  (marker) =>
+                    !marker.collected && (
+                      <span
+                        key={marker.code}
+                        className="map-tape-dot"
+                        title={`Cinta ${marker.code}`}
+                        style={
+                          {
+                            left: `${marker.left}%`,
+                            top: `${marker.top}%`,
+                            "--tape": marker.color,
+                          } as CSSProperties
+                        }
+                      >
+                        ◆
+                      </span>
+                    ),
+                )}
+                {exitMapMarker && (
+                  <span
+                    className={`map-exit-dot ${tapes.length >= TAPES_TO_EXIT ? "unlocked" : ""}`}
+                    title={tapes.length >= TAPES_TO_EXIT ? "Salida abierta" : "Salida bloqueada (necesita 3 cintas)"}
+                    style={{
+                      left: `${exitMapMarker.left}%`,
+                      top: `${exitMapMarker.top}%`,
+                    }}
+                  >
+                    {tapes.length >= TAPES_TO_EXIT ? "SALIDA" : "🔒"}
+                  </span>
+                )}
+                {relicMapMarker && !relicMapMarker.found && (
+                  <span
+                    className="map-relic-dot"
+                    title="Señal anómala · 1969"
+                    style={{
+                      left: `${relicMapMarker.left}%`,
+                      top: `${relicMapMarker.top}%`,
+                    }}
+                  >
+                    ✦
+                  </span>
+                )}
                 {cameraNames.map((name, index) => (
                   <button
                     key={name}
@@ -4410,6 +4684,12 @@ export default function WalkExe() {
                     C{index + 1}
                   </button>
                 ))}
+              </div>
+              <div className="cctv-map-legend" aria-hidden="true">
+                <span><b>YOU</b> TÚ</span>
+                <span><i className="leg-tape">◆</i> CINTAS</span>
+                <span><i className="leg-exit">■</i> SALIDA</span>
+                <span><i className="leg-relic">✦</i> 1969</span>
               </div>
               <div className="cctv-power">
                 <span>ENERGÍA DE RED</span>
@@ -4445,25 +4725,25 @@ export default function WalkExe() {
           </div>
           <h1>M00N<br /><strong>W4LK.EXE</strong></h1>
           <p>
-            Los corredores cambian en cada incursión. Encuentra la salida,
-            métete por los conductos y escucha tus latidos: cuanto más rápidos,
-            más cerca está <b>SUJETO M</b>.
+            Tu misión en el laberinto: <b>recupera {TAPES_TO_EXIT} cintas de Raúl</b> para
+            dar energía a la puerta de emergencia y escapa sin que <b>SUJETO M-22</b> te
+            atrape. Sigue el rastreador direccional VHS o consulta el mapa con <b>TAB</b>.
           </p>
           <div className="briefing-grid">
             <div>
-              <span>ENTIDAD</span>
-              <strong>ANIMATRÓNICO M-22</strong>
-              <small>Memoria acústica · predice pasos · sprint audible</small>
+              <span>01 · OBJETIVO</span>
+              <strong>RECUPERA {TAPES_TO_EXIT} DE {WALK_TAPES.length} CINTAS</strong>
+              <small>Cógelas con E · las 5 juntas desbloquean el final secreto Director&apos;s Cut</small>
             </div>
             <div>
-              <span>RECURSO</span>
-              <strong>ECOS ESPECTRALES</strong>
-              <small>Encuéntralos con E · proyéctalos con G</small>
+              <span>02 · SIGILO Y LINTERNA</span>
+              <strong>OCÚLTATE O DESLUMBRA</strong>
+              <small>CTRL + F apagada te oculta en la oscuridad · F directa a su cara lo frena 2 s</small>
             </div>
             <div>
-              <span>RUTA</span>
-              <strong>GENERACIÓN ÚNICA</strong>
-              <small>Pasillos, cruces, cámaras y conductos variables</small>
+              <span>03 · SUPERVIVENCIA</span>
+              <strong>SEÑUELOS, CCTV Y RELIQUIA</strong>
+              <small>TAB muestra cintas y salida · G/Q distraen · busca el vinilo oculto de 1969</small>
             </div>
           </div>
           <div className="briefing-tapes" aria-label="Las cinco cintas de Raúl">
@@ -4481,87 +4761,108 @@ export default function WalkExe() {
                 </figure>
               ))}
             </div>
-            <small>Las cinco juntas desbloquean el final secreto: DIRECTOR&apos;S CUT.</small>
+            <small>Las cinco juntas desbloquean el final secreto: DIRECTOR&apos;S CUT. Hay además un vinilo oculto de Ghost (+25% CCTV y +1 eco).</small>
           </div>
-          <div className="briefing-roster" aria-label="Archivo de animatrónicos">
-            <span className="briefing-roster-title">
-              RED MASCOTA CORRUPTA · 4 SCREAMS PROCEDURALES
-            </span>
-            <div>
-              {SCARE_ROSTER.map((mascot) => (
-                <article key={mascot.id}>
-                  <i
-                    className="briefing-mascot-image"
-                    style={{ backgroundImage: `url(${mascot.image})` }}
-                    aria-hidden="true"
+          <div className="briefing-cta-row">
+            <button type="button" className="briefing-start-primary" onClick={beginGame}>
+              ▶ ENTRAR EN EL PASADIZO <span>WASD →</span>
+            </button>
+            <div className="difficulty-picker" role="group" aria-label="Dificultad de la incursión">
+              <button
+                type="button"
+                className={difficulty === "estreno" ? "active" : ""}
+                onClick={() => setDifficulty("estreno")}
+              >
+                MODO ESTRENO <small>EQUILIBRADO</small>
+              </button>
+              <button
+                type="button"
+                className={difficulty === "pesadilla" ? "active" : ""}
+                onClick={() => setDifficulty("pesadilla")}
+              >
+                MODO PESADILLA <small>IA AGRESIVA</small>
+              </button>
+            </div>
+          </div>
+          <details className="briefing-advanced">
+            <summary>⚙ OPCIONES AVANZADAS · GRÁFICOS, AUDIO Y PRUEBA DE SCREAMS</summary>
+            <div className="briefing-roster" aria-label="Archivo de animatrónicos">
+              <span className="briefing-roster-title">
+                RED MASCOTA CORRUPTA · 4 SCREAMS PROCEDURALES
+              </span>
+              <div>
+                {SCARE_ROSTER.map((mascot) => (
+                  <article key={mascot.id}>
+                    <i
+                      className="briefing-mascot-image"
+                      style={{ backgroundImage: `url(${mascot.image})` }}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      <strong>{mascot.name}</strong>
+                      <small>{mascot.role}</small>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => previewMascotScream(mascot)}
+                      aria-label={`Oír scream de ${mascot.name}`}
+                    >
+                      ▶ OÍR
+                    </button>
+                  </article>
+                ))}
+              </div>
+            </div>
+            <div className="quality-picker" aria-label="Calidad gráfica">
+              <span>PERFIL GRÁFICO</span>
+              <div>
+                {(["low", "medium", "high", "ultra"] as const).map(
+                  (profile) => (
+                    <button
+                      key={profile}
+                      type="button"
+                      className={quality === profile ? "active" : ""}
+                      onClick={() => setQuality(profile)}
+                    >
+                      {profile === "low"
+                        ? "BAJO"
+                        : profile === "medium"
+                          ? "MEDIO"
+                          : profile === "high"
+                            ? "ALTO"
+                            : "ULTRA"}
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
+            <div className="audio-mixer" aria-label="Mezclador de audio">
+              {(
+                [
+                  ["master", "GENERAL"],
+                  ["ambience", "AMBIENTE"],
+                  ["music", "MÚSICA"],
+                  ["sfx", "EFECTOS"],
+                  ["heartbeat", "LATIDO"],
+                  ["jumpscare", "JUMPSCARE"],
+                ] as Array<[keyof AudioLevels, string]>
+              ).map(([key, label]) => (
+                <label key={key}>
+                  <span>{label}</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={audioLevels[key]}
+                    onChange={(event) =>
+                      updateAudioLevel(key, Number(event.target.value))
+                    }
                   />
-                  <span>
-                    <strong>{mascot.name}</strong>
-                    <small>{mascot.role}</small>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => previewMascotScream(mascot)}
-                    aria-label={`Oír scream de ${mascot.name}`}
-                  >
-                    ▶ OÍR
-                  </button>
-                </article>
+                </label>
               ))}
             </div>
-          </div>
-          <div className="quality-picker" aria-label="Calidad gráfica">
-            <span>PERFIL GRÁFICO</span>
-            <div>
-              {(["low", "medium", "high", "ultra"] as const).map(
-                (profile) => (
-                  <button
-                    key={profile}
-                    type="button"
-                    className={quality === profile ? "active" : ""}
-                    onClick={() => setQuality(profile)}
-                  >
-                    {profile === "low"
-                      ? "BAJO"
-                      : profile === "medium"
-                        ? "MEDIO"
-                        : profile === "high"
-                          ? "ALTO"
-                          : "ULTRA"}
-                  </button>
-                ),
-              )}
-            </div>
-          </div>
-          <div className="audio-mixer" aria-label="Mezclador de audio">
-            {(
-              [
-                ["master", "GENERAL"],
-                ["ambience", "AMBIENTE"],
-                ["music", "MÚSICA"],
-                ["sfx", "EFECTOS"],
-                ["heartbeat", "LATIDO"],
-                ["jumpscare", "JUMPSCARE"],
-              ] as Array<[keyof AudioLevels, string]>
-            ).map(([key, label]) => (
-              <label key={key}>
-                <span>{label}</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={audioLevels[key]}
-                  onChange={(event) =>
-                    updateAudioLevel(key, Number(event.target.value))
-                  }
-                />
-              </label>
-            ))}
-          </div>
-          <button type="button" onClick={beginGame}>
-            ENTRAR EN EL PASADIZO <span>WASD →</span>
-          </button>
+          </details>
           <small className="fiction-note">
             Parodia de terror completamente ficticia · Recomendado con auriculares y ordenador
           </small>
@@ -4576,7 +4877,7 @@ export default function WalkExe() {
           <p>{message}</p>
           {runStats && <RunReport stats={runStats} />}
           <button type="button" onClick={restart}>GENERAR OTRO LABERINTO</button>
-          <Link href="/">ABANDONAR ARCHIVO</Link>
+          <Link href="/#juegos">VOLVER A LA PREMIERE</Link>
         </section>
       )}
 
@@ -4587,7 +4888,7 @@ export default function WalkExe() {
           <p>{message}</p>
           {runStats && <RunReport stats={runStats} />}
           <button type="button" onClick={restart}>ENTRAR EN OTRA RUTA</button>
-          <Link href="/">VOLVER A LA PREMIERE</Link>
+          <Link href="/#final">CONTINUAR AL FINAL DE LA PREMIERE →</Link>
         </section>
       )}
 

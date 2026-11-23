@@ -53,11 +53,11 @@ function MjWorld({ onMoonwalk }: MjWorldProps) {
           type="button"
           className="mj-moonwalk-track"
           onClick={onMoonwalk}
-          aria-label="Abrir el pasadizo M00NW4LK"
+          aria-label="Abrir el minijuego 3D Huida en Moonwalk"
         >
           <span>01</span><span>02</span><span>03</span><span>04</span>
-          <b>MOONWALK</b>
-          <em>▶ ABRIR PASADIZO</em>
+          <b>HUIDA MOONWALK</b>
+          <em>▶ MINIJUEGO 3D</em>
         </button>
         <div className="mj-photo-scan" aria-hidden="true" />
         <figcaption>

@@ -264,3 +264,79 @@ export function unlockPitch(sample: HTMLAudioElement) {
   media.webkitPreservesPitch = false;
   return sample;
 }
+
+/** Single gothic pipe-organ note for lighting a Ghost ritual candle. */
+export function playGhostCandle(frequency: number) {
+  const context = prankAudioContext();
+  if (!context) return;
+  const now = context.currentTime + 0.02;
+  tone(context, context.destination, frequency, now, 1.35, 0.09, "sawtooth");
+  tone(context, context.destination, frequency * 2, now, 1.1, 0.045, "triangle");
+  tone(context, context.destination, frequency / 2, now, 1.5, 0.075, "sine");
+}
+
+/** Majestic cathedral organ + bell toll for Ghost easter eggs (Mary On A Cross / Ritual 22). */
+export function playGhostRitualChord() {
+  const context = prankAudioContext();
+  if (!context) return;
+  const now = context.currentTime + 0.04;
+  // Deep cathedral bell strike
+  [146.83, 405.2, 792.8].forEach((freq, idx) => {
+    tone(context, context.destination, freq, now, 3.2 - idx * 0.6, 0.1 / (idx + 1), "sine");
+  });
+  // Cathedral organ cadence (Dm -> Bb -> C -> Dm)
+  const chords = [
+    [146.83, 220, 293.66, 349.23],
+    [116.54, 233.08, 293.66, 349.23],
+    [130.81, 261.63, 329.63, 392.0],
+    [146.83, 220, 293.66, 440.0],
+  ];
+  chords.forEach((notes, stepIndex) => {
+    const at = now + 0.25 + stepIndex * 0.72;
+    notes.forEach((freq) => {
+      tone(context, context.destination, freq, at, 0.95, 0.045, "sawtooth");
+      tone(context, context.destination, freq * 2, at, 0.75, 0.018, "triangle");
+    });
+  });
+}
+
+/** Hypnotic 1969 psychedelic organ turntable loop for the 7-inch vinyl. Returns stop(). */
+export function startGhostOrganLoop(side: "A" | "B" = "B") {
+  const context = prankAudioContext();
+  if (!context) return () => undefined;
+  const master = context.createGain();
+  master.gain.setValueAtTime(0.0001, context.currentTime);
+  master.gain.exponentialRampToValueAtTime(0.14, context.currentTime + 0.6);
+  master.connect(context.destination);
+
+  // Side B ("Mary On A Cross" vibe): dreamy 60s occult-pop organ arpeggio; Side A: punchier drive.
+  const arp =
+    side === "B"
+      ? [293.66, 349.23, 440, 349.23, 233.08, 293.66, 349.23, 293.66, 261.63, 329.63, 392, 329.63, 220, 293.66, 349.23, 440]
+      : [293.66, 329.63, 349.23, 440, 392, 349.23, 329.63, 293.66, 233.08, 293.66, 349.23, 392, 349.23, 329.63, 261.63, 293.66];
+  const stepSeconds = side === "B" ? 0.24 : 0.19;
+  let step = 0;
+  let nextAt = context.currentTime + 0.08;
+
+  const schedule = () => {
+    while (nextAt < context.currentTime + 0.16) {
+      const freq = arp[step % arp.length];
+      tone(context, master, freq, nextAt, stepSeconds * 1.15, 0.22, "triangle");
+      tone(context, master, freq * 2, nextAt, stepSeconds * 0.7, 0.06, "sawtooth");
+      if (step % 4 === 0) {
+        tone(context, master, freq / 2, nextAt, stepSeconds * 3.6, 0.26, "sine");
+      }
+      step = (step + 1) % arp.length;
+      nextAt += stepSeconds;
+    }
+  };
+  schedule();
+  const timer = window.setInterval(schedule, 40);
+
+  return () => {
+    window.clearInterval(timer);
+    master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), context.currentTime);
+    master.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.35);
+    window.setTimeout(() => master.disconnect(), 450);
+  };
+}

@@ -50,6 +50,7 @@ function Behind() {
           <figure
             key={item.code}
             className={`photo-placeholder photo-${index + 1}`}
+            data-secret-anchor={item.code === "03C" ? "friends" : undefined}
             data-reveal="drop"
             style={{ "--i": index } as CSSProperties}
           >

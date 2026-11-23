@@ -30,7 +30,7 @@ import {
   type SecretProgressV1,
 } from "./secret-system.mjs";
 import { audioContext } from "./audio/engine";
-import { ACHIEVEMENTS } from "./prank-system.mjs";
+import { ACHIEVEMENT_CATEGORIES, ACHIEVEMENTS } from "./prank-system.mjs";
 import { ACHIEVEMENT_TOTAL, resetAchievements, useAchievements } from "./pranks/Achievements";
 import { announceMicroNote, drainPower, fireScare } from "./pranks/bus";
 import { updateNight } from "./ui/nightStore";
@@ -51,6 +51,8 @@ type SecretExtrasProps = {
   soundOn: boolean;
   blocked: boolean;
   beaconVisible: boolean;
+  panelOpen: boolean;
+  onPanelOpenChange: (open: boolean) => void;
   onExclusiveChange: (exclusive: boolean) => void;
 };
 
@@ -83,6 +85,23 @@ const SECRET_LABELS: Record<SecretId, string> = {
   continuity: "ERRORES DE CONTINUIDAD",
 };
 
+const SECRET_HINTS: Record<SecretId, string> = {
+  spielberg: "Haz scroll arriba y abajo rápido tres veces seguidas, como rebobinando una bobina.",
+  nightShift: "A partir del 25% de scroll, intercepta rápido a los 4 animatrónicos que se cuelan en los marcos.",
+  microtonal: "Pulsa 3 veces en «24 TET» dentro de Angine de Poitrine (o ábrelo directo en el Acto III · Juegos).",
+  continuity: "Busca 4 pequeñas etiquetas rojas de «ERROR» pegadas en fotos de Portada, Videoteca, Detrás y Corte 22.",
+};
+
+const DIRECTOR_STOPS = [
+  { href: "#reparto", code: "01", label: "El Director y Videoteca", detail: "7 vídeos reales de @Raaulinhoo" },
+  { href: "#detras", code: "02", label: "Detrás de las cámaras", detail: "Mesa de montaje y fotos ampliables" },
+  { href: "#expediente", code: "03", label: "Expediente RG-22", detail: "5 barras negras desclasificables" },
+  { href: "#referentes", code: "04", label: "El Multiverso (4 mundos)", detail: "MJ · Spielberg · Five Nights · 24 TET" },
+  { href: "#ghost", code: "05", label: "Catedral de Ghost · Ritual 22", detail: "Vinilo 1969, 5 velas y Mary On A Cross" },
+  { href: "#juegos", code: "06", label: "Sesión Golfa · Juegos 3D", detail: "Corte 22, Huida Moonwalk y M00NW4LK.EXE" },
+  { href: "#final", code: "07", label: "Escena Final y Créditos", detail: "Claqueta, Cumpleaños 24 TET y Diploma" },
+] as const;
+
 const CONTINUITY_CLUES: Record<
   ContinuityId,
   { selector: string; label: string; note: string; glyph: string }
@@ -102,7 +121,7 @@ const CONTINUITY_CLUES: Record<
   friends: {
     selector: '[data-secret-anchor="friends"]',
     label: "Ojos de animatrónico en la fotografía",
-    note: "Dos miembros del reparto no aparecen en la hoja de llamada.",
+    note: "En Detrás de las Cámaras se ha colado alguien que no estaba en el rodaje.",
     glyph: "••",
   },
   trailer: {
@@ -144,9 +163,12 @@ export default function SecretExtras({
   scrollDepth,
   soundOn,
   blocked,
-  beaconVisible,
+  beaconVisible: _beaconVisible,
+  panelOpen,
+  onPanelOpenChange,
   onExclusiveChange,
 }: SecretExtrasProps) {
+  void _beaconVisible;
   const [progress, setProgress] = useState<SecretProgressV1>(() => {
     if (typeof window === "undefined") return createSecretProgress();
     try {
@@ -155,7 +177,8 @@ export default function SecretExtras({
       return createSecretProgress();
     }
   });
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [consoleTab, setConsoleTab] = useState<"map" | "secrets" | "achievements">("map");
+  const [revealedHints, setRevealedHints] = useState<SecretId[]>([]);
   const [resetArmed, setResetArmed] = useState(false);
   const [activeMode, setActiveMode] = useState<ActiveMode>(null);
   const [spielbergProgress, setSpielbergProgress] = useState(0);
@@ -819,9 +842,17 @@ export default function SecretExtras({
 
   useEffect(() => {
     const handleUnlock = () => registerMicroUnlock();
+    const handleOpenLab = () => {
+      onPanelOpenChange(false);
+      startMicroLab();
+    };
     window.addEventListener("premiere22:micro-unlock", handleUnlock);
-    return () => window.removeEventListener("premiere22:micro-unlock", handleUnlock);
-  }, [registerMicroUnlock]);
+    window.addEventListener("premiere22:open-micro-lab", handleOpenLab);
+    return () => {
+      window.removeEventListener("premiere22:micro-unlock", handleUnlock);
+      window.removeEventListener("premiere22:open-micro-lab", handleOpenLab);
+    };
+  }, [onPanelOpenChange, registerMicroUnlock, startMicroLab]);
 
   useEffect(() => {
     if (activeMode !== "micro") return;
@@ -978,83 +1009,186 @@ export default function SecretExtras({
 
   return (
     <>
-      {started && !blocked && activeMode === null && beaconVisible && (
-        <button
-          type="button"
-          className={`micro-discovery-beacon ${progress.completed.includes("microtonal") ? "replay" : ""}`}
-          onClick={registerMicroUnlock}
-          aria-label={`Abrir laboratorio 24 TET. ${microUnlockClicks} de 3 pulsos realizados`}
+      {panelOpen && (
+        <div
+          className="secret-console-backdrop"
+          onClick={() => onPanelOpenChange(false)}
+          aria-hidden="true"
           data-hee-control
-        >
-          <span>{progress.completed.includes("microtonal") ? "LAB COMPLETADO · REPETIR" : "LABORATORIO MICROTONAL"}</span>
-          <strong>24 <b>TET</b></strong>
-          <small>{microUnlockClicks === 0 ? "PULSA 3 VECES" : `${3 - microUnlockClicks} PULSO${3 - microUnlockClicks === 1 ? "" : "S"} MÁS`}</small>
-          <i aria-hidden="true">
-            {Array.from({ length: 3 }, (_, index) => (
-              <b key={index} className={index < microUnlockClicks ? "active" : ""} />
-            ))}
-          </i>
-        </button>
+        />
       )}
 
       <aside className={`secret-console ${panelOpen ? "open" : ""}`} data-hee-control>
-        <button
-          type="button"
-          className="secret-console-tab"
-          onClick={() => setPanelOpen((current) => !current)}
-          aria-expanded={panelOpen}
-          aria-controls="secret-console-panel"
-        >
-          <span>EXTRAS</span>
-          <strong>{completedCount}/4</strong>
-        </button>
-        <div id="secret-console-panel" className="secret-console-panel">
+        <div id="secret-console-panel" className="secret-console-panel" role="dialog" aria-label="Cuaderno del director y extras">
           <header>
             <div>
-              <small>ARCHIVOS FUERA DE GUIÓN</small>
-              <strong>EXTRAS DE RAÚL</strong>
+              <small>CUADERNO DEL DIRECTOR · PREMIERE 22</small>
+              <strong>EXTRAS Y PROGRESO</strong>
             </div>
-            <span>{completedCount === 4 ? "MASTER COMPLETO" : "BUSCANDO SEÑALES"}</span>
+            <button
+              type="button"
+              className="secret-console-close"
+              onClick={() => onPanelOpenChange(false)}
+              aria-label="Cerrar cuaderno de extras"
+            >
+              ×
+            </button>
           </header>
-          <div className="secret-console-list">
-            {(Object.keys(SECRET_LABELS) as SecretId[]).map((secretId, index) => (
-              <div
-                key={secretId}
-                className={progress.completed.includes(secretId) ? "complete" : ""}
-              >
-                <span>0{index + 1}</span>
-                <p>
-                  <strong>{SECRET_LABELS[secretId]}</strong>
-                  <small>{secretStatus[secretId]}</small>
-                </p>
-                <b>{progress.completed.includes(secretId) ? "✓" : "○"}</b>
-              </div>
-            ))}
+
+          <div className="secret-console-tabs" role="tablist" aria-label="Secciones del cuaderno">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={consoleTab === "map"}
+              className={consoleTab === "map" ? "active" : ""}
+              onClick={() => setConsoleTab("map")}
+            >
+              🗺️ MAPA
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={consoleTab === "secrets"}
+              className={consoleTab === "secrets" ? "active" : ""}
+              onClick={() => setConsoleTab("secrets")}
+            >
+              🕵️ SECRETOS ({completedCount}/4)
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={consoleTab === "achievements"}
+              className={consoleTab === "achievements" ? "active" : ""}
+              onClick={() => setConsoleTab("achievements")}
+            >
+              🏆 LOGROS ({achievementState.unlocked.length}/{ACHIEVEMENT_TOTAL})
+            </button>
           </div>
-          <div className="secret-console-achievements">
-            <header>
-              <small>LOGROS · 22G CADA UNO</small>
-              <strong>{achievementState.unlocked.length}/{ACHIEVEMENT_TOTAL}</strong>
-            </header>
-            <ul>
-              {ACHIEVEMENTS.map((achievement) => {
-                const done = achievementState.unlocked.includes(achievement.id);
+
+          {consoleTab === "map" && (
+            <div className="secret-map-list">
+              <p className="secret-tab-intro">
+                Salta directo a cualquier parada de la premiere si no quieres perderte nada:
+              </p>
+              {DIRECTOR_STOPS.map((stop) => (
+                <a
+                  key={stop.href}
+                  href={stop.href}
+                  className="secret-map-item"
+                  onClick={() => onPanelOpenChange(false)}
+                >
+                  <span>{stop.code}</span>
+                  <div>
+                    <strong>{stop.label}</strong>
+                    <small>{stop.detail}</small>
+                  </div>
+                  <b aria-hidden="true">→</b>
+                </a>
+              ))}
+              <a
+                href="/walk-exe"
+                className="secret-map-item featured"
+              >
+                <span>3D</span>
+                <div>
+                  <strong>M00NW4LK.EXE · JUEGO COMPLETO</strong>
+                  <small>Recupera 3 cintas en el laberinto y escapa</small>
+                </div>
+                <b aria-hidden="true">▶</b>
+              </a>
+            </div>
+          )}
+
+          {consoleTab === "secrets" && (
+            <div className="secret-console-list">
+              {(Object.keys(SECRET_LABELS) as SecretId[]).map((secretId, index) => {
+                const done = progress.completed.includes(secretId);
+                const hintOpen = revealedHints.includes(secretId);
                 return (
-                  <li key={achievement.id} className={done ? "complete" : ""}>
-                    <b aria-hidden="true">{done ? "🏆" : "🔒"}</b>
-                    <span>
-                      <strong>{done ? achievement.title : "???"}</strong>
-                      <small>{done ? achievement.detail : "Sigue buscando."}</small>
-                    </span>
-                  </li>
+                  <div key={secretId} className={`secret-entry ${done ? "complete" : ""}`}>
+                    <div className="secret-entry-main">
+                      <span>0{index + 1}</span>
+                      <p>
+                        <strong>{SECRET_LABELS[secretId]}</strong>
+                        <small>{secretStatus[secretId]}</small>
+                      </p>
+                      <b>{done ? "✓" : "○"}</b>
+                    </div>
+                    <div className="secret-entry-actions">
+                      {!done && (
+                        <button
+                          type="button"
+                          className="secret-hint-toggle"
+                          onClick={() =>
+                            setRevealedHints((current) =>
+                              current.includes(secretId)
+                                ? current.filter((item) => item !== secretId)
+                                : [...current, secretId],
+                            )
+                          }
+                        >
+                          {hintOpen ? "Ocultar pista" : "Ver pista"}
+                        </button>
+                      )}
+                      {secretId === "microtonal" && (
+                        <button
+                          type="button"
+                          className="secret-launch-btn"
+                          onClick={() => {
+                            onPanelOpenChange(false);
+                            startMicroLab();
+                          }}
+                        >
+                          {done ? "LAB COMPLETADO · REPETIR" : "ABRIR LABORATORIO 24 TET →"}
+                        </button>
+                      )}
+                    </div>
+                    {hintOpen && !done && (
+                      <em className="secret-hint-copy">{SECRET_HINTS[secretId]}</em>
+                    )}
+                  </div>
                 );
               })}
-            </ul>
-          </div>
-          <button type="button" className="secret-reset" onClick={resetSecrets}>
-            {resetArmed ? "CONFIRMAR REINICIO" : "REINICIAR LOS 4 EXTRAS"}
-            <span>{resetArmed ? "!" : "↺"}</span>
-          </button>
+              <button type="button" className="secret-reset" onClick={resetSecrets}>
+                {resetArmed ? "CONFIRMAR REINICIO" : "REINICIAR LOS 4 EXTRAS Y LOGROS"}
+                <span>{resetArmed ? "!" : "↺"}</span>
+              </button>
+            </div>
+          )}
+
+          {consoleTab === "achievements" && (
+            <div className="secret-console-achievements">
+              {ACHIEVEMENT_CATEGORIES.map((category) => {
+                const items = ACHIEVEMENTS.filter((a) => a.category === category.id);
+                const unlockedInCat = items.filter((a) =>
+                  achievementState.unlocked.includes(a.id),
+                ).length;
+                return (
+                  <details key={category.id} className="achievement-group" open={unlockedInCat > 0 || category.id === "hee"}>
+                    <summary>
+                      <span>{category.label}</span>
+                      <strong>{unlockedInCat}/{items.length}</strong>
+                    </summary>
+                    <p className="achievement-group-hint">{category.hint}</p>
+                    <ul>
+                      {items.map((achievement) => {
+                        const done = achievementState.unlocked.includes(achievement.id);
+                        return (
+                          <li key={achievement.id} className={done ? "complete" : ""}>
+                            <b aria-hidden="true">{done ? "🏆" : "🔒"}</b>
+                            <span>
+                              <strong>{done ? achievement.title : "Logro secreto"}</strong>
+                              <small>{done ? achievement.detail : "Explora esta categoría para desbloquearlo."}</small>
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </details>
+                );
+              })}
+            </div>
+          )}
         </div>
       </aside>
 
@@ -1250,5 +1384,6 @@ export default function SecretExtras({
 declare global {
   interface WindowEventMap {
     "premiere22:micro-unlock": Event;
+    "premiere22:open-micro-lab": Event;
   }
 }

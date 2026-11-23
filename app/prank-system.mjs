@@ -2,36 +2,63 @@ export const ACHIEVEMENT_STORAGE_KEY = "premiere22.achievements.v1";
 export const HEE_COUNT_STORAGE_KEY = "premiere22.hee-count.v1";
 export const VISIT_STORAGE_KEY = "premiere22.visits.v1";
 
+export const ACHIEVEMENT_CATEGORIES = [
+  {
+    id: "hee",
+    label: "El caos del Hee-Hee",
+    hint: "Baja hasta el fondo, intenta silenciarlo y descubre qué pasa después.",
+  },
+  {
+    id: "night",
+    label: "Turno de noche & M00NW4LK.EXE",
+    hint: "Aguanta la noche FNAF, escapa del pasadizo y recupera las 5 cintas.",
+  },
+  {
+    id: "ghost",
+    label: "El Clero · Ghost & Cultura",
+    hint: "Explora el Ritual 22, Spielberg, el laboratorio 24 TET y sus secretos.",
+  },
+  {
+    id: "gags",
+    label: "Gags ocultos & Palabras secretas",
+    hint: "Prueba a escribir palabras en el teclado (hehe, annie, freddy, ghost, mary, 22) o tocar todo lo sospechoso.",
+  },
+];
+
 export const ACHIEVEMENTS = [
-  { id: "mute5", title: "NO PUEDES HUIR DEL RITMO", detail: "Intentaste callar a MJ cinco veces." },
-  { id: "director", title: "DIRECTOR AL MANDO", detail: "Cortaste el hee-hee como un profesional." },
-  { id: "coward", title: "COBARDE, PERO VALE", detail: "Preferiste el botón antes que gritar." },
-  { id: "thriller", title: "BANDA SONORA ALTERNATIVA", detail: "Pediste silencio. Te dieron terror-funk." },
-  { id: "chipmunk", title: "ARDILLA DEL POP", detail: "Llegaste al fondo con el hee-hee a ×8." },
-  { id: "hee100", title: "100 HEE-HEES", detail: "Tus oídos ya pertenecen a Neverland." },
-  { id: "blackout", title: "SOBREVIVISTE AL APAGÓN", detail: "La cajita de música sonó para ti." },
-  { id: "sixAm", title: "6 AM · YOU SURVIVED", detail: "Turno completo sin dimitir." },
-  { id: "realNight", title: "INSOMNE OFICIAL", detail: "Entraste de madrugada. De verdad." },
-  { id: "tabWatch", title: "ABANDONASTE EL TURNO", detail: "Te fuiste de la pestaña y alguien entró." },
-  { id: "flashlight", title: "MIEDO A LA OSCURIDAD", detail: "Te quedaste quieto demasiado tiempo." },
-  { id: "ghostPhoto", title: "¿LO HAS VISTO?", detail: "Pillaste al intruso de la foto." },
-  { id: "closeEncounters", title: "ENCUENTRO EN LA TERCERA FASE", detail: "Re · Mi · Do · Do · Sol." },
-  { id: "lean", title: "SMOOTH CRIMINAL", detail: "Inclinaste la premiere 45 grados." },
-  { id: "take22", title: "TOMA 22", detail: "Veintiuna tomas falsas. Una buena." },
-  { id: "pan", title: "EL PAN TA' DURO", detail: "Rompiste la pantalla con una barra de pan." },
-  { id: "calor", title: "¿QUÉ CALOREH?", detail: "Te quedaste tanto que se recalentó el plató." },
-  { id: "credits", title: "TE TRAGASTE LOS CRÉDITOS", detail: "Los viste enteros. Como debe ser." },
-  { id: "print", title: "IMPRESOR DE FREDDYS", detail: "Intentaste imprimir la premiere." },
-  { id: "wordHehe", title: "PALABRA SECRETA · HEHE", detail: "Lo invocaste tú solito." },
-  { id: "wordAnnie", title: "PALABRA SECRETA · ANNIE", detail: "Annie, are you OK?" },
-  { id: "wordFreddy", title: "PALABRA SECRETA · FREDDY", detail: "Freddy se ha reído contigo." },
-  { id: "word22", title: "PALABRA SECRETA · 22", detail: "Confeti reglamentario." },
-  { id: "welcomeBack", title: "HAS VUELTO", detail: "Freddy te echaba de menos." },
-  { id: "moonwalk", title: "PASADIZO M00NW4LK", detail: "Escapaste del pasadizo haciendo moonwalk." },
-  { id: "declassified", title: "EXPEDIENTE FILTRADO", detail: "Quitaste todas las barras negras." },
-  { id: "walkEscape", title: "SALISTE DE M00NW4LK.EXE", detail: "Encontraste la puerta de emergencia del laberinto." },
-  { id: "walkDirectorsCut", title: "DIRECTOR’S CUT", detail: "Recuperaste las 5 cintas de Raúl y escapaste." },
-  { id: "walkCaught", title: "ERROR CERVICAL 180", detail: "Sujeto M te encontró en el laberinto." },
+  { id: "mute5", category: "hee", title: "NO PUEDES HUIR DEL RITMO", detail: "Intentaste callar a MJ cinco veces." },
+  { id: "director", category: "hee", title: "DIRECTOR AL MANDO", detail: "Cortaste el hee-hee como un profesional." },
+  { id: "coward", category: "hee", title: "COBARDE, PERO VALE", detail: "Preferiste el botón antes que gritar." },
+  { id: "thriller", category: "hee", title: "BANDA SONORA ALTERNATIVA", detail: "Pediste silencio. Te dieron terror-funk." },
+  { id: "chipmunk", category: "hee", title: "ARDILLA DEL POP", detail: "Llegaste al fondo con el hee-hee a ×8." },
+  { id: "hee100", category: "hee", title: "100 HEE-HEES", detail: "Tus oídos ya pertenecen a Neverland." },
+  { id: "blackout", category: "night", title: "SOBREVIVISTE AL APAGÓN", detail: "La cajita de música sonó para ti." },
+  { id: "sixAm", category: "night", title: "6 AM · YOU SURVIVED", detail: "Turno completo sin dimitir." },
+  { id: "realNight", category: "night", title: "INSOMNE OFICIAL", detail: "Entraste de madrugada. De verdad." },
+  { id: "tabWatch", category: "night", title: "ABANDONASTE EL TURNO", detail: "Te fuiste de la pestaña y alguien entró." },
+  { id: "flashlight", category: "night", title: "MIEDO A LA OSCURIDAD", detail: "Te quedaste quieto demasiado tiempo." },
+  { id: "ghostPhoto", category: "night", title: "¿LO HAS VISTO?", detail: "Pillaste al intruso de la foto." },
+  { id: "moonwalk", category: "night", title: "PASADIZO M00NW4LK", detail: "Escapaste del pasadizo haciendo moonwalk." },
+  { id: "walkEscape", category: "night", title: "SALISTE DE M00NW4LK.EXE", detail: "Encontraste la puerta de emergencia del laberinto." },
+  { id: "walkDirectorsCut", category: "night", title: "DIRECTOR’S CUT", detail: "Recuperaste las 5 cintas de Raúl y escapaste." },
+  { id: "walkCaught", category: "night", title: "ERROR CERVICAL 180", detail: "Sujeto M te encontró en el laberinto." },
+  { id: "walkGhostRelic", category: "ghost", title: "SEVEN INCHES · LABERINTO", detail: "Encontraste el vinilo oculto de Ghost dentro de M00NW4LK.EXE." },
+  { id: "ghostRitual", category: "ghost", title: "MARY ON A CROSS · 1969", detail: "Encendiste las 5 velas del Ritual 22." },
+  { id: "squareHammer", category: "ghost", title: "ON THE SQUARE, ON THE LEVEL", detail: "Sellaste el juramento de Square Hammer ante El Clero." },
+  { id: "closeEncounters", category: "ghost", title: "ENCUENTRO EN LA TERCERA FASE", detail: "Re · Mi · Do · Do · Sol." },
+  { id: "lean", category: "ghost", title: "SMOOTH CRIMINAL", detail: "Inclinaste la premiere 45 grados." },
+  { id: "declassified", category: "ghost", title: "EXPEDIENTE FILTRADO", detail: "Quitaste todas las barras negras." },
+  { id: "take22", category: "gags", title: "TOMA 22", detail: "Las tomas falsas merecieron la pena. Toma buena." },
+  { id: "pan", category: "gags", title: "EL PAN TA' DURO", detail: "Rompiste la pantalla con una barra de pan." },
+  { id: "calor", category: "gags", title: "¿QUÉ CALOREH?", detail: "Te quedaste tanto que se recalentó el plató." },
+  { id: "credits", category: "gags", title: "TE TRAGASTE LOS CRÉDITOS", detail: "Los viste enteros. Como debe ser." },
+  { id: "print", category: "gags", title: "IMPRESOR DE FREDDYS", detail: "Intentaste imprimir la premiere." },
+  { id: "wordHehe", category: "gags", title: "PALABRA SECRETA · HEHE", detail: "Lo invocaste tú solito." },
+  { id: "wordAnnie", category: "gags", title: "PALABRA SECRETA · ANNIE", detail: "Annie, are you OK?" },
+  { id: "wordFreddy", category: "gags", title: "PALABRA SECRETA · FREDDY", detail: "Freddy se ha reído contigo." },
+  { id: "wordGhost", category: "gags", title: "IF YOU HAVE GHOSTS", detail: "Invocaste al Clero escribiendo ghost o mary." },
+  { id: "word22", category: "gags", title: "PALABRA SECRETA · 22", detail: "Confeti reglamentario." },
+  { id: "welcomeBack", category: "gags", title: "HAS VUELTO", detail: "Freddy te echaba de menos." },
 ];
 
 export const ACHIEVEMENT_IDS = ACHIEVEMENTS.map((achievement) => achievement.id);
@@ -114,6 +141,17 @@ export const TAKE_REASONS = [
 
 export const FINAL_TAKE = TAKE_REASONS.length + 1;
 
+/**
+ * Condensed montage steps for the finale clapperboard: hits 6 iconic false
+ * takes and lands on Toma 22 without making Raúl click 22 times in a row.
+ */
+export const CLAPPER_SEQUENCE = [1, 5, 8, 12, 17, 21, FINAL_TAKE];
+
+export function nextClapperTake(currentTake) {
+  const next = CLAPPER_SEQUENCE.find((step) => step > currentTake);
+  return next ?? FINAL_TAKE;
+}
+
 export function takeReason(take) {
   if (!Number.isFinite(take) || take < 1 || take >= FINAL_TAKE) return null;
   return TAKE_REASONS[Math.floor(take) - 1];
@@ -150,7 +188,7 @@ export function isNewVisitDay(lastKey, nowKey) {
   return typeof lastKey === "string" && lastKey.length > 0 && lastKey !== nowKey;
 }
 
-export const SECRET_WORDS = ["hehe", "annie", "freddy", "22"];
+export const SECRET_WORDS = ["hehe", "annie", "freddy", "ghost", "mary", "22"];
 
 export function matchSecretWord(buffer) {
   const normalized = String(buffer ?? "").toLowerCase();
@@ -180,7 +218,7 @@ function normalizeSpeech(transcript) {
   return String(transcript ?? "")
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 export function matchDirectorCommand(transcript) {

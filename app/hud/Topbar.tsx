@@ -9,17 +9,31 @@ type TopbarProps = {
   scrollDepth: number;
   onToggleSound: () => void;
   nightSlotRef: (element: HTMLElement | null) => void;
+  extrasOpen: boolean;
+  onToggleExtras: () => void;
+  achievementCount: number;
+  achievementTotal: number;
 };
 
 const NAV = [
-  { href: "#filmografia", label: "Filmografía" },
-  { href: "#expediente", label: "Expediente" },
-  { href: "#referentes", label: "Referentes" },
-  { href: "#final", label: "Escena final" },
-];
+  { href: "#reparto", label: "Director" },
+  { href: "#referentes", label: "Multiverso" },
+  { href: "#ghost", label: "Ghost" },
+  { href: "#juegos", label: "Juegos", highlight: true },
+  { href: "#final", label: "Final" },
+] as const;
 
-/** Topbar: brand, active-scene nav, night clock slot, soundtrack and the film-strip progress. */
-function Topbar({ soundOn, scrollDepth, onToggleSound, nightSlotRef }: TopbarProps) {
+/** Topbar: brand, 4-act + Ghost nav, night clock, unified Extras trigger, soundtrack and scene strip. */
+function Topbar({
+  soundOn,
+  scrollDepth,
+  onToggleSound,
+  nightSlotRef,
+  extrasOpen,
+  onToggleExtras,
+  achievementCount,
+  achievementTotal,
+}: TopbarProps) {
   const [active, setActive] = useState<string>("premiere");
   const [volume, setVolume] = useState(1);
 
@@ -54,8 +68,10 @@ function Topbar({ soundOn, scrollDepth, onToggleSound, nightSlotRef }: TopbarPro
   const activeIndex = scenes.findIndex((scene) => scene.id === active);
   const navActive = (href: string) => {
     const target = href.slice(1);
-    if (target === "final") return active === "final" || active === "escena-22";
-    if (target === "referentes") return active === "referentes";
+    if (target === "reparto") {
+      return ["reparto", "filmografia", "detras", "expediente"].includes(active);
+    }
+    if (target === "juegos") return active === "juegos" || active === "escena-22";
     return active === target;
   };
 
@@ -70,32 +86,49 @@ function Topbar({ soundOn, scrollDepth, onToggleSound, nightSlotRef }: TopbarPro
       </a>
       <nav aria-label="Navegación principal">
         {NAV.map((item) => (
-          <a key={item.href} href={item.href} className={navActive(item.href) ? "active" : ""}>
+          <a
+            key={item.href}
+            href={item.href}
+            className={`${navActive(item.href) ? "active" : ""} ${"highlight" in item && item.highlight ? "nav-games" : ""}`}
+          >
             {item.label}
           </a>
         ))}
       </nav>
-      <div className="topbar-night-slot" ref={nightSlotRef} />
-      <div className={`sound-control ${soundOn ? "on" : ""}`}>
-        <button className="sound-button" type="button" onClick={onToggleSound} aria-pressed={soundOn}>
-          <span className={soundOn ? "sound-dot live" : "sound-dot"} />
-          BANDA SONORA {soundOn ? "ON" : "OFF"}
+      <div className="topbar-tools" data-hee-control>
+        <div className="topbar-night-slot" ref={nightSlotRef} />
+        <button
+          type="button"
+          className={`topbar-extras-btn ${extrasOpen ? "open" : ""}`}
+          onClick={onToggleExtras}
+          aria-expanded={extrasOpen}
+          aria-controls="secret-console-panel"
+          title="Abrir Cuaderno del Director: mapa, secretos y logros"
+        >
+          <span>EXTRAS</span>
+          <b>🏆 {achievementCount}/{achievementTotal}</b>
         </button>
-        <label className="sound-volume">
-          <span className="sr-only">Volumen de la banda sonora</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(volume * 100)}
-            onChange={(event) => {
-              const next = Number(event.target.value) / 100;
-              setVolume(next);
-              setMusicVolume(next);
-            }}
-            disabled={!soundOn}
-          />
-        </label>
+        <div className={`sound-control ${soundOn ? "on" : ""}`}>
+          <button className="sound-button" type="button" onClick={onToggleSound} aria-pressed={soundOn}>
+            <span className={soundOn ? "sound-dot live" : "sound-dot"} />
+            BANDA {soundOn ? "ON" : "OFF"}
+          </button>
+          <label className="sound-volume">
+            <span className="sr-only">Volumen de la banda sonora</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(volume * 100)}
+              onChange={(event) => {
+                const next = Number(event.target.value) / 100;
+                setVolume(next);
+                setMusicVolume(next);
+              }}
+              disabled={!soundOn}
+            />
+          </label>
+        </div>
       </div>
       <div className="scene-strip" aria-hidden="true">
         <i className="scene-strip-fill" style={{ transform: `scaleX(${scrollDepth / 100})` }} />
