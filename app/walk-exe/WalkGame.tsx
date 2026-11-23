@@ -10,33 +10,27 @@ import {
 } from "react";
 import Link from "next/link";
 import * as THREE from "three";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   CELL_SIZE,
   CROUCH_HEIGHT,
-  MAZE_SIZE,
   PLAYER_HEIGHT,
   WALL_HEIGHT,
   WALL_THICKNESS,
-  chooseSpreadCells,
-  chooseTapeCells,
+  cellCenter2D,
   corridorLineOfSight,
   createAcousticEvent,
   createMaze,
-  createZoneMap,
   decideEnemyState,
   extrapolateAcousticTrailCell,
-  farthestCell,
   mazeDistances,
   mazePath,
   openingDirection,
   positionCell2D,
   pruneAcousticEvents,
   resolveGridMovement,
-  selectAcousticTarget,
   seededRandom,
-  uniqueReachableCells,
+  selectAcousticTarget,
   validateMaze,
   type AcousticEvent,
   type AcousticPerception,
@@ -57,7 +51,7 @@ import {
   fearLevel,
   formatTimecode,
   rateRun,
-  type RunGrade,
+  resolveEndingKind,
 } from "./run-report";
 import {
   ACHIEVEMENT_STORAGE_KEY,
@@ -74,11 +68,9 @@ import {
 import {
   WalkInputController,
   walkInputActionForCode,
-  type InputSlice,
   type WalkInputAction,
 } from "./input-controller";
 import {
-  SCARE_ROSTER,
   decideCctvEncounter,
   mascotForCamera,
   mascotForCatch,
@@ -88,30 +80,36 @@ import {
   SUBJECT_MATERIALS,
   SUBJECT_TEXTURE_SETS,
   subjectTextureAnisotropy,
-  subjectTextureVariant,
 } from "./subject-materials";
-import {
-  computeObjectiveReading,
-  type ObjectiveReading,
-} from "./objective-tracker";
+import { computeObjectiveReading } from "./objective-tracker";
 import {
   adaptiveEnemySpeed,
   isFlashlightDazzle,
   stepDetectionMeter,
   type WalkDifficulty,
 } from "./perception";
+import {
+  STUDIO_BIOME_ATMOSPHERE,
+  STUDIO_GRID_SIZE,
+  STUDIO_WINGS,
+  buildStudioLayout,
+  type StudioBiomeId,
+  type StudioEggId,
+  type StudioWingId,
+} from "./studio-layout";
+import { selectActivePoolLights, type VirtualLightSource } from "./light-pool";
+import { buildBiomeComplex } from "./biome-builder";
+import { buildThemedStudio } from "./level-builder";
+import WalkBriefing, {
+  type AudioLevels,
+  type QualityProfile,
+} from "./WalkBriefing";
+import WalkHud, { type HudSnapshot } from "./WalkHud";
+import WalkCctv, { type MapDot, type WingMapLabel } from "./WalkCctv";
+import WalkEnding, { type EndingRunStats } from "./WalkEnding";
 
 type GamePhase = "briefing" | "playing" | "caught" | "escaped";
-type QualityProfile = "low" | "medium" | "high" | "ultra";
 type CctvEncounterPhase = "idle" | "presence" | "scream";
-type AudioLevels = {
-  master: number;
-  ambience: number;
-  music: number;
-  sfx: number;
-  heartbeat: number;
-  jumpscare: number;
-};
 
 type RuntimeEcho = {
   mesh: THREE.Group;
@@ -125,43 +123,6 @@ type RuntimeTape = {
   index: number;
   collected: boolean;
 };
-
-type RunStats = {
-  escaped: boolean;
-  seconds: number;
-  meters: number;
-  tapes: number[];
-  echoesUsed: number;
-  objectsThrown: number;
-  closeCalls: number;
-  peakBpm: number;
-  grade: RunGrade;
-  best: number | null;
-  record: boolean;
-};
-
-const BOOT_LINES = [
-  "> MONTANDO UNIDAD BODY-CAM ........ OK",
-  "> CARGANDO SUJETO M-22 ............ OK",
-  "> 5 CINTAS DE RAÚL DETECTADAS ...... DISPERSAS",
-  "> PUERTA DE EMERGENCIA ............ SIN ENERGÍA",
-  "> HEE-HEE ......................... ARMADO",
-];
-
-const tapeColor = (color: number) => `#${color.toString(16).padStart(6, "0")}`;
-
-/** Records an achievement in the premiere's shared store (shown on the home page). */
-function unlockPremiereAchievement(id: AchievementId) {
-  try {
-    const state = parseAchievementState(window.localStorage.getItem(ACHIEVEMENT_STORAGE_KEY));
-    const result = unlockAchievement(state, id);
-    if (result.isNew) {
-      window.localStorage.setItem(ACHIEVEMENT_STORAGE_KEY, JSON.stringify(result.state));
-    }
-  } catch {
-    // Storage can be unavailable; the run still counts.
-  }
-}
 
 type VentTrip = {
   sourceCell: number;
@@ -189,6 +150,8 @@ type EscapeSequence = {
   startedAt: number;
   playerStart: THREE.Vector3;
   playerEnd: THREE.Vector3;
+  slammed: boolean;
+  finaleCuePlayed: boolean;
 };
 
 type CaughtSequence = {
@@ -197,111 +160,103 @@ type CaughtSequence = {
   subjectYaw: number;
 };
 
-const JUMPSCARE_DURATION_MS = 1120;
+const JUMPSCARE_DURATION_MS = 1080;
+const ESCAPE_DURATION_MS = 4200;
 
-/** Phones shake with every jumpscare (Android; silently ignored elsewhere). */
-function vibrateScare() {
-  try {
-    navigator.vibrate?.([0, 90, 40, 220, 60, 120]);
-  } catch {
-    // Vibration is optional.
-  }
-}
+const BOOT_LINES = [
+  "> INICIANDO ESTUDIOS PLATÓ 22 (13×13) ........ OK",
+  "> CARGANDO 5 ALAS Y POOL DE 3 LUCES .......... OK",
+  "> SUJETO M-22 (MODELO GLB + IA) .............. ACTIVO",
+  "> 5 CINTAS + 5 ARTEFACTOS DE LORE ............ OCULTOS",
+  "> PROTOCOLO ALERTA ROJA Y FINAL 3D ........... ARMADO",
+] as const;
 
-const cameraNames = [
-  "CAM 01 · GALERÍA OESTE",
-  "CAM 02 · CUARTO DE FIESTA",
-  "CAM 03 · CONDUCTOS",
-  "CAM 04 · PASO DE SERVICIO",
-  "CAM 05 · ARCHIVO 22",
-  "CAM 06 · SALIDA",
-];
+const CAMERA_NAMES = [
+  "CAM 01 · PLATÓ NEVERLAND",
+  "CAM 02 · CRIPTA GHOST (1969)",
+  "CAM 03 · CÁMARA 24 TET",
+  "CAM 04 · OFICINA FAZBEAR",
+  "CAM 05 · ARCHIVO MUERTO",
+  "CAM 06 · PUERTA DE ESTRENO",
+] as const;
 
-const qualitySettings: Record<
+const QUALITY_SETTINGS: Record<
   QualityProfile,
   {
     pixelRatio: number;
     dust: number;
-    localLights: number;
-    shadows: boolean;
     cctvWidth: number;
     cctvFps: number;
+    highTextures: boolean;
   }
 > = {
-  low: {
-    pixelRatio: 0.85,
-    dust: 180,
-    localLights: 4,
-    shadows: false,
-    cctvWidth: 480,
-    cctvFps: 10,
-  },
-  medium: {
-    pixelRatio: 1,
-    dust: 360,
-    localLights: 6,
-    shadows: false,
-    cctvWidth: 640,
-    cctvFps: 12,
-  },
-  high: {
-    pixelRatio: 1.25,
-    dust: 620,
-    localLights: 8,
-    shadows: false,
-    cctvWidth: 854,
-    cctvFps: 15,
-  },
-  ultra: {
-    pixelRatio: 1.55,
-    dust: 900,
-    localLights: 10,
-    shadows: true,
-    cctvWidth: 960,
-    cctvFps: 20,
-  },
+  low: { pixelRatio: 0.85, dust: 120, cctvWidth: 384, cctvFps: 10, highTextures: false },
+  medium: { pixelRatio: 1.0, dust: 220, cctvWidth: 512, cctvFps: 12, highTextures: false },
+  high: { pixelRatio: 1.2, dust: 340, cctvWidth: 640, cctvFps: 15, highTextures: false },
+  ultra: { pixelRatio: 1.45, dust: 520, cctvWidth: 768, cctvFps: 18, highTextures: true },
 };
 
-const enemyStateLabels: Record<EnemyState, string> = {
-  patrol: "PATRULLA",
-  listen: "ESCUCHANDO",
-  investigate: "INVESTIGANDO",
-  search: "BUSCANDO",
-  chase: "PERSECUCIÓN",
-  lure: "DISTRAÍDO",
-  "vent-watch": "VIGILANDO CONDUCTO",
-  ambush: "EMBOSCADA",
-  recover: "RECALCULANDO",
+const INITIAL_HUD: HudSnapshot = {
+  bpm: 48,
+  distance: 99,
+  traveled: 0,
+  sector: "A-01",
+  wing: "booth",
+  enemyMode: "patrol",
+  echoes: 0,
+  tapes: [],
+  eggsFound: [],
+  hardBreadArmed: false,
+  ghostBlessed: false,
+  redAlert: false,
+  detectionPct: 0,
+  stealthState: "lit",
+  dazzled: false,
+  objective: null,
+  interactPrompt: null,
+  loreBanner: null,
+  prompt: "Explora las cinco alas y recupera 3 cintas de Raúl.",
+  difficulty: "estreno",
 };
 
-function cellCenter(index: number) {
-  const row = Math.floor(index / MAZE_SIZE);
-  const column = index % MAZE_SIZE;
-  const half = (MAZE_SIZE * CELL_SIZE) / 2;
-  return new THREE.Vector3(
-    -half + CELL_SIZE / 2 + column * CELL_SIZE,
-    0,
-    -half + CELL_SIZE / 2 + row * CELL_SIZE,
-  );
+const tapeColor = (color: number) => `#${color.toString(16).padStart(6, "0")}`;
+
+function unlockPremiereAchievement(id: AchievementId) {
+  try {
+    const state = parseAchievementState(window.localStorage.getItem(ACHIEVEMENT_STORAGE_KEY));
+    const result = unlockAchievement(state, id);
+    if (result.isNew) {
+      window.localStorage.setItem(ACHIEVEMENT_STORAGE_KEY, JSON.stringify(result.state));
+    }
+  } catch {
+    // Storage optional.
+  }
 }
 
-function positionCell(position: THREE.Vector3) {
-  return positionCell2D(position.x, position.z);
+function vibrateScare() {
+  try {
+    navigator.vibrate?.([0, 90, 40, 220, 60, 120]);
+  } catch {
+    // Optional on non-Android devices.
+  }
 }
 
-function sectorForCell(index: number) {
-  const row = Math.floor(index / MAZE_SIZE);
-  const column = index % MAZE_SIZE;
-  return `${String.fromCharCode(65 + Math.floor(row / 4))}-${String(
-    column + 1,
-  ).padStart(2, "0")}`;
+function cellCenter(index: number, size = STUDIO_GRID_SIZE) {
+  const c = cellCenter2D(index, size, CELL_SIZE);
+  return new THREE.Vector3(c.x, 0, c.z);
 }
 
-function material(
-  color: THREE.ColorRepresentation,
-  roughness = 0.72,
-  metalness = 0.12,
-) {
+function positionCell(position: THREE.Vector3, size = STUDIO_GRID_SIZE) {
+  return positionCell2D(position.x, position.z, size, CELL_SIZE);
+}
+
+function sectorForCell(index: number, size = STUDIO_GRID_SIZE) {
+  const row = Math.floor(index / size);
+  const col = index % size;
+  return `${String.fromCharCode(65 + Math.floor(row / 3))}-${String(col + 1).padStart(2, "0")}`;
+}
+
+function mat(color: THREE.ColorRepresentation, roughness = 0.72, metalness = 0.12) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
 
@@ -315,21 +270,19 @@ function addMesh(
   const mesh = new THREE.Mesh(geometry, surface);
   mesh.position.set(...position);
   mesh.rotation.set(...rotation);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
   parent.add(mesh);
   return mesh;
 }
 
+/** Fallback procedural rig while subject-m22.glb streams in. */
 function createSubjectM() {
   const root = new THREE.Group();
   root.name = "SUJETO_M";
-
-  const black = material(0x080809, 0.42, 0.45);
-  const jacket = material(0x17181c, 0.55, 0.32);
-  const chrome = material(0x72767c, 0.2, 0.92);
-  const skin = material(0x777a73, 0.64, 0.38);
-  const white = material(0xe9e6dd, 0.48, 0.14);
+  const black = mat(0x080809, 0.42, 0.45);
+  const jacket = mat(0x1b1c20, 0.55, 0.32);
+  const chrome = mat(0x72767c, 0.22, 0.9);
+  const skin = mat(0x888a82, 0.64, 0.35);
+  const white = mat(0xe9e6dd, 0.48, 0.14);
   const red = new THREE.MeshStandardMaterial({
     color: 0x330000,
     emissive: 0xff0909,
@@ -340,95 +293,38 @@ function createSubjectM() {
   hips.name = "hips";
   hips.position.y = 1.7;
   root.add(hips);
-
-  const torso = addMesh(
-    hips,
-    new THREE.BoxGeometry(0.94, 1.18, 0.48, 2, 3, 2),
-    jacket,
-    [0, 0.28, 0],
-  );
-  torso.scale.x = 0.92;
-  addMesh(hips, new THREE.BoxGeometry(0.27, 1.03, 0.07), white, [0, 0.28, -0.27]);
-  addMesh(hips, new THREE.BoxGeometry(0.75, 0.06, 0.07), chrome, [0, 0.72, -0.31]);
-  addMesh(hips, new THREE.CylinderGeometry(0.1, 0.13, 0.16, 12), red, [0, 0.18, -0.3], [Math.PI / 2, 0, 0]);
-  addMesh(hips, new THREE.BoxGeometry(0.36, 1.28, 0.12), jacket, [-0.31, -0.46, 0.18], [0.08, 0, 0.08]);
-  addMesh(hips, new THREE.BoxGeometry(0.36, 1.42, 0.12), jacket, [0.31, -0.52, 0.18], [-0.1, 0, -0.08]);
-  for (let cable = -1; cable <= 1; cable += 1) {
-    addMesh(
-      hips,
-      new THREE.TorusGeometry(0.31 + Math.abs(cable) * 0.08, 0.018, 6, 20, Math.PI),
-      cable === 0 ? red : chrome,
-      [cable * 0.18, 0.18, 0.28],
-      [Math.PI / 2, cable * 0.3, 0],
-    );
-  }
+  addMesh(hips, new THREE.BoxGeometry(0.9, 1.18, 0.46), jacket, [0, 0.28, 0]);
+  addMesh(hips, new THREE.BoxGeometry(0.26, 1.02, 0.06), white, [0, 0.28, -0.26]);
 
   const headPivot = new THREE.Group();
   headPivot.name = "head";
   headPivot.position.set(0, 1.15, 0);
   hips.add(headPivot);
-  addMesh(headPivot, new THREE.CylinderGeometry(0.12, 0.12, 0.25, 12), chrome, [0, -0.08, 0]);
-  addMesh(
-    headPivot,
-    new THREE.SphereGeometry(0.42, 24, 18),
-    skin,
-    [0, 0.33, -0.02],
-    [0, 0, 0],
-  ).scale.set(0.82, 1.08, 0.88);
-  addMesh(headPivot, new THREE.SphereGeometry(0.43, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), black, [0, 0.48, 0.02]);
-  addMesh(headPivot, new THREE.BoxGeometry(0.1, 0.035, 0.055), black, [-0.15, 0.39, -0.37]);
-  addMesh(headPivot, new THREE.BoxGeometry(0.1, 0.035, 0.055), black, [0.15, 0.39, -0.37]);
-  addMesh(headPivot, new THREE.SphereGeometry(0.045, 12, 8), red, [-0.15, 0.37, -0.405]);
-  addMesh(headPivot, new THREE.SphereGeometry(0.045, 12, 8), red, [0.15, 0.37, -0.405]);
-  addMesh(headPivot, new THREE.ConeGeometry(0.08, 0.24, 8), skin, [0, 0.26, -0.43], [Math.PI / 2, 0, 0]);
+  addMesh(headPivot, new THREE.SphereGeometry(0.39, 16, 12), skin, [0, 0.33, -0.02]).scale.set(0.84, 1.08, 0.88);
+  addMesh(headPivot, new THREE.SphereGeometry(0.045, 8, 6), red, [-0.14, 0.37, -0.37]);
+  addMesh(headPivot, new THREE.SphereGeometry(0.045, 8, 6), red, [0.14, 0.37, -0.37]);
   const jaw = new THREE.Group();
   jaw.name = "jaw";
-  jaw.position.set(0, 0.06, -0.37);
+  jaw.position.set(0, 0.06, -0.34);
   headPivot.add(jaw);
-  addMesh(jaw, new THREE.BoxGeometry(0.34, 0.16, 0.12), chrome, [0, 0, 0]);
-  for (let tooth = -2; tooth <= 2; tooth += 1) {
-    addMesh(
-      jaw,
-      new THREE.BoxGeometry(0.035, 0.08, 0.035),
-      white,
-      [tooth * 0.06, 0.02, -0.075],
-    );
-  }
-  addMesh(headPivot, new THREE.TorusGeometry(0.17, 0.025, 6, 16, Math.PI), chrome, [0, -0.03, 0.02], [Math.PI / 2, 0, 0]);
+  addMesh(jaw, new THREE.BoxGeometry(0.32, 0.14, 0.12), chrome, [0, 0, 0]);
 
   const hat = new THREE.Group();
   hat.name = "hat";
   hat.position.set(0, 0.66, -0.01);
   headPivot.add(hat);
-  addMesh(hat, new THREE.CylinderGeometry(0.5, 0.5, 0.055, 28), black, [0, 0, 0]);
-  addMesh(hat, new THREE.CylinderGeometry(0.32, 0.38, 0.36, 24), black, [0, 0.18, 0]);
-  addMesh(hat, new THREE.CylinderGeometry(0.385, 0.385, 0.055, 24), white, [0, 0.08, 0]);
+  addMesh(hat, new THREE.CylinderGeometry(0.49, 0.49, 0.055, 20), black, [0, 0, 0]);
+  addMesh(hat, new THREE.CylinderGeometry(0.31, 0.37, 0.35, 18), black, [0, 0.18, 0]);
+  addMesh(hat, new THREE.CylinderGeometry(0.375, 0.375, 0.055, 18), white, [0, 0.08, 0]);
 
   const makeArm = (side: -1 | 1, glove: boolean) => {
     const shoulder = new THREE.Group();
     shoulder.name = side < 0 ? "armLeft" : "armRight";
-    shoulder.position.set(side * 0.58, 0.66, 0);
+    shoulder.position.set(side * 0.56, 0.66, 0);
     hips.add(shoulder);
-    addMesh(shoulder, new THREE.SphereGeometry(0.18, 12, 8), chrome, [0, 0, 0]);
-    addMesh(shoulder, new THREE.CapsuleGeometry(0.14, 0.58, 5, 10), jacket, [0, -0.42, 0]);
-    addMesh(shoulder, new THREE.TorusGeometry(0.145, 0.04, 8, 16), chrome, [0, -0.8, 0], [Math.PI / 2, 0, 0]);
-    addMesh(shoulder, new THREE.CapsuleGeometry(0.12, 0.52, 5, 10), black, [0, -1.12, 0]);
-    const hand = addMesh(
-      shoulder,
-      new THREE.SphereGeometry(0.17, 14, 10),
-      glove ? white : chrome,
-      [0, -1.52, 0],
-    );
-    hand.scale.set(0.72, 1.12, 0.55);
-    for (let finger = -2; finger <= 2; finger += 1) {
-      addMesh(
-        shoulder,
-        new THREE.CapsuleGeometry(0.022, 0.15, 3, 6),
-        glove ? white : chrome,
-        [finger * 0.052, -1.68 - Math.abs(finger) * 0.012, -0.025],
-        [0.08, 0, finger * 0.08],
-      );
-    }
+    addMesh(shoulder, new THREE.CapsuleGeometry(0.13, 0.56, 4, 8), jacket, [0, -0.42, 0]);
+    addMesh(shoulder, new THREE.CapsuleGeometry(0.11, 0.5, 4, 8), black, [0, -1.1, 0]);
+    addMesh(shoulder, new THREE.SphereGeometry(0.15, 10, 8), glove ? white : chrome, [0, -1.5, 0]);
   };
   makeArm(-1, true);
   makeArm(1, false);
@@ -436,164 +332,45 @@ function createSubjectM() {
   const makeLeg = (side: -1 | 1) => {
     const leg = new THREE.Group();
     leg.name = side < 0 ? "legLeft" : "legRight";
-    leg.position.set(side * 0.25, -0.3, 0);
+    leg.position.set(side * 0.24, -0.3, 0);
     hips.add(leg);
-    addMesh(leg, new THREE.CapsuleGeometry(0.17, 0.65, 5, 10), black, [0, -0.42, 0]);
-    addMesh(leg, new THREE.TorusGeometry(0.17, 0.045, 8, 16), chrome, [0, -0.83, 0], [Math.PI / 2, 0, 0]);
-    addMesh(leg, new THREE.CapsuleGeometry(0.14, 0.62, 5, 10), black, [0, -1.2, 0]);
-    addMesh(leg, new THREE.BoxGeometry(0.35, 0.2, 0.68), black, [0, -1.62, -0.14]);
-    addMesh(leg, new THREE.BoxGeometry(0.28, 0.06, 0.42), white, [0, -1.5, -0.08]);
+    addMesh(leg, new THREE.CapsuleGeometry(0.15, 0.64, 4, 8), black, [0, -0.42, 0]);
+    addMesh(leg, new THREE.CapsuleGeometry(0.13, 0.6, 4, 8), black, [0, -1.18, 0]);
+    addMesh(leg, new THREE.BoxGeometry(0.33, 0.18, 0.64), black, [0, -1.6, -0.14]);
   };
   makeLeg(-1);
   makeLeg(1);
 
-  root.scale.setScalar(1.08);
+  root.scale.setScalar(1.06);
   return root;
 }
 
 function createSubjectMProxy() {
   const proxy = new THREE.Group();
   proxy.name = "SUJETO_M_PROXY";
-  const dark = material(0x060709, 0.48, 0.46);
-  const ivory = material(0xb8b4aa, 0.76, 0.06);
-  const metal = material(0x555b5d, 0.34, 0.8);
-  const glove = material(0xdedbd1, 0.3, 0.22);
-  const eye = new THREE.MeshStandardMaterial({
-    color: 0x220000,
-    emissive: 0xe30d0d,
-    emissiveIntensity: 2.5,
-  });
-  addMesh(
-    proxy,
-    new THREE.BoxGeometry(0.86, 1.16, 0.42),
-    ivory,
-    [0, 2.02, 0],
-  );
-  addMesh(
-    proxy,
-    new THREE.BoxGeometry(0.26, 1.02, 0.045),
-    dark,
-    [0, 2.03, -0.235],
-  );
-  addMesh(
-    proxy,
-    new THREE.CapsuleGeometry(0.15, 0.73, 4, 8),
-    dark,
-    [-0.24, 0.93, 0],
-  );
-  addMesh(
-    proxy,
-    new THREE.CapsuleGeometry(0.15, 0.73, 4, 8),
-    dark,
-    [0.24, 0.93, 0],
-  );
-  addMesh(
-    proxy,
-    new THREE.BoxGeometry(0.34, 0.18, 0.62),
-    dark,
-    [-0.24, 0.24, -0.15],
-  );
-  addMesh(
-    proxy,
-    new THREE.BoxGeometry(0.34, 0.18, 0.62),
-    dark,
-    [0.24, 0.24, -0.15],
-  );
-  addMesh(
-    proxy,
-    new THREE.CapsuleGeometry(0.12, 0.9, 4, 8),
-    ivory,
-    [-0.57, 1.8, 0],
-  );
-  addMesh(
-    proxy,
-    new THREE.CapsuleGeometry(0.1, 0.96, 4, 8),
-    metal,
-    [0.57, 1.77, 0],
-  );
-  addMesh(
-    proxy,
-    new THREE.SphereGeometry(0.15, 9, 7),
-    glove,
-    [-0.57, 1.14, 0],
-  );
-  addMesh(
-    proxy,
-    new THREE.SphereGeometry(0.34, 14, 10),
-    metal,
-    [0, 2.86, 0],
-    [0, 0, 0],
-  ).scale.set(0.82, 1.08, 0.9);
-  addMesh(
-    proxy,
-    new THREE.SphereGeometry(0.33, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2),
-    ivory,
-    [0, 2.88, -0.03],
-  ).scale.set(0.82, 1.08, 0.92);
-  addMesh(
-    proxy,
-    new THREE.CylinderGeometry(0.48, 0.48, 0.055, 16),
-    dark,
-    [0, 3.22, 0],
-    [0.04, 0, -0.08],
-  );
-  addMesh(
-    proxy,
-    new THREE.CylinderGeometry(0.29, 0.35, 0.34, 14),
-    dark,
-    [0, 3.39, 0],
-    [0.04, 0, -0.08],
-  );
-  addMesh(
-    proxy,
-    new THREE.SphereGeometry(0.05, 8, 6),
-    eye,
-    [-0.12, 2.9, -0.3],
-  );
-  addMesh(
-    proxy,
-    new THREE.SphereGeometry(0.05, 8, 6),
-    eye,
-    [0.12, 2.9, -0.3],
-  );
+  const dark = mat(0x060709, 0.48, 0.46);
+  const ivory = mat(0xb8b4aa, 0.76, 0.06);
+  const eye = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xe30d0d, emissiveIntensity: 2.5 });
+  addMesh(proxy, new THREE.BoxGeometry(0.84, 1.15, 0.4), ivory, [0, 2.02, 0]);
+  addMesh(proxy, new THREE.CapsuleGeometry(0.14, 1.35, 4, 6), dark, [-0.24, 0.88, 0]);
+  addMesh(proxy, new THREE.CapsuleGeometry(0.14, 1.35, 4, 6), dark, [0.24, 0.88, 0]);
+  addMesh(proxy, new THREE.SphereGeometry(0.33, 10, 8), ivory, [0, 2.86, 0]);
+  addMesh(proxy, new THREE.CylinderGeometry(0.48, 0.48, 0.055, 14), dark, [0, 3.22, 0]);
+  addMesh(proxy, new THREE.CylinderGeometry(0.28, 0.34, 0.32, 12), dark, [0, 3.38, 0]);
+  addMesh(proxy, new THREE.SphereGeometry(0.05, 6, 6), eye, [-0.12, 2.9, -0.29]);
+  addMesh(proxy, new THREE.SphereGeometry(0.05, 6, 6), eye, [0.12, 2.9, -0.29]);
   proxy.scale.setScalar(0.92);
   return proxy;
 }
 
 function createSubjectMotionClips() {
-  const cyclic = (
-    name: string,
-    duration: number,
-    legSwing: number,
-    armSwing: number,
-    hipsTravel: number,
-  ) =>
+  const cyclic = (name: string, duration: number, legSwing: number, armSwing: number, hipsTravel: number) =>
     new THREE.AnimationClip(name, duration, [
-      new THREE.NumberKeyframeTrack(
-        "legLeft.rotation[x]",
-        [0, duration * 0.25, duration * 0.5, duration * 0.75, duration],
-        [0, legSwing, 0, -legSwing, 0],
-      ),
-      new THREE.NumberKeyframeTrack(
-        "legRight.rotation[x]",
-        [0, duration * 0.25, duration * 0.5, duration * 0.75, duration],
-        [0, -legSwing, 0, legSwing, 0],
-      ),
-      new THREE.NumberKeyframeTrack(
-        "armLeft.rotation[x]",
-        [0, duration * 0.25, duration * 0.5, duration * 0.75, duration],
-        [0, -armSwing, 0, armSwing, 0],
-      ),
-      new THREE.NumberKeyframeTrack(
-        "armRight.rotation[x]",
-        [0, duration * 0.25, duration * 0.5, duration * 0.75, duration],
-        [0, armSwing, 0, -armSwing, 0],
-      ),
-      new THREE.NumberKeyframeTrack(
-        "hips.position[z]",
-        [0, duration * 0.5, duration],
-        [0, hipsTravel, 0],
-      ),
+      new THREE.NumberKeyframeTrack("legLeft.rotation[x]", [0, duration * 0.25, duration * 0.5, duration * 0.75, duration], [0, legSwing, 0, -legSwing, 0]),
+      new THREE.NumberKeyframeTrack("legRight.rotation[x]", [0, duration * 0.25, duration * 0.5, duration * 0.75, duration], [0, -legSwing, 0, legSwing, 0]),
+      new THREE.NumberKeyframeTrack("armLeft.rotation[x]", [0, duration * 0.25, duration * 0.5, duration * 0.75, duration], [0, -armSwing, 0, armSwing, 0]),
+      new THREE.NumberKeyframeTrack("armRight.rotation[x]", [0, duration * 0.25, duration * 0.5, duration * 0.75, duration], [0, armSwing, 0, -armSwing, 0]),
+      new THREE.NumberKeyframeTrack("hips.position[z]", [0, duration * 0.5, duration], [0, hipsTravel, 0]),
     ]);
   return {
     idle: cyclic("idle", 2.4, 0.025, 0.02, 0.012),
@@ -603,145 +380,113 @@ function createSubjectMotionClips() {
   };
 }
 
+/** Emissive spectral echo — zero PointLights (light pool handles glow). */
 function createEcho(color = 0x87d9e9) {
   const ghost = new THREE.Group();
   const glow = new THREE.MeshStandardMaterial({
     color,
     emissive: color,
-    emissiveIntensity: 1.4,
+    emissiveIntensity: 1.65,
     transparent: true,
-    opacity: 0.42,
+    opacity: 0.48,
     roughness: 0.18,
   });
-  addMesh(ghost, new THREE.CapsuleGeometry(0.22, 0.64, 6, 12), glow, [0, 0.84, 0]);
-  addMesh(ghost, new THREE.SphereGeometry(0.26, 16, 12), glow, [0, 1.48, 0]);
-  addMesh(ghost, new THREE.CapsuleGeometry(0.08, 0.42, 4, 8), glow, [-0.18, 0.68, 0], [0, 0, -0.24]);
-  addMesh(ghost, new THREE.CapsuleGeometry(0.08, 0.42, 4, 8), glow, [0.18, 0.68, 0], [0, 0, 0.24]);
-  const light = new THREE.PointLight(color, 5, 5);
-  light.position.y = 1.1;
-  ghost.add(light);
+  addMesh(ghost, new THREE.CapsuleGeometry(0.21, 0.62, 5, 10), glow, [0, 0.84, 0]);
+  addMesh(ghost, new THREE.SphereGeometry(0.24, 12, 8), glow, [0, 1.46, 0]);
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.32, 0.42, 20),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.025;
+  ghost.add(ring);
   return ghost;
 }
 
-/** A VHS cassette from Raúl's archive, glowing in its label colour. */
+/** Emissive VHS cassette from Raúl's archive — zero PointLights! */
 function createTape(color: number) {
   const tape = new THREE.Group();
-  const shell = material(0x0d0d10, 0.42, 0.35);
+  const shell = mat(0x0d0d10, 0.42, 0.35);
   const label = new THREE.MeshStandardMaterial({
     color,
     emissive: color,
-    emissiveIntensity: 0.9,
-    roughness: 0.4,
+    emissiveIntensity: 1.3,
+    roughness: 0.35,
   });
-  const reel = material(0xe8e4da, 0.5, 0.2);
+  const reel = mat(0xe8e4da, 0.5, 0.2);
   const body = new THREE.Group();
-  body.position.y = 0.95;
+  body.position.y = 0.98;
   body.rotation.x = -0.35;
   body.scale.setScalar(1.35);
   addMesh(body, new THREE.BoxGeometry(0.78, 0.46, 0.12), shell, [0, 0, 0]);
-  // Glowing label on both faces and a lit rim so the tape reads in the dark.
   addMesh(body, new THREE.BoxGeometry(0.6, 0.16, 0.01), label, [0, 0.1, 0.065]);
   addMesh(body, new THREE.BoxGeometry(0.6, 0.16, 0.01), label, [0, 0.1, -0.065]);
-  addMesh(body, new THREE.BoxGeometry(0.8, 0.025, 0.13), label, [0, 0.235, 0]);
-  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16), reel, [-0.17, -0.08, 0.065], [Math.PI / 2, 0, 0]);
-  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16), reel, [0.17, -0.08, 0.065], [Math.PI / 2, 0, 0]);
-  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16), reel, [-0.17, -0.08, -0.065], [Math.PI / 2, 0, 0]);
-  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 16), reel, [0.17, -0.08, -0.065], [Math.PI / 2, 0, 0]);
+  addMesh(body, new THREE.BoxGeometry(0.8, 0.03, 0.13), label, [0, 0.235, 0]);
+  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 12), reel, [-0.17, -0.08, 0.065], [Math.PI / 2, 0, 0]);
+  addMesh(body, new THREE.CylinderGeometry(0.075, 0.075, 0.02, 12), reel, [0.17, -0.08, 0.065], [Math.PI / 2, 0, 0]);
   tape.add(body);
   const halo = new THREE.Mesh(
-    new THREE.RingGeometry(0.42, 0.5, 32),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
+    new THREE.RingGeometry(0.42, 0.54, 24),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.65, side: THREE.DoubleSide }),
   );
   halo.rotation.x = -Math.PI / 2;
-  halo.position.y = 0.02;
+  halo.position.y = 0.025;
   tape.add(halo);
-  const light = new THREE.PointLight(color, 4.5, 4.5);
-  light.position.y = 1.1;
-  tape.add(light);
   tape.userData.body = body;
   return tape;
 }
 
-/** Secret Ghost 7-inch vinyl ("Seven Inches of Satanic Panic · 1969") hidden in the maze. */
-function createGhostRelic() {
-  const relic = new THREE.Group();
-  const vinyl = material(0x0b0710, 0.25, 0.5);
-  const gold = new THREE.MeshStandardMaterial({
-    color: 0xe8b84d,
-    emissive: 0xc98a22,
-    emissiveIntensity: 1.1,
-    roughness: 0.3,
-    metalness: 0.72,
-  });
-  const purple = new THREE.MeshStandardMaterial({
-    color: 0x6d2cff,
-    emissive: 0x9c5bff,
-    emissiveIntensity: 1.35,
-    roughness: 0.35,
-  });
-  const body = new THREE.Group();
-  body.position.y = 1.05;
-  addMesh(body, new THREE.CylinderGeometry(0.46, 0.46, 0.035, 28), vinyl, [0, 0, 0], [Math.PI / 2, 0, 0]);
-  addMesh(body, new THREE.CylinderGeometry(0.18, 0.18, 0.042, 20), gold, [0, 0, 0], [Math.PI / 2, 0, 0]);
-  addMesh(body, new THREE.TorusGeometry(0.52, 0.025, 8, 28), purple, [0, 0, 0]);
-  relic.add(body);
-  const halo = new THREE.Mesh(
-    new THREE.RingGeometry(0.44, 0.56, 32),
-    new THREE.MeshBasicMaterial({ color: 0xe8b84d, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
-  );
-  halo.rotation.x = -Math.PI / 2;
-  halo.position.y = 0.025;
-  relic.add(halo);
-  const light = new THREE.PointLight(0xd99b38, 5, 5.5);
-  light.position.y = 1.15;
-  relic.add(light);
-  relic.userData.body = body;
-  relic.name = "GHOST_RELIC_1969";
-  return relic;
-}
-
 function createSecurityCamera() {
   const camera = new THREE.Group();
-  const casing = material(0xaeb0a6, 0.44, 0.62);
-  const dark = material(0x090a0a, 0.22, 0.8);
-  addMesh(camera, new THREE.BoxGeometry(0.74, 0.46, 0.9), casing, [0, 0, 0]);
-  addMesh(camera, new THREE.CylinderGeometry(0.2, 0.2, 0.12, 20), dark, [0, 0, -0.52], [Math.PI / 2, 0, 0]);
+  const casing = mat(0x1b2022, 0.42, 0.72);
+  const dark = mat(0x090a0a, 0.22, 0.85);
+  addMesh(camera, new THREE.BoxGeometry(0.28, 0.18, 0.42), casing, [0, 0, 0]);
+  addMesh(camera, new THREE.CylinderGeometry(0.08, 0.08, 0.09, 12), dark, [0, 0, -0.24], [Math.PI / 2, 0, 0]);
   addMesh(
     camera,
-    new THREE.CylinderGeometry(0.1, 0.1, 0.13, 18),
-    new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xe31616, emissiveIntensity: 1.6 }),
-    [0, 0, -0.6],
+    new THREE.CylinderGeometry(0.032, 0.032, 0.09, 10),
+    new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xe31616, emissiveIntensity: 2.2 }),
+    [0.06, 0.04, -0.24],
     [Math.PI / 2, 0, 0],
   );
-  addMesh(camera, new THREE.CylinderGeometry(0.08, 0.08, 0.5, 12), casing, [0, 0.48, 0.24], [0.4, 0, 0]);
   return camera;
 }
 
 function createExitDoor() {
   const door = new THREE.Group();
-  const steel = material(0x303336, 0.38, 0.86);
-  const red = new THREE.MeshStandardMaterial({
+  const steel = mat(0x303336, 0.38, 0.86);
+  const beaconMat = new THREE.MeshStandardMaterial({
     color: 0x420606,
     emissive: 0xe01111,
-    emissiveIntensity: 1.25,
+    emissiveIntensity: 1.8,
   });
   addMesh(door, new THREE.BoxGeometry(0.28, 3.35, 0.34), steel, [-1.08, 1.66, 0]);
   addMesh(door, new THREE.BoxGeometry(0.28, 3.35, 0.34), steel, [1.08, 1.66, 0]);
   addMesh(door, new THREE.BoxGeometry(2.44, 0.28, 0.34), steel, [0, 3.22, 0]);
   const panel = new THREE.Group();
   panel.name = "emergencyDoorPanel";
-  addMesh(panel, new THREE.BoxGeometry(1.86, 2.9, 0.18), material(0x090909, 0.8, 0.3), [0, 1.48, 0]);
-  addMesh(panel, new THREE.BoxGeometry(1.6, 0.14, 0.1), red, [0, 2.72, -0.13]);
-  addMesh(panel, new THREE.BoxGeometry(0.22, 0.55, 0.18), red, [0.69, 1.52, -0.16]);
+  addMesh(panel, new THREE.BoxGeometry(1.86, 2.9, 0.18), mat(0x090909, 0.8, 0.3), [0, 1.48, 0]);
+  addMesh(panel, new THREE.BoxGeometry(1.6, 0.16, 0.1), beaconMat, [0, 2.72, -0.13]);
+  addMesh(panel, new THREE.BoxGeometry(0.22, 0.55, 0.18), beaconMat, [0.69, 1.52, -0.16]);
   door.add(panel);
   door.userData.panel = panel;
+  door.userData.beaconMat = beaconMat;
   return door;
+}
+
+function pointerEventTimestamp(e: ReactPointerEvent<HTMLButtonElement>) {
+  return !Number.isFinite(e.timeStamp) || e.timeStamp <= 0
+    ? performance.now()
+    : e.timeStamp > performance.timeOrigin
+      ? e.timeStamp - performance.timeOrigin
+      : e.timeStamp;
 }
 
 export default function WalkExe() {
   const mountRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const phaseRef = useRef<GamePhase>("briefing");
+  const difficultyRef = useRef<WalkDifficulty>("estreno");
   const inputControllerRef = useRef<WalkInputController | null>(null);
   if (inputControllerRef.current === null) {
     inputControllerRef.current = new WalkInputController();
@@ -765,63 +510,52 @@ export default function WalkExe() {
   const audioRef = useRef<SpatialAudioEngine | null>(null);
   const heeBufferRef = useRef<AudioBuffer | null>(null);
   const timecodeRef = useRef<HTMLSpanElement | null>(null);
+  const autoStartNextRunRef = useRef(false);
+  const qaActionsRef = useRef<{
+    triggerRedAlert: () => boolean;
+    triggerEscape: () => boolean;
+    triggerSecretEscape: () => boolean;
+    visitNextBiome: () => string | false;
+  } | null>(null);
+
   const [phase, setPhase] = useState<GamePhase>("briefing");
+  const [qaSummary, setQaSummary] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<WalkDifficulty>("estreno");
-  const difficultyRef = useRef<WalkDifficulty>("estreno");
-  const [tapes, setTapes] = useState<number[]>([]);
-  const [ghostRelicFound, setGhostRelicFound] = useState(false);
-  const [objectiveReading, setObjectiveReading] = useState<ObjectiveReading | null>(null);
-  const [detectionPct, setDetectionPct] = useState(0);
-  const [stealthState, setStealthState] = useState<"hidden" | "dim" | "lit">("lit");
-  const [dazzled, setDazzled] = useState(false);
-  const [tapeMapMarkers, setTapeMapMarkers] = useState<
-    Array<{ code: string; color: string; left: number; top: number; collected: boolean }>
-  >([]);
-  const [exitMapMarker, setExitMapMarker] = useState<{ left: number; top: number } | null>(null);
-  const [relicMapMarker, setRelicMapMarker] = useState<{ left: number; top: number; found: boolean } | null>(null);
-  const [runStats, setRunStats] = useState<RunStats | null>(null);
-  const [bootStep, setBootStep] = useState(0);
+  const [quality, setQuality] = useState<QualityProfile>("medium");
   const [seed, setSeed] = useState(220722);
-  const [echoes, setEchoes] = useState(0);
-  const [bpm, setBpm] = useState(48);
-  const [distance, setDistance] = useState(99);
-  const [traveled, setTraveled] = useState(0);
-  const [sector, setSector] = useState("A-01");
+  const [runEpoch, setRunEpoch] = useState(0);
+  const [bootStep, setBootStep] = useState(0);
+  const [sceneReady, setSceneReady] = useState(false);
+  const [hud, setHud] = useState<HudSnapshot>(INITIAL_HUD);
+  const [runStats, setRunStats] = useState<EndingRunStats | null>(null);
   const [tabletOpen, setTabletOpen] = useState(false);
   const [cctvIndex, setCctvIndex] = useState(0);
-  const [power, setPower] = useState(96);
+  const [power, setPower] = useState(100);
   const [inVent, setInVent] = useState(false);
   const [ventProgress, setVentProgress] = useState(0);
   const [ventRoute, setVentRoute] = useState("SIN RUTA");
   const [pointerHelp, setPointerHelp] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
-  const [enemyMode, setEnemyMode] = useState<EnemyState>("patrol");
-  const [quality, setQuality] = useState<QualityProfile>("high");
   const [motionDetected, setMotionDetected] = useState(false);
   const [signalLost, setSignalLost] = useState(false);
-  const [cctvEncounter, setCctvEncounter] =
-    useState<ScareMascot | null>(null);
-  const [cctvEncounterPhase, setCctvEncounterPhase] =
-    useState<CctvEncounterPhase>("idle");
-  const [activeJumpscare, setActiveJumpscare] =
-    useState<ScareMascot | null>(null);
-  const [mapPlayer, setMapPlayer] = useState({ left: 3, top: 3 });
-  const [cameraMapPositions, setCameraMapPositions] = useState<
-    Array<{ left: number; top: number }>
-  >([]);
-  const [mapSegments, setMapSegments] = useState<
-    Array<{ x1: number; y1: number; x2: number; y2: number }>
-  >([]);
+  const [cctvEncounter, setCctvEncounter] = useState<ScareMascot | null>(null);
+  const [cctvEncounterPhase, setCctvEncounterPhase] = useState<CctvEncounterPhase>("idle");
+  const [activeJumpscare, setActiveJumpscare] = useState<ScareMascot | null>(null);
+  const [mapPlayer, setMapPlayer] = useState({ left: 4, top: 4 });
+  const [cameraMapPositions, setCameraMapPositions] = useState<Array<{ left: number; top: number }>>([]);
+  const [tapeMapMarkers, setTapeMapMarkers] = useState<MapDot[]>([]);
+  const [wingMapLabels, setWingMapLabels] = useState<WingMapLabel[]>([]);
+  const [exitMapMarker, setExitMapMarker] = useState<{ left: number; top: number } | null>(null);
+  const [mapSegments, setMapSegments] = useState<Array<{ x1: number; y1: number; x2: number; y2: number }>>([]);
   const [audioLevels, setAudioLevels] = useState<AudioLevels>({
-    master: 0.82,
+    master: 0.84,
     ambience: 0.72,
-    music: 0.34,
-    sfx: 0.82,
-    heartbeat: 0.86,
-    jumpscare: 0.68,
+    music: 0.36,
+    sfx: 0.86,
+    heartbeat: 0.88,
+    jumpscare: 0.7,
   });
-  const [prompt, setPrompt] = useState("Encuentra una salida. No corras sin escuchar.");
-  const [message, setMessage] = useState("El sistema está generando una ruta nueva.");
+  const [message, setMessage] = useState("El motor 3D está preparando las cinco alas del estudio.");
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -833,9 +567,7 @@ export default function WalkExe() {
 
   const clearCctvEncounter = useCallback(() => {
     cctvEncounterGenerationRef.current += 1;
-    cctvEncounterTimersRef.current.forEach((timer) =>
-      window.clearTimeout(timer),
-    );
+    cctvEncounterTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     cctvEncounterTimersRef.current.clear();
     cctvEncounterRef.current = null;
     cctvEncounterPhaseRef.current = "idle";
@@ -846,10 +578,7 @@ export default function WalkExe() {
   const startAudio = useCallback(() => {
     const engine =
       audioRef.current ??
-      new SpatialAudioEngine({
-        seed,
-        levels: audioLevels,
-      });
+      new SpatialAudioEngine({ seed, levels: audioLevels });
     audioRef.current = engine;
     engine.setLevels(audioLevels);
     void engine
@@ -861,17 +590,16 @@ export default function WalkExe() {
           bus: "sfx",
           gain: 1,
           refDistance: 1.5,
-          maxDistance: 44,
+          maxDistance: 40,
           rolloffFactor: 1.4,
         });
         engine.ensureEmitter("metal-impact", {
           bus: "sfx",
-          gain: 0.9,
+          gain: 0.95,
           refDistance: 1.2,
           maxDistance: 35,
-          rolloffFactor: 1.55,
+          rolloffFactor: 1.5,
         });
-        // Subject M's signature: a positional hee-hee from the animatronic.
         if (!heeBufferRef.current) {
           void engine
             .loadSample("/audio/michael-jackson-hee-hee.mp3")
@@ -882,9 +610,7 @@ export default function WalkExe() {
         }
       })
       .catch(() => {
-        setMessage(
-          "El navegador ha bloqueado el audio. El juego continúa en silencio.",
-        );
+        setMessage("El navegador ha bloqueado el audio. El juego continúa en silencio.");
       });
     return engine;
   }, [audioLevels, seed]);
@@ -900,9 +626,7 @@ export default function WalkExe() {
       const engine = audioRef.current ?? startAudio();
       void primeCctvAudio().then((running) => {
         if (!running || audioRef.current !== engine) {
-          setMessage(
-            "AUDIO BLOQUEADO · vuelve a pulsar OÍR para autorizar el sonido.",
-          );
+          setMessage("AUDIO BLOQUEADO · vuelve a pulsar OÍR para autorizar el sonido.");
           return;
         }
         engine.playMascotWarning(mascot.screamVariant);
@@ -928,69 +652,88 @@ export default function WalkExe() {
     try {
       const request = canvas.requestPointerLock();
       if (request && typeof request.catch === "function") {
-        void request.catch(() => {
-          setPointerHelp(true);
-          setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
-        });
+        void request.catch(() => setPointerHelp(true));
       }
     } catch {
       setPointerHelp(true);
-      setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
     }
   }, []);
 
   useEffect(() => {
     if (phase !== "briefing") return;
     const timers = BOOT_LINES.map((_, index) =>
-      window.setTimeout(() => setBootStep(index + 1), 260 + index * 320),
+      window.setTimeout(() => setBootStep(index + 1), 160 + index * 200),
     );
     return () => {
       timers.forEach((timer) => window.clearTimeout(timer));
       setBootStep(0);
     };
-  }, [phase, seed]);
+  }, [phase, seed, runEpoch]);
 
   const beginGame = useCallback(() => {
     startAudio();
     setGamePhase("playing");
     setActiveJumpscare(null);
     setPointerHelp(false);
-    setPrompt("Sigue las marcas del suelo. WASD mueve; arrastra para mirar.");
-    setMessage("Encuentra la puerta de emergencia. TAB abre la red CCTV.");
-    // Pointer lock must be requested synchronously inside the user's click.
+    setHud((prev) => ({
+      ...prev,
+      difficulty: difficultyRef.current,
+      prompt: "Sigue el rastreador VHS o abre el mapa con [TAB].",
+    }));
     requestControl();
+    window.requestAnimationFrame(() => {
+      canvasRef.current?.focus({ preventScroll: true });
+    });
   }, [requestControl, setGamePhase, startAudio]);
 
-  const restart = useCallback(() => {
-    document.exitPointerLock?.();
-    clearCctvEncounter();
-    if (audioRef.current) {
-      void audioRef.current.cleanup();
-      audioRef.current = null;
-    }
-    setEchoes(0);
-    setTapes([]);
-    setGhostRelicFound(false);
-    setObjectiveReading(null);
-    setDetectionPct(0);
-    setDazzled(false);
-    setRunStats(null);
-    heeBufferRef.current = null;
-    setTraveled(0);
-    setPower(96);
-    setTabletOpen(false);
-    setInVent(false);
-    setVentProgress(0);
-    setVentRoute("SIN RUTA");
-    setActiveJumpscare(null);
+  const resetRunState = useCallback(
+    (nextSeed: number, immediateStart: boolean) => {
+      document.exitPointerLock?.();
+      clearCctvEncounter();
+      if (audioRef.current) {
+        void audioRef.current.cleanup();
+        audioRef.current = null;
+      }
+      heeBufferRef.current = null;
+      setRunStats(null);
+      setPower(100);
+      setTabletOpen(false);
+      setInVent(false);
+      setVentProgress(0);
+      setVentRoute("SIN RUTA");
+      setActiveJumpscare(null);
+      tabletRef.current = false;
+      cctvVisitRef.current = 0;
+      cctvQuietVisitsRef.current = 0;
+      cctvLastEncounterAtRef.current = Number.NEGATIVE_INFINITY;
+      autoStartNextRunRef.current = immediateStart;
+      setHud({ ...INITIAL_HUD, difficulty: difficultyRef.current });
+      setSeed(nextSeed);
+      setRunEpoch((value) => value + 1);
+      if (immediateStart) {
+        setGamePhase("playing");
+      } else {
+        setGamePhase("briefing");
+        setMessage("El estudio ha reorganizado sus cinco alas.");
+      }
+    },
+    [clearCctvEncounter, setGamePhase],
+  );
+
+  const quickRetry = useCallback(() => {
+    resetRunState(seed, true);
+  }, [resetRunState, seed]);
+
+  const newMaze = useCallback(() => {
+    resetRunState(Math.floor(100000 + Math.random() * 899999), false);
+  }, [resetRunState]);
+
+  const handleCloseTablet = useCallback(() => {
     tabletRef.current = false;
-    setSeed(Math.floor(100000 + Math.random() * 899999));
-    cctvVisitRef.current = 0;
-    cctvQuietVisitsRef.current = 0;
-    cctvLastEncounterAtRef.current = Number.NEGATIVE_INFINITY;
-    setGamePhase("briefing");
-    setMessage("El sistema ha destruido el mapa anterior.");
-  }, [clearCctvEncounter, setGamePhase]);
+    setTabletOpen(false);
+    clearCctvEncounter();
+    requestControl();
+  }, [clearCctvEncounter, requestControl]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -998,131 +741,118 @@ export default function WalkExe() {
     const inputController = inputControllerRef.current;
     if (!inputController) return;
     const mobilePointers = mobilePointersRef.current;
+    const encounterTimers = cctvEncounterTimersRef.current;
     inputController.reset(performance.now());
     mobilePointers.clear();
     setRuntimeError(null);
+    setSceneReady(false);
 
-    let maze = createMaze(seed);
-    let validation = validateMaze(maze);
+    const GRID = STUDIO_GRID_SIZE;
+    let maze = createMaze(seed, GRID);
+    let validation = validateMaze(maze, GRID);
     for (let attempt = 1; !validation.valid && attempt < 8; attempt += 1) {
-      maze = createMaze(seed + attempt * 104729);
-      validation = validateMaze(maze);
+      maze = createMaze(seed + attempt * 104729, GRID);
+      validation = validateMaze(maze, GRID);
     }
     if (!validation.valid) {
-      setRuntimeError(
-        `MAPA RECHAZADO · ${validation.issues.join(" · ")}`,
-      );
+      setRuntimeError(`MAPA RECHAZADO · ${validation.issues.join(" · ")}`);
       return;
     }
+
+    const layout = buildStudioLayout(maze, seed, GRID);
     const capsuleWorld = createCapsuleCollisionWorld(maze, {
-      size: MAZE_SIZE,
+      size: GRID,
       cellSize: CELL_SIZE,
       wallThickness: WALL_THICKNESS,
       standingEyeHeight: PLAYER_HEIGHT,
       crouchingEyeHeight: CROUCH_HEIGHT,
     });
-    const zones = createZoneMap(maze, seed);
     const random = seededRandom(seed * 7 + 22);
-    const graphics = qualitySettings[quality];
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    const qaMode = new URLSearchParams(window.location.search).has("qa");
-    const exitCell = farthestCell(maze, 0);
-    const spread = chooseSpreadCells(maze, seed, 14);
-    const enemyStart = spread[0] ?? exitCell;
-    const echoCells = spread.slice(1, 8);
-    const ventCells = spread.slice(8, 12);
-    const cctvCells = uniqueReachableCells(
-      maze,
-      [0, exitCell, ...spread.slice(2)],
-      6,
-    );
-    const qaTapes = Number(new URLSearchParams(window.location.search).get("tapes") ?? 0);
-    const requiredTapes = qaMode
-      ? Math.max(0, Math.min(WALK_TAPES.length, Number.isFinite(qaTapes) ? qaTapes : 0))
-      : TAPES_TO_EXIT;
-    const tapeCells = chooseTapeCells(
-      maze,
-      seed,
-      [0, exitCell, enemyStart, ...spread, ...cctvCells],
-      WALK_TAPES.length,
-    );
-    const ghostRelicCell = chooseTapeCells(
-      maze,
-      seed ^ 0x666,
-      [0, exitCell, enemyStart, ...spread, ...cctvCells, ...tapeCells],
-      1,
-    )[0] ?? tapeCells[0] ?? exitCell;
-    const gridPercent = (coordinate: number) =>
-      4 + (coordinate / Math.max(1, MAZE_SIZE - 1)) * 88;
-    const cellMapPosition = (cell: number) => ({
-      left: gridPercent(cell % MAZE_SIZE),
-      top: gridPercent(Math.floor(cell / MAZE_SIZE)),
+    const graphics = QUALITY_SETTINGS[quality];
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const searchParams = new URLSearchParams(window.location.search);
+    const qaMode = searchParams.has("qa");
+    const qaTapesRaw = searchParams.get("tapes");
+    const qaTapes = qaTapesRaw !== null ? Number(qaTapesRaw) : TAPES_TO_EXIT;
+    const requiredTapes =
+      qaMode && qaTapesRaw !== null
+        ? Math.max(0, Math.min(WALK_TAPES.length, Number.isFinite(qaTapes) ? qaTapes : TAPES_TO_EXIT))
+        : TAPES_TO_EXIT;
+
+    // Publish CCTV schematic & markers (padded below header so YOU/C6 never collide)
+    const gridX = (col: number) => 8 + (col / Math.max(1, GRID - 1)) * 84;
+    const gridY = (row: number) => 16 + (row / Math.max(1, GRID - 1)) * 76;
+    const cellMapPos = (cell: number) => ({
+      left: gridX(cell % GRID),
+      top: gridY(Math.floor(cell / GRID)),
     });
-    setCameraMapPositions(cctvCells.map(cellMapPosition));
+    setCameraMapPositions(
+      layout.cctvCells.map((cell, idx) => {
+        const pos = cellMapPos(cell);
+        return idx === 5 ? { left: Math.max(10, pos.left - 6), top: Math.min(93, pos.top + 4) } : pos;
+      }),
+    );
     setTapeMapMarkers(
-      tapeCells.map((cell, index) => ({
+      layout.tapeCells.map((cell, index) => ({
         code: WALK_TAPES[index].code,
         color: tapeColor(WALK_TAPES[index].color),
-        ...cellMapPosition(cell),
+        ...cellMapPos(cell),
         collected: false,
       })),
     );
-    setExitMapMarker(cellMapPosition(exitCell));
-    setRelicMapMarker({ ...cellMapPosition(ghostRelicCell), found: false });
-    const schematic: Array<{
-      x1: number;
-      y1: number;
-      x2: number;
-      y2: number;
-    }> = [];
+    setExitMapMarker(cellMapPos(layout.exitCell));
+    setWingMapLabels(
+      layout.eggPlacements.map((egg) => ({
+        id: egg.id,
+        short: egg.title,
+        color: STUDIO_WINGS[egg.wing].accentCss,
+        ...cellMapPos(egg.cell),
+        done: false,
+      })),
+    );
+
+    const schematic: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
     maze.forEach((cell, index) => {
-      const row = Math.floor(index / MAZE_SIZE);
-      const column = index % MAZE_SIZE;
-      if (cell.e && column + 1 < MAZE_SIZE) {
-        schematic.push({
-          x1: gridPercent(column),
-          y1: gridPercent(row),
-          x2: gridPercent(column + 1),
-          y2: gridPercent(row),
-        });
+      const row = Math.floor(index / GRID);
+      const col = index % GRID;
+      if (cell.e && col + 1 < GRID) {
+        schematic.push({ x1: gridX(col), y1: gridY(row), x2: gridX(col + 1), y2: gridY(row) });
       }
-      if (cell.s && row + 1 < MAZE_SIZE) {
-        schematic.push({
-          x1: gridPercent(column),
-          y1: gridPercent(row),
-          x2: gridPercent(column),
-          y2: gridPercent(row + 1),
-        });
+      if (cell.s && row + 1 < GRID) {
+        schematic.push({ x1: gridX(col), y1: gridY(row), x2: gridX(col), y2: gridY(row + 1) });
       }
     });
     setMapSegments(schematic);
+
+    // ── Three.js Scene & Performance-First Renderer ─────────────────────────
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050807);
-    scene.fog = new THREE.FogExp2(0x050807, 0.032);
+    const currentBgColor = new THREE.Color(STUDIO_BIOME_ATMOSPHERE.booth.fogHex);
+    const targetBgColor = new THREE.Color(STUDIO_BIOME_ATMOSPHERE.booth.fogHex);
+    const targetHemiSky = new THREE.Color(STUDIO_BIOME_ATMOSPHERE.booth.hemiSkyHex);
+    const targetHemiGround = new THREE.Color(STUDIO_BIOME_ATMOSPHERE.booth.hemiGroundHex);
+    const alertBg = new THREE.Color(0x140305);
+    scene.background = currentBgColor;
+    scene.fog = new THREE.FogExp2(STUDIO_BIOME_ATMOSPHERE.booth.fogHex, STUDIO_BIOME_ATMOSPHERE.booth.fogDensity);
 
     const camera = new THREE.PerspectiveCamera(
       74,
       mount.clientWidth / Math.max(1, mount.clientHeight),
-      0.05,
-      34,
+      0.06,
+      30,
     );
     camera.rotation.order = "YXZ";
 
     const renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: quality === "high" || quality === "ultra",
       powerPreference: "high-performance",
+      stencil: false,
     });
-    renderer.setPixelRatio(
-      Math.min(window.devicePixelRatio, graphics.pixelRatio),
-    );
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, graphics.pixelRatio));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
-    renderer.shadowMap.enabled = graphics.shadows;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = false;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.32;
+    renderer.toneMappingExposure = 1.24;
     renderer.info.autoReset = false;
     renderer.domElement.className = "walk-canvas";
     renderer.domElement.tabIndex = 0;
@@ -1132,34 +862,425 @@ export default function WalkExe() {
     const cctvTarget = new THREE.WebGLRenderTarget(
       graphics.cctvWidth,
       Math.round((graphics.cctvWidth * 9) / 16),
-      {
-        depthBuffer: true,
-        stencilBuffer: false,
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-      },
+      { depthBuffer: true, stencilBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter },
     );
     cctvTarget.texture.colorSpace = THREE.SRGBColorSpace;
-    cctvTarget.texture.name = "CCTV_FEED";
     const cctvDisplayScene = new THREE.Scene();
     const cctvDisplayCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const cctvDisplayGeometry = new THREE.PlaneGeometry(2, 2);
-    const cctvDisplayMaterial = new THREE.MeshBasicMaterial({
-      map: cctvTarget.texture,
-      toneMapped: false,
+    const cctvDisplayMaterial = new THREE.MeshBasicMaterial({ map: cctvTarget.texture, toneMapped: false });
+    cctvDisplayScene.add(new THREE.Mesh(cctvDisplayGeometry, cctvDisplayMaterial));
+
+    const world = new THREE.Group();
+    scene.add(world);
+    const hemiLight = new THREE.HemisphereLight(0x8a9c96, 0x0a0b0d, 0.78);
+    scene.add(hemiLight);
+    const emergencyLight = new THREE.DirectionalLight(0x748a82, 0.52);
+    emergencyLight.position.set(4, 12, 2);
+    scene.add(emergencyLight);
+
+    // ── Light Pool: MAXIMUM 3 recycled PointLights for silky 60 FPS! ────────
+    const poolLights = Array.from({ length: 3 }, () => {
+      const light = new THREE.PointLight(0xffffff, 0, 12, 1.9);
+      light.visible = false;
+      scene.add(light);
+      return light;
     });
-    cctvDisplayScene.add(
-      new THREE.Mesh(cctvDisplayGeometry, cctvDisplayMaterial),
+
+    const metalMat = mat(0x282d2c, 0.36, 0.85);
+    const boardSpan = GRID * CELL_SIZE;
+
+    // Build all 6 rich architectural biomes (per-biome walls, floors, arches, pipes & 150+ instanced corridor furniture!)
+    const biomeComplex = buildBiomeComplex(world, maze, layout, seed);
+
+    // Build the 5 themed horror wings + interactive set pieces!
+    const studioEnv = buildThemedStudio(world, maze, layout);
+
+    // Atmospheric dust particles
+    const dustPositions = new Float32Array(graphics.dust * 3);
+    const halfSpan = boardSpan / 2;
+    for (let i = 0; i < graphics.dust; i += 1) {
+      dustPositions[i * 3] = (random() - 0.5) * halfSpan * 2;
+      dustPositions[i * 3 + 1] = 0.2 + random() * (WALL_HEIGHT - 0.4);
+      dustPositions[i * 3 + 2] = (random() - 0.5) * halfSpan * 2;
+    }
+    const dustGeo = new THREE.BufferGeometry();
+    dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
+    const dust = new THREE.Points(
+      dustGeo,
+      new THREE.PointsMaterial({ color: 0x9daaa1, size: 0.036, transparent: true, opacity: 0.24, depthWrite: false }),
+    );
+    world.add(dust);
+
+    // Floor start chevrons
+    const start = cellCenter(layout.boothCell, GRID);
+    const startOpening = openingDirection(maze[layout.boothCell]);
+    const routeGuideMat = new THREE.MeshBasicMaterial({ color: 0x9fcbb0 });
+    for (let marker = 0; marker < 3; marker += 1) {
+      const longX = startOpening.x !== 0;
+      addMesh(
+        world,
+        new THREE.BoxGeometry(longX ? 0.42 : 0.12, 0.02, longX ? 0.12 : 0.42),
+        routeGuideMat,
+        [start.x + startOpening.x * (0.65 + marker * 0.5), 0.02, start.z + startOpening.z * (0.65 + marker * 0.5)],
+      );
+    }
+
+    // 6 CCTV cameras watching the 5 wings + exit
+    const cctvCameras: THREE.PerspectiveCamera[] = [];
+    layout.cctvCells.forEach((cellIndex, index) => {
+      const center = cellCenter(cellIndex, GRID);
+      const nextCell = mazePath(maze, cellIndex, layout.exitCell, GRID)[1] ?? cellIndex;
+      const target = cellCenter(nextCell, GRID).setY(1.1);
+      const housing = createSecurityCamera();
+      housing.position.set(center.x + 1.4, 3.05, center.z + 1.4);
+      housing.lookAt(target);
+      const optical = new THREE.PerspectiveCamera(62, 16 / 9, 0.08, 36);
+      optical.position.set(0, 0.08, 0.42);
+      optical.rotation.y = Math.PI;
+      optical.name = `CCTV_0${index + 1}`;
+      housing.add(optical);
+      cctvCameras.push(optical);
+      world.add(housing);
+    });
+
+    // Emergency Premiere Blast Door
+    const exit = createExitDoor();
+    const exitPosition = cellCenter(layout.exitCell, GRID);
+    const exitOpening = openingDirection(maze[layout.exitCell]);
+    exit.position.set(exitPosition.x, 0, exitPosition.z);
+    exit.rotation.y = exitOpening.yaw;
+    world.add(exit);
+    const exitPanel = exit.getObjectByName("emergencyDoorPanel");
+    const exitBeaconMat = exit.userData.beaconMat as THREE.MeshStandardMaterial | undefined;
+
+    // Virtual light table (all wing lights + exit light + tape lights -> fed to 3-light pool!)
+    const exitVirtualLight: {
+      id: string;
+      x: number;
+      y: number;
+      z: number;
+      color: number;
+      intensity: number;
+      distance: number;
+      priority: number;
+      active: boolean;
+    } = {
+      id: "exit-door",
+      x: exitPosition.x,
+      y: 2.5,
+      z: exitPosition.z,
+      color: requiredTapes === 0 ? 0x35ff7a : 0xff1717,
+      intensity: 24,
+      distance: 12,
+      priority: 1.8,
+      active: true,
+    };
+    const virtualLights: VirtualLightSource[] = [...studioEnv.virtualLights, exitVirtualLight];
+
+    // Pooled thrown metal/bread objects
+    const noiseObjGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.24, 8);
+    const noiseObjMat = mat(0x737877, 0.3, 0.88);
+    const noiseObjects: RuntimeNoiseObject[] = Array.from({ length: 6 }, () => {
+      const mesh = new THREE.Mesh(noiseObjGeo, noiseObjMat);
+      mesh.rotation.z = Math.PI / 2;
+      mesh.visible = false;
+      world.add(mesh);
+      return { mesh, activeUntil: 0 };
+    });
+
+    // Spectral echoes (no PointLight!)
+    const runtimeEchoes: RuntimeEcho[] = layout.echoCells.map((cell, index) => {
+      const mesh = createEcho(index % 2 ? 0x7ec6ff : 0xb58bff);
+      const center = cellCenter(cell, GRID);
+      mesh.position.set(center.x + (random() - 0.5) * 0.6, 0, center.z + (random() - 0.5) * 0.6);
+      world.add(mesh);
+      return { mesh, cell, collected: false };
+    });
+
+    // 5 Tapes of Raúl (no PointLight — registered in virtualLights!)
+    const tapeVirtualLights: Array<{
+      id: string;
+      x: number;
+      y: number;
+      z: number;
+      color: number;
+      intensity: number;
+      distance: number;
+      priority: number;
+      active: boolean;
+    }> = [];
+    const runtimeTapes: RuntimeTape[] = layout.tapeCells.map((cell, index) => {
+      const mesh = createTape(WALK_TAPES[index].color);
+      const center = cellCenter(cell, GRID);
+      mesh.position.set(center.x + (random() - 0.5) * 0.7, 0, center.z + (random() - 0.5) * 0.7);
+      mesh.name = `RAUL_TAPE_${WALK_TAPES[index].code}`;
+      world.add(mesh);
+      const vLight = {
+        id: `tape-${index}`,
+        x: mesh.position.x,
+        y: 1.2,
+        z: mesh.position.z,
+        color: WALK_TAPES[index].color,
+        intensity: 10,
+        distance: 8,
+        priority: 1.1,
+        active: true,
+      };
+      tapeVirtualLights.push(vLight);
+      virtualLights.push(vLight);
+      return { mesh, cell, index, collected: false };
+    });
+
+    // Maintenance Vents (2 connected shortcut pairs, zero PointLights!)
+    const ventMeshes: THREE.Group[] = [];
+    const ductRoutes: THREE.Group[] = [];
+    const ventByCell = new Map<number, number>();
+    const ventGlowMat = new THREE.MeshBasicMaterial({ color: 0x6f98b8 });
+    layout.ventPairs.forEach(([first, second], pairIndex) => {
+      ventByCell.set(first, second);
+      ventByCell.set(second, first);
+      [first, second].forEach((cell, side) => {
+        const center = cellCenter(cell, GRID);
+        const vent = new THREE.Group();
+        vent.position.set(center.x + (side ? -1.48 : 1.48), 0.72, center.z);
+        vent.rotation.y = side ? Math.PI / 2 : -Math.PI / 2;
+        addMesh(vent, new THREE.BoxGeometry(1.22, 1.16, 0.14), metalMat, [0, 0, 0]);
+        for (let bar = -2; bar <= 2; bar += 1) {
+          addMesh(vent, new THREE.BoxGeometry(0.07, 0.96, 0.05), mat(0x080909, 0.4, 0.9), [bar * 0.22, 0, -0.1]);
+        }
+        addMesh(vent, new THREE.BoxGeometry(1.0, 0.05, 0.05), ventGlowMat, [0, 0.56, -0.09]);
+        vent.userData.cell = cell;
+        vent.userData.pair = pairIndex;
+        world.add(vent);
+        ventMeshes.push(vent);
+      });
+    });
+    layout.ventPairs.forEach((_, pairIndex) => {
+      const pairVents = ventMeshes.filter((v) => v.userData.pair === pairIndex);
+      if (pairVents.length !== 2) return;
+      const first = pairVents[0].position;
+      const second = pairVents[1].position;
+      const length = Math.hypot(second.x - first.x, second.z - first.z);
+      const duct = new THREE.Group();
+      duct.position.set((first.x + second.x) / 2, WALL_HEIGHT + 0.78, (first.z + second.z) / 2);
+      duct.rotation.y = -Math.atan2(second.z - first.z, second.x - first.x);
+      const panel = mat(0x161b1e, 0.55, 0.8);
+      addMesh(duct, new THREE.BoxGeometry(length + 1.2, 0.08, 1.36), panel, [0, -0.59, 0]);
+      addMesh(duct, new THREE.BoxGeometry(length + 1.2, 0.08, 1.36), panel, [0, 0.59, 0]);
+      addMesh(duct, new THREE.BoxGeometry(length + 1.2, 1.22, 0.08), panel, [0, 0, -0.68]);
+      addMesh(duct, new THREE.BoxGeometry(length + 1.2, 1.22, 0.08), panel, [0, 0, 0.68]);
+      duct.visible = false;
+      world.add(duct);
+      ductRoutes[pairIndex] = duct;
+    });
+
+    // ── Subject M-22 Model (LOD + Pre-compiled low textures by default) ─────
+    const subjectDetailSlot = new THREE.Group();
+    const subjectFallback = createSubjectM();
+    subjectDetailSlot.add(subjectFallback);
+    let subjectDetail = subjectFallback;
+    const subject = new THREE.LOD();
+    subject.addLevel(subjectDetailSlot, 0);
+    subject.addLevel(createSubjectMProxy(), 18);
+    const enemyPosition = cellCenter(layout.enemyStartCell, GRID);
+    subject.position.set(enemyPosition.x, 0, enemyPosition.z);
+    world.add(subject);
+
+    let head = subjectDetail.getObjectByName("head");
+    let jaw = subjectDetail.getObjectByName("jaw");
+    let subjectHat = subjectDetail.getObjectByName("hat");
+    let subjectHatBaseY = subjectHat?.position.y ?? 0.77;
+    let facePlateLeft = subjectDetail.getObjectByName("facePlateLeft");
+    let facePlateRight = subjectDetail.getObjectByName("facePlateRight");
+    let chestCore = subjectDetail.getObjectByName("chestCore");
+    let servoMaterials: THREE.MeshStandardMaterial[] = [];
+    const collectServoMaterials = () => {
+      const collected = new Set<THREE.MeshStandardMaterial>();
+      subjectDetail.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        const surfaces = Array.isArray(object.material) ? object.material : [object.material];
+        surfaces.forEach((s) => {
+          if (s instanceof THREE.MeshStandardMaterial && s.name === "RED_SERVO_EMISSION") collected.add(s);
+        });
+      });
+      servoMaterials = [...collected];
+    };
+    collectServoMaterials();
+
+    const pbrTextures = new Set<THREE.Texture>();
+    const textureLoader = new THREE.TextureLoader();
+    const pbrVariant = graphics.highTextures ? "high" : "low";
+    const aniso = Math.min(subjectTextureAnisotropy(quality), renderer.capabilities.getMaxAnisotropy());
+
+    let enemyMixer = new THREE.AnimationMixer(subjectDetail);
+    const enemyClips = createSubjectMotionClips();
+    const createEnemyActions = (mixer: THREE.AnimationMixer, clips: THREE.AnimationClip[]) => {
+      const byName = new Map(clips.map((c) => [c.name, c]));
+      return {
+        idle: mixer.clipAction(byName.get("idle") ?? enemyClips.idle),
+        moonwalk: mixer.clipAction(byName.get("moonwalk") ?? enemyClips.moonwalk),
+        investigate: mixer.clipAction(byName.get("investigate") ?? enemyClips.investigate),
+        chase: mixer.clipAction(byName.get("chase") ?? enemyClips.chase),
+      };
+    };
+    let enemyActions = createEnemyActions(enemyMixer, Object.values(enemyClips));
+    Object.values(enemyActions).forEach((action) => {
+      action.enabled = true;
+      action.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
+    });
+    let activeEnemyAction = enemyActions.moonwalk;
+    activeEnemyAction.play();
+
+    let rigLoadCancelled = false;
+    let gltfRigLoaded = false;
+    const actionForEnemyState = (state: EnemyState) =>
+      state === "chase" || state === "ambush"
+        ? enemyActions.chase
+        : state === "investigate" || state === "search" || state === "lure" || state === "vent-watch"
+          ? enemyActions.investigate
+          : state === "listen" || state === "recover"
+            ? enemyActions.idle
+            : enemyActions.moonwalk;
+
+    const transitionEnemyAnimation = (state: EnemyState) => {
+      const nextAction = actionForEnemyState(state);
+      if (nextAction === activeEnemyAction) return;
+      nextAction.reset().play();
+      nextAction.crossFadeFrom(activeEnemyAction, 0.26, true);
+      activeEnemyAction = nextAction;
+    };
+
+    const loadTex = (url: string, isColor: boolean, repeat: readonly [number, number]) =>
+      new Promise<THREE.Texture | null>((resolve) => {
+        const tex = textureLoader.load(
+          url,
+          (loaded) => {
+            if (rigLoadCancelled) {
+              loaded.dispose();
+              resolve(null);
+              return;
+            }
+            loaded.colorSpace = isColor ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+            loaded.wrapS = THREE.RepeatWrapping;
+            loaded.wrapT = THREE.RepeatWrapping;
+            loaded.repeat.set(...repeat);
+            loaded.anisotropy = aniso;
+            pbrTextures.add(loaded);
+            resolve(loaded);
+          },
+          undefined,
+          () => {
+            tex.dispose();
+            resolve(null);
+          },
+        );
+      });
+
+    new GLTFLoader().load(
+      "/models/subject-m22.glb",
+      (gltf) => {
+        if (rigLoadCancelled) return;
+        const imported = gltf.scene;
+        const hasRig = ["hips", "head", "jaw", "hat", "armLeft", "armRight", "legLeft", "legRight"].every((n) =>
+          imported.getObjectByName(n),
+        );
+        if (!hasRig) return;
+
+        // Disable any PointLights embedded inside the GLB to preserve our strict 3-light budget!
+        imported.traverse((obj) => {
+          if (obj instanceof THREE.Light) obj.visible = false;
+        });
+
+        enemyMixer.stopAllAction();
+        enemyMixer.uncacheRoot(subjectDetail);
+        subjectFallback.visible = false;
+        subjectDetailSlot.add(imported);
+        subjectDetail = imported;
+        head = subjectDetail.getObjectByName("head");
+        jaw = subjectDetail.getObjectByName("jaw");
+        subjectHat = subjectDetail.getObjectByName("hat");
+        subjectHatBaseY = subjectHat?.position.y ?? 0.75;
+        facePlateLeft = subjectDetail.getObjectByName("facePlateLeft");
+        facePlateRight = subjectDetail.getObjectByName("facePlateRight");
+        chestCore = subjectDetail.getObjectByName("chestCore");
+        collectServoMaterials();
+
+        enemyMixer = new THREE.AnimationMixer(subjectDetail);
+        enemyActions = createEnemyActions(enemyMixer, gltf.animations);
+        Object.values(enemyActions).forEach((action) => {
+          action.enabled = true;
+          action.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
+        });
+        activeEnemyAction = actionForEnemyState(currentEnemyMode);
+        activeEnemyAction.reset().play();
+        gltfRigLoaded = true;
+
+        // Apply low/high PBR textures without heavy RoomEnvironment PMREM stall!
+        const texSets = SUBJECT_TEXTURE_SETS[pbrVariant];
+        void Promise.all(
+          (Object.keys(texSets) as Array<keyof typeof texSets>).map(async (setKey) => {
+            const set = texSets[setKey];
+            const [baseColor, normal] = await Promise.all([
+              loadTex(set.baseColor, true, set.repeat),
+              loadTex(set.normal, false, set.repeat),
+            ]);
+            return [setKey, { baseColor, normal }] as const;
+          }),
+        ).then((entries) => {
+          if (rigLoadCancelled) return;
+          const loadedMap = new Map(entries);
+          const mats = new Map<string, THREE.MeshStandardMaterial[]>();
+          imported.traverse((obj) => {
+            if (!(obj instanceof THREE.Mesh)) return;
+            const arr = Array.isArray(obj.material) ? obj.material : [obj.material];
+            arr.forEach((m) => {
+              if (m instanceof THREE.MeshStandardMaterial) {
+                const list = mats.get(m.name) ?? [];
+                list.push(m);
+                mats.set(m.name, list);
+              }
+            });
+          });
+          Object.entries(SUBJECT_MATERIALS).forEach(([matName, def]) => {
+            const targets = mats.get(matName);
+            const bundle = loadedMap.get(def.textureSet);
+            if (!targets || !bundle) return;
+            targets.forEach((surface) => {
+              if (bundle.baseColor && (!("useBaseColor" in def) || def.useBaseColor !== false)) {
+                surface.map = bundle.baseColor;
+                surface.color.setHex(def.tint);
+              }
+              if (bundle.normal) {
+                surface.normalMap = bundle.normal;
+                surface.normalScale.setScalar(def.normalScale);
+              }
+              surface.needsUpdate = true;
+            });
+          });
+          // Pre-compile WebGL shaders while still in briefing to prevent first-sight stutter!
+          renderer.compile(scene, camera);
+          setSceneReady(true);
+        });
+      },
+      undefined,
+      () => {
+        renderer.compile(scene, camera);
+        setSceneReady(true);
+      },
     );
 
-    const start = cellCenter(0);
-    const startOpening = openingDirection(maze[0]);
+    // Player flashlight (the ONLY SpotLight in the scene!)
+    const flashlight = new THREE.SpotLight(0xeef6ee, 138, 22, Math.PI / 5.4, 0.56, 1.5);
+    flashlight.position.set(0, -0.08, 0);
+    flashlight.target.position.set(0, -0.08, -1);
+    camera.add(flashlight);
+    camera.add(flashlight.target);
+    scene.add(camera);
+
+    // ── Simulation State & Scratch Vectors (ZERO GC inside fixedUpdate!) ────
     const player = new THREE.Vector3(start.x, PLAYER_HEIGHT, start.z);
-    let capsuleState = createCapsuleState(capsuleWorld, {
-      x: player.x,
-      z: player.z,
-    });
-    let lastCapsuleCollided = false;
+    let capsuleState = createCapsuleState(capsuleWorld, { x: player.x, z: player.z });
     let yaw = startOpening.yaw;
     let pitch = 0;
     let currentVentHeadingYaw = yaw;
@@ -1167,23 +1288,27 @@ export default function WalkExe() {
     let echoesHeld = 0;
     let tapesHeld = 0;
     const tapeIndices: number[] = [];
+    const eggsFound: StudioEggId[] = [];
+    let hardBreadArmed = false;
+    let ghostBlessed = false;
+    let redAlert = false;
     let runStartedAt = 0;
     let echoesUsed = 0;
     let objectsThrown = 0;
+    let dazzles = 0;
     let closeCalls = 0;
     let inCloseCall = false;
-    let peakBpm = 0;
+    let peakBpm = 48;
     let lastHeeAt = Number.NEGATIVE_INFINITY;
-    let nextGiggleAt = performance.now() + 20000;
+    let nextGiggleAt = performance.now() + 18000;
     let nextHeartbeat = 0;
     let nextFootstep = 0;
     let nextEnemyStep = 0;
-    let nextPathUpdate = 0;
     let lastHudUpdate = 0;
+    let lastLightPoolUpdate = 0;
     let lastVentHudUpdate = 0;
-    let cctvPower = 96;
-    let lastReportedPower = 96;
-    let enemyPath = mazePath(maze, enemyStart, 0);
+    let cctvPower = 100;
+    let lastReportedPower = 100;
     let ventTrip: VentTrip | null = null;
     let activeLure: ActiveLure | null = null;
     let escapeSequence: EscapeSequence | null = null;
@@ -1199,17 +1324,19 @@ export default function WalkExe() {
     let simulationPaused = document.hidden;
     const FIXED_DELTA = 1 / 60;
     const MAX_FRAME_DELTA = 0.25;
-    const MAX_CATCH_UP_STEPS = 15;
+    const MAX_CATCH_UP_STEPS = 10;
     let simulationTime = performance.now();
     let simulationAccumulator = 0;
     let lastRenderTime = performance.now();
-    let clockResyncs = 0;
-    let lastClockLagBeforeResyncMs = 0;
     let currentEnemyMode: EnemyState = "patrol";
     let currentEnemySpeed = 1.05;
     let currentPlayerDistance = 99;
     let currentRouteDistance = 99;
-    let currentBpm = 42;
+    let currentBpm = 48;
+    let detectionMeter = 0;
+    let dazzledUntil = Number.NEGATIVE_INFINITY;
+    let dazzleCooldownUntil = Number.NEGATIVE_INFINITY;
+    let banishedUntil = Number.NEGATIVE_INFINITY;
     let acousticEvents: AcousticEvent[] = [];
     let acousticPerception: AcousticPerception | null = null;
     let lastHeardAt = Number.NEGATIVE_INFINITY;
@@ -1228,1001 +1355,37 @@ export default function WalkExe() {
     let playerMoving = false;
     let playerSprinting = false;
     let playerCrouching = false;
-    let modelPreviewUntil = 0;
-    let modelPreviewState: EnemyState = "listen";
-    let qaEnemyStage: {
-      distance: number;
-      state: EnemyState;
-      yawOffsetDegrees: number;
-      verticalOffset: number;
-    } | null = null;
-    const qaNeutralLighting =
-      new URLSearchParams(window.location.search).get("qa") !== "game";
     let nextObjectDropAt = 0;
-    let lastAppliedVelocity = { x: 0, z: 0 };
-    let lastInputSlices: InputSlice[] = [];
+    let loreBanner: { kicker: string; text: string; until: number } | null = null;
+    let currentPrompt = "Explora las cinco alas y recupera 3 cintas de Raúl.";
+    let lastAppliedFov = 74;
+
+    // Cached BFS tables (recomputed ONLY when cells change — kills 180 BFS/s lag!)
+    let cachedEnemyCell = -1;
+    let cachedPlayerCell = -1;
+    let cachedTargetCell = -1;
+    let cachedEnemyDistances = mazeDistances(maze, layout.enemyStartCell, GRID);
+    let enemyPath = mazePath(maze, layout.enemyStartCell, 0, GRID);
+    let lastPathAt = 0;
+
+    // Pre-allocated scratch vectors (ZERO allocations in 60 Hz loop!)
+    const tmpPlayerFlat = new THREE.Vector3();
+    const tmpEnemyTarget = new THREE.Vector3();
+    const tmpDir = new THREE.Vector3();
+    const tmpForward = new THREE.Vector3();
+    const cctvFrustum = new THREE.Frustum();
+    const cctvProjection = new THREE.Matrix4();
+    const enemyProbe = new THREE.Vector3();
+    const audioForward = new THREE.Vector3();
+    const audioUp = new THREE.Vector3();
+    const enemyAudioForward = new THREE.Vector3();
+
+    const showLore = (kicker: string, text: string, durationMs = 5400) => {
+      loreBanner = { kicker, text, until: performance.now() + durationMs };
+    };
 
     const emitNoise = (kind: NoiseKind, cell: number, now: number) => {
-      acousticEvents = pruneAcousticEvents(
-        [...acousticEvents, createAcousticEvent(kind, cell, now)],
-        now,
-      );
-    };
-
-    const world = new THREE.Group();
-    scene.add(world);
-    scene.add(new THREE.HemisphereLight(0x9caaa5, 0x0b0d0c, 0.92));
-    const emergencyLight = new THREE.DirectionalLight(0x7f948b, 0.68);
-    emergencyLight.position.set(4, 12, 2);
-    scene.add(emergencyLight);
-
-    const createSurfaceTexture = (
-      base: [number, number, number],
-      variation: number,
-      dataOnly = false,
-    ) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = 256;
-      canvas.height = 256;
-      const context = canvas.getContext("2d");
-      if (!context) return new THREE.CanvasTexture(canvas);
-      const image = context.createImageData(canvas.width, canvas.height);
-      for (let index = 0; index < image.data.length; index += 4) {
-        const grain =
-          (random() - 0.5) * variation +
-          Math.sin(index * 0.0017) * variation * 0.12;
-        image.data[index] = THREE.MathUtils.clamp(base[0] + grain, 0, 255);
-        image.data[index + 1] = THREE.MathUtils.clamp(
-          base[1] + grain * 0.86,
-          0,
-          255,
-        );
-        image.data[index + 2] = THREE.MathUtils.clamp(
-          base[2] + grain * 0.72,
-          0,
-          255,
-        );
-        image.data[index + 3] = 255;
-      }
-      context.putImageData(image, 0, 0);
-      context.globalAlpha = 0.2;
-      for (let stain = 0; stain < 34; stain += 1) {
-        context.fillStyle = stain % 3 ? "#080b09" : "#4b5148";
-        context.beginPath();
-        context.ellipse(
-          random() * 256,
-          random() * 256,
-          3 + random() * 24,
-          1 + random() * 9,
-          random() * Math.PI,
-          0,
-          Math.PI * 2,
-        );
-        context.fill();
-      }
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(18, 18);
-      texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-      if (!dataOnly) texture.colorSpace = THREE.SRGBColorSpace;
-      return texture;
-    };
-    const concreteColor = createSurfaceTexture([66, 72, 68], 48);
-    const concreteRelief = createSurfaceTexture([128, 128, 128], 95, true);
-
-    const concrete = new THREE.MeshStandardMaterial({
-      color: 0x9aa09c,
-      map: concreteColor,
-      bumpMap: concreteRelief,
-      roughness: 0.92,
-      metalness: 0.05,
-      bumpScale: 0.12,
-    });
-    const dampConcrete = new THREE.MeshStandardMaterial({
-      color: 0x5d6861,
-      map: concreteColor,
-      bumpMap: concreteRelief,
-      bumpScale: 0.08,
-      roughness: 0.82,
-      metalness: 0.18,
-    });
-    const metal = material(0x282d2c, 0.36, 0.88);
-    addMesh(
-      world,
-      new THREE.PlaneGeometry(MAZE_SIZE * CELL_SIZE, MAZE_SIZE * CELL_SIZE),
-      dampConcrete,
-      [0, 0, 0],
-      [-Math.PI / 2, 0, 0],
-    );
-    addMesh(
-      world,
-      new THREE.PlaneGeometry(MAZE_SIZE * CELL_SIZE, MAZE_SIZE * CELL_SIZE),
-      concrete,
-      [0, WALL_HEIGHT, 0],
-      [Math.PI / 2, 0, 0],
-    );
-
-    const horizontalWall = new THREE.BoxGeometry(
-      CELL_SIZE + 0.18,
-      WALL_HEIGHT,
-      WALL_THICKNESS,
-    );
-    const verticalWall = new THREE.BoxGeometry(
-      WALL_THICKNESS,
-      WALL_HEIGHT,
-      CELL_SIZE + 0.18,
-    );
-    const horizontalWallPositions: Array<[number, number]> = [];
-    const verticalWallPositions: Array<[number, number]> = [];
-    const lightStride = Math.max(
-      1,
-      Math.floor((MAZE_SIZE * MAZE_SIZE) / graphics.localLights),
-    );
-    maze.forEach((cell, index) => {
-      const center = cellCenter(index);
-      const row = Math.floor(index / MAZE_SIZE);
-      const column = index % MAZE_SIZE;
-      if (!cell.n) {
-        horizontalWallPositions.push([center.x, center.z - CELL_SIZE / 2]);
-      }
-      if (!cell.w) {
-        verticalWallPositions.push([center.x - CELL_SIZE / 2, center.z]);
-      }
-      if (row === MAZE_SIZE - 1 && !cell.s) {
-        horizontalWallPositions.push([center.x, center.z + CELL_SIZE / 2]);
-      }
-      if (column === MAZE_SIZE - 1 && !cell.e) {
-        verticalWallPositions.push([center.x + CELL_SIZE / 2, center.z]);
-      }
-
-      if (index % 11 === 3) {
-        const stain = addMesh(
-          world,
-          new THREE.PlaneGeometry(1.2 + random(), 1.8 + random()),
-          new THREE.MeshBasicMaterial({
-            color: random() > 0.5 ? 0x121a16 : 0x1b1010,
-            transparent: true,
-            opacity: 0.38,
-          }),
-          [center.x, 1.35, center.z - CELL_SIZE / 2 + 0.116],
-        );
-        stain.castShadow = false;
-      }
-
-      if (index % 19 === 2) {
-        addMesh(
-          world,
-          new THREE.CylinderGeometry(0.07, 0.07, CELL_SIZE * 0.92, 8),
-          metal,
-          [center.x - 1.5, 3.48, center.z],
-          [Math.PI / 2, 0, 0],
-        );
-      }
-
-      if (index % lightStride === 0) {
-        const lampSurface = new THREE.MeshStandardMaterial({
-          color: 0x8f9381,
-          emissive: random() > 0.3 ? 0xb3c2a1 : 0x2a1010,
-          emissiveIntensity: 1.8,
-        });
-        addMesh(world, new THREE.BoxGeometry(0.16, 0.08, 1.15), lampSurface, [center.x, 3.69, center.z]);
-        const light = new THREE.PointLight(
-          random() > 0.25 ? 0xa9b7a0 : 0xc01b17,
-          9,
-          10,
-          2.1,
-        );
-        light.position.set(center.x, 3.5, center.z);
-        light.castShadow = graphics.shadows && index === 0;
-        scene.add(light);
-      }
-    });
-
-    const addWallInstances = (
-      geometry: THREE.BufferGeometry,
-      positions: Array<[number, number]>,
-    ) => {
-      const walls = new THREE.InstancedMesh(
-        geometry,
-        concrete,
-        positions.length,
-      );
-      const transform = new THREE.Matrix4();
-      positions.forEach(([x, z], index) => {
-        transform.makeTranslation(x, WALL_HEIGHT / 2, z);
-        walls.setMatrixAt(index, transform);
-      });
-      walls.instanceMatrix.setUsage(THREE.StaticDrawUsage);
-      walls.instanceMatrix.needsUpdate = true;
-      walls.castShadow = false;
-      walls.receiveShadow = false;
-      world.add(walls);
-    };
-    addWallInstances(horizontalWall, horizontalWallPositions);
-    addWallInstances(verticalWall, verticalWallPositions);
-
-    const hazardCanvas = document.createElement("canvas");
-    hazardCanvas.width = 128;
-    hazardCanvas.height = 64;
-    const hazardContext = hazardCanvas.getContext("2d");
-    if (hazardContext) {
-      hazardContext.fillStyle = "#b79a22";
-      hazardContext.fillRect(0, 0, 128, 64);
-      hazardContext.strokeStyle = "#11120f";
-      hazardContext.lineWidth = 18;
-      for (let stripe = -64; stripe < 192; stripe += 34) {
-        hazardContext.beginPath();
-        hazardContext.moveTo(stripe, 64);
-        hazardContext.lineTo(stripe + 64, 0);
-        hazardContext.stroke();
-      }
-    }
-    const hazardTexture = new THREE.CanvasTexture(hazardCanvas);
-    hazardTexture.colorSpace = THREE.SRGBColorSpace;
-    hazardTexture.wrapS = THREE.RepeatWrapping;
-    hazardTexture.repeat.set(2, 1);
-    const hazardStripe = new THREE.MeshStandardMaterial({
-      map: hazardTexture,
-      emissive: 0x211901,
-      emissiveIntensity: 0.26,
-      roughness: 0.84,
-      metalness: 0.18,
-    });
-    const junctionPlate = new THREE.PlaneGeometry(3.1, 1.8);
-    const cabinet = material(0x20292b, 0.58, 0.72);
-    const archivePaper = material(0x5f5949, 0.92, 0.02);
-    const screenGlass = new THREE.MeshStandardMaterial({
-      color: 0x0b2118,
-      emissive: 0x38d98a,
-      emissiveIntensity: 1.6,
-      roughness: 0.2,
-      metalness: 0.3,
-    });
-    const warningGlass = new THREE.MeshStandardMaterial({
-      color: 0x2a0805,
-      emissive: 0xff2b16,
-      emissiveIntensity: 2.4,
-      roughness: 0.28,
-    });
-
-    const decorGroups: THREE.Group[] = [];
-    zones.forEach((zone, index) => {
-      if (zone === "corridor") return;
-      const center = cellCenter(index);
-      const room = new THREE.Group();
-      room.position.copy(center);
-      room.userData.zone = zone;
-
-      if (zone === "security") {
-        addMesh(
-          room,
-          new THREE.BoxGeometry(1.55, 0.88, 0.58),
-          cabinet,
-          [1.15, 0.44, 1.35],
-        );
-        for (let monitor = -1; monitor <= 1; monitor += 1) {
-          addMesh(
-            room,
-            new THREE.BoxGeometry(0.38, 0.28, 0.06),
-            screenGlass,
-            [0.8 + monitor * 0.42, 1.12, 1.06],
-            [-0.12, 0, 0],
-          );
-        }
-      }
-
-      if (zone === "electrical") {
-        addMesh(
-          room,
-          new THREE.BoxGeometry(1.45, 1.8, 0.32),
-          cabinet,
-          [-1.65, 0.9, 0.45],
-        );
-        for (let breaker = 0; breaker < 8; breaker += 1) {
-          addMesh(
-            room,
-            new THREE.BoxGeometry(0.12, 0.18, 0.05),
-            breaker % 3 === 0 ? warningGlass : metal,
-            [
-              -2 + (breaker % 4) * 0.25,
-              0.58 + Math.floor(breaker / 4) * 0.34,
-              0.26,
-            ],
-          );
-        }
-      }
-
-      if (zone === "archive") {
-        for (let shelf = -1; shelf <= 1; shelf += 1) {
-          addMesh(
-            room,
-            new THREE.BoxGeometry(0.34, 2.3, 1.4),
-            cabinet,
-            [1.58, 1.15, shelf * 1.05],
-          );
-          for (let box = 0; box < 3; box += 1) {
-            addMesh(
-              room,
-              new THREE.BoxGeometry(0.4, 0.28, 0.32),
-              archivePaper,
-              [1.35, 0.42 + box * 0.62, shelf * 1.05],
-            );
-          }
-        }
-      }
-
-      if (zone === "maintenance") {
-        for (let pipe = 0; pipe < 4; pipe += 1) {
-          addMesh(
-            room,
-            new THREE.CylinderGeometry(0.1, 0.1, 3.3, 10),
-            metal,
-            [-1.7 + pipe * 0.28, 2.8, 0.2],
-            [Math.PI / 2, 0, 0],
-          );
-        }
-      }
-
-      if (zone === "junction") {
-        addMesh(
-          room,
-          junctionPlate,
-          hazardStripe,
-          [0, 0.018, 0],
-          [-Math.PI / 2, 0, 0],
-        );
-      }
-
-      world.add(room);
-      decorGroups.push(room);
-    });
-
-    const dustPositions = new Float32Array(graphics.dust * 3);
-    const worldHalf = (MAZE_SIZE * CELL_SIZE) / 2;
-    for (let index = 0; index < graphics.dust; index += 1) {
-      dustPositions[index * 3] = (random() - 0.5) * worldHalf * 2;
-      dustPositions[index * 3 + 1] = 0.2 + random() * (WALL_HEIGHT - 0.4);
-      dustPositions[index * 3 + 2] = (random() - 0.5) * worldHalf * 2;
-    }
-    const dustGeometry = new THREE.BufferGeometry();
-    dustGeometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(dustPositions, 3),
-    );
-    const dust = new THREE.Points(
-      dustGeometry,
-      new THREE.PointsMaterial({
-        color: 0x9daaa1,
-        size: 0.035,
-        transparent: true,
-        opacity: 0.24,
-        depthWrite: false,
-      }),
-    );
-    world.add(dust);
-
-    const routeGuide = new THREE.MeshStandardMaterial({
-      color: 0x789081,
-      emissive: 0x9fcbb0,
-      emissiveIntensity: 2.6,
-      roughness: 0.44,
-    });
-    for (let marker = 0; marker < 3; marker += 1) {
-      const longX = startOpening.x !== 0;
-      addMesh(
-        world,
-        new THREE.BoxGeometry(
-          longX ? 0.42 : 0.12,
-          0.025,
-          longX ? 0.12 : 0.42,
-        ),
-        routeGuide,
-        [
-          start.x + startOpening.x * (0.58 + marker * 0.48),
-          0.018,
-          start.z + startOpening.z * (0.58 + marker * 0.48),
-        ],
-      );
-    }
-
-    // The visible camera housing and its optical camera share one transform.
-    const cctvCameras: THREE.PerspectiveCamera[] = [];
-    cctvCells.forEach((cellIndex, index) => {
-      const center = cellCenter(cellIndex);
-      const nextCell = mazePath(maze, cellIndex, exitCell)[1] ?? cellIndex;
-      const target = cellCenter(nextCell).setY(1.15);
-      const securityCamera = createSecurityCamera();
-      securityCamera.position.set(center.x + 1.45, 3.05, center.z + 1.45);
-      securityCamera.lookAt(target);
-      securityCamera.rotateX(index % 2 ? -0.05 : 0.05);
-      const opticalCamera = new THREE.PerspectiveCamera(62, 16 / 9, 0.08, 65);
-      opticalCamera.position.set(0, 0.08, 0.42);
-      opticalCamera.rotation.y = Math.PI;
-      opticalCamera.name = `CCTV_${String(index + 1).padStart(2, "0")}`;
-      securityCamera.add(opticalCamera);
-      cctvCameras.push(opticalCamera);
-      world.add(securityCamera);
-    });
-
-    const exit = createExitDoor();
-    const exitPosition = cellCenter(exitCell);
-    const exitOpening = openingDirection(maze[exitCell]);
-    exit.position.copy(exitPosition);
-    exit.position.y = 0;
-    exit.rotation.y = exitOpening.yaw;
-    world.add(exit);
-    const exitPanel = exit.getObjectByName("emergencyDoorPanel");
-    const exitLight = new THREE.PointLight(0xff1717, 34, 10, 1.8);
-    exitLight.position.copy(exitPosition).add(new THREE.Vector3(0, 2.4, 0));
-    scene.add(exitLight);
-    if (requiredTapes === 0) exitLight.color.setHex(0x35ff7a);
-
-    // Reusable dropped hardware: one shared geometry/material and no allocations
-    // during gameplay. Q throws a metal part that SUJETO M can hear.
-    const noiseObjectGeometry = new THREE.CylinderGeometry(0.07, 0.07, 0.22, 8);
-    const noiseObjectMaterial = material(0x676d6d, 0.28, 0.92);
-    const noiseObjects: RuntimeNoiseObject[] = Array.from(
-      { length: 8 },
-      (_, index) => {
-        const mesh = new THREE.Mesh(noiseObjectGeometry, noiseObjectMaterial);
-        mesh.name = `NOISE_OBJECT_${index + 1}`;
-        mesh.rotation.z = Math.PI / 2;
-        mesh.visible = false;
-        world.add(mesh);
-        return { mesh, activeUntil: 0 };
-      },
-    );
-
-    const runtimeEchoes: RuntimeEcho[] = echoCells.map((cell, index) => {
-      const mesh = createEcho(index % 2 ? 0x7ec6ff : 0xb58bff);
-      const center = cellCenter(cell);
-      mesh.position.set(center.x + (random() - 0.5), 0, center.z + (random() - 0.5));
-      world.add(mesh);
-      return { mesh, cell, collected: false };
-    });
-
-    const runtimeTapes: RuntimeTape[] = tapeCells.map((cell, index) => {
-      const mesh = createTape(WALK_TAPES[index].color);
-      const center = cellCenter(cell);
-      mesh.position.set(center.x + (random() - 0.5) * 0.8, 0, center.z + (random() - 0.5) * 0.8);
-      mesh.name = `RAUL_TAPE_${WALK_TAPES[index].code}`;
-      world.add(mesh);
-      return { mesh, cell, index, collected: false };
-    });
-
-    const ghostRelicMesh = createGhostRelic();
-    const relicCenter = cellCenter(ghostRelicCell);
-    ghostRelicMesh.position.set(relicCenter.x, 0, relicCenter.z);
-    world.add(ghostRelicMesh);
-    let ghostRelicCollected = false;
-    let detectionMeter = 0;
-    let dazzledUntil = Number.NEGATIVE_INFINITY;
-    let dazzleCooldownUntil = Number.NEGATIVE_INFINITY;
-
-    const ventMeshes: THREE.Group[] = [];
-    const ductRoutes: THREE.Group[] = [];
-    const ventPairs: Array<[number, number]> = [
-      [ventCells[0] ?? spread[1] ?? 1, ventCells[1] ?? spread[2] ?? 2],
-      [ventCells[2] ?? spread[3] ?? 3, ventCells[3] ?? spread[4] ?? 4],
-    ];
-    const ventByCell = new Map<number, number>();
-    ventPairs.forEach(([first, second], pairIndex) => {
-      ventByCell.set(first, second);
-      ventByCell.set(second, first);
-      [first, second].forEach((cell, side) => {
-        const center = cellCenter(cell);
-        const vent = new THREE.Group();
-        vent.position.set(center.x + (side ? -1.5 : 1.5), 0.72, center.z);
-        vent.rotation.y = side ? Math.PI / 2 : -Math.PI / 2;
-        addMesh(vent, new THREE.BoxGeometry(1.25, 1.2, 0.16), metal, [0, 0, 0]);
-        for (let bar = -2; bar <= 2; bar += 1) {
-          addMesh(vent, new THREE.BoxGeometry(0.08, 1, 0.06), material(0x080909, 0.4, 0.9), [bar * 0.22, 0, -0.11]);
-        }
-        const ventGlow = new THREE.PointLight(0x6f8090, 0.45, 3);
-        ventGlow.position.set(0, 0, -0.3);
-        vent.add(ventGlow);
-        vent.userData.cell = cell;
-        vent.userData.pair = pairIndex;
-        world.add(vent);
-        ventMeshes.push(vent);
-      });
-    });
-    ventPairs.forEach((_, pairIndex) => {
-      const pairVents = ventMeshes.filter(
-        (vent) => vent.userData.pair === pairIndex,
-      );
-      if (pairVents.length !== 2) return;
-      const first = pairVents[0].position;
-      const second = pairVents[1].position;
-      const dx = second.x - first.x;
-      const dz = second.z - first.z;
-      const length = Math.hypot(dx, dz);
-      const duct = new THREE.Group();
-      duct.name = `VENT_ROUTE_${pairIndex + 1}`;
-      duct.position.set(
-        (first.x + second.x) / 2,
-        WALL_HEIGHT + 0.78,
-        (first.z + second.z) / 2,
-      );
-      duct.rotation.y = -Math.atan2(dz, dx);
-      const panel = material(0x181d1f, 0.52, 0.82);
-      const ribs = material(0x080a0a, 0.4, 0.92);
-      addMesh(
-        duct,
-        new THREE.BoxGeometry(length + 1.2, 0.08, 1.38),
-        panel,
-        [0, -0.59, 0],
-      );
-      addMesh(
-        duct,
-        new THREE.BoxGeometry(length + 1.2, 0.08, 1.38),
-        panel,
-        [0, 0.59, 0],
-      );
-      addMesh(
-        duct,
-        new THREE.BoxGeometry(length + 1.2, 1.24, 0.08),
-        panel,
-        [0, 0, -0.69],
-      );
-      addMesh(
-        duct,
-        new THREE.BoxGeometry(length + 1.2, 1.24, 0.08),
-        panel,
-        [0, 0, 0.69],
-      );
-      const ribCount = Math.min(8, Math.max(3, Math.floor(length / 6)));
-      for (let rib = 0; rib <= ribCount; rib += 1) {
-        addMesh(
-          duct,
-          new THREE.BoxGeometry(0.055, 1.18, 1.34),
-          ribs,
-          [-length / 2 + (rib / ribCount) * length, 0, 0],
-        );
-      }
-      duct.visible = false;
-      world.add(duct);
-      ductRoutes[pairIndex] = duct;
-    });
-
-    const subjectDetailSlot = new THREE.Group();
-    subjectDetailSlot.name = "SUJETO_M22_DETAIL_SLOT";
-    const subjectFallback = createSubjectM();
-    subjectDetailSlot.add(subjectFallback);
-    let subjectDetail = subjectFallback;
-    const subject = new THREE.LOD();
-    subject.name = "SUJETO_M_LOD";
-    subject.addLevel(subjectDetailSlot, 0);
-    subject.addLevel(createSubjectMProxy(), 24);
-    const enemyPosition = cellCenter(enemyStart);
-    subject.position.set(enemyPosition.x, 0, enemyPosition.z);
-    world.add(subject);
-    let head = subjectDetail.getObjectByName("head");
-    let jaw = subjectDetail.getObjectByName("jaw");
-    let subjectHat = subjectDetail.getObjectByName("hat");
-    let subjectHatBaseY = subjectHat?.position.y ?? 0.77;
-    let facePlateLeft = subjectDetail.getObjectByName("facePlateLeft");
-    let facePlateRight = subjectDetail.getObjectByName("facePlateRight");
-    let chestCore = subjectDetail.getObjectByName("chestCore");
-    let eyeGlowLeft = subjectDetail.getObjectByName(
-      "eyeGlowLeft",
-    ) as THREE.PointLight | undefined;
-    let eyeGlowRight = subjectDetail.getObjectByName(
-      "eyeGlowRight",
-    ) as THREE.PointLight | undefined;
-    let outerShellRetracted = false;
-    let pbrMaterialsLoaded = false;
-    let pbrMaterialsFailed = false;
-    let pbrAppliedMaterials = 0;
-    const pbrTextureVariant = subjectTextureVariant(quality);
-    const pbrTextures = new Set<THREE.Texture>();
-    let subjectEnvironmentTarget: THREE.WebGLRenderTarget | null = null;
-    let servoMaterials: THREE.MeshStandardMaterial[] = [];
-    const collectServoMaterials = () => {
-      const collected = new Set<THREE.MeshStandardMaterial>();
-      subjectDetail.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        const surfaces = Array.isArray(object.material)
-          ? object.material
-          : [object.material];
-        surfaces.forEach((surface) => {
-          if (
-            surface instanceof THREE.MeshStandardMaterial &&
-            surface.name === "RED_SERVO_EMISSION"
-          ) {
-            collected.add(surface);
-          }
-        });
-      });
-      servoMaterials = [...collected];
-    };
-    collectServoMaterials();
-
-    type SubjectTextureBundle = {
-      baseColor: THREE.Texture;
-      normal: THREE.Texture;
-      rm?: THREE.Texture;
-    };
-    const subjectTextureLoader = new THREE.TextureLoader();
-    const requestedAnisotropy = Math.min(
-      subjectTextureAnisotropy(quality),
-      renderer.capabilities.getMaxAnisotropy(),
-    );
-    const ensureSubjectEnvironment = () => {
-      if (subjectEnvironmentTarget) return subjectEnvironmentTarget.texture;
-      const environment = new RoomEnvironment();
-      const generator = new THREE.PMREMGenerator(renderer);
-      subjectEnvironmentTarget = generator.fromScene(environment, 0.04);
-      environment.dispose();
-      generator.dispose();
-      subjectEnvironmentTarget.texture.name = "SUBJECT_M22_PMREM";
-      return subjectEnvironmentTarget.texture;
-    };
-    const loadSubjectTexture = (
-      url: string,
-      colorTexture: boolean,
-      repeat: readonly [number, number],
-    ) =>
-      new Promise<THREE.Texture | null>((resolve) => {
-        const pendingTexture = subjectTextureLoader.load(
-          url,
-          (texture) => {
-            if (rigLoadCancelled) {
-              texture.dispose();
-              resolve(null);
-              return;
-            }
-            texture.colorSpace = colorTexture
-              ? THREE.SRGBColorSpace
-              : THREE.NoColorSpace;
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(...repeat);
-            texture.anisotropy = requestedAnisotropy;
-            texture.name = `SUBJECT_M22_${url.split("/").at(-1) ?? "TEXTURE"}`;
-            texture.needsUpdate = true;
-            pbrTextures.add(texture);
-            resolve(texture);
-          },
-          undefined,
-          () => {
-            pendingTexture.dispose();
-            resolve(null);
-          },
-        );
-      });
-    const loadSubjectTextureBundle = async (
-      textureSet: (typeof SUBJECT_TEXTURE_SETS)[typeof pbrTextureVariant][keyof (typeof SUBJECT_TEXTURE_SETS)[typeof pbrTextureVariant]],
-    ): Promise<SubjectTextureBundle | null> => {
-      const [baseColor, normal, rm] = await Promise.all([
-        loadSubjectTexture(textureSet.baseColor, true, textureSet.repeat),
-        loadSubjectTexture(textureSet.normal, false, textureSet.repeat),
-        textureSet.rm
-          ? loadSubjectTexture(textureSet.rm, false, textureSet.repeat)
-          : Promise.resolve(undefined),
-      ]);
-      if (!baseColor || !normal || (textureSet.rm && !rm)) {
-        [baseColor, normal, rm].forEach((texture) => {
-          if (!texture) return;
-          pbrTextures.delete(texture);
-          texture.dispose();
-        });
-        return null;
-      }
-      return { baseColor, normal, ...(rm ? { rm } : {}) };
-    };
-    const applySubjectPbrMaterials = async (model: THREE.Object3D) => {
-      const textureSets = SUBJECT_TEXTURE_SETS[pbrTextureVariant];
-      const requiredTextureSets = [
-        ...new Set(
-          Object.values(SUBJECT_MATERIALS).map(
-            (definition) => definition.textureSet,
-          ),
-        ),
-      ];
-      const loadedTextureSets = new Map<
-        keyof typeof textureSets,
-        SubjectTextureBundle
-      >();
-      await Promise.all(
-        requiredTextureSets.map(async (textureSetName) => {
-          const bundle = await loadSubjectTextureBundle(
-            textureSets[textureSetName],
-          );
-          if (bundle) loadedTextureSets.set(textureSetName, bundle);
-        }),
-      );
-      if (rigLoadCancelled) return;
-
-      const materials = new Map<string, Set<THREE.MeshStandardMaterial>>();
-      model.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        const surfaces = Array.isArray(object.material)
-          ? object.material
-          : [object.material];
-        surfaces.forEach((surface) => {
-          if (!(surface instanceof THREE.MeshStandardMaterial)) return;
-          const namedMaterials = materials.get(surface.name) ?? new Set();
-          namedMaterials.add(surface);
-          materials.set(surface.name, namedMaterials);
-        });
-      });
-
-      let failedSets = 0;
-      let appliedMaterials = 0;
-      Object.entries(SUBJECT_MATERIALS).forEach(
-        ([materialName, definition]) => {
-          const targets = materials.get(materialName);
-          if (!targets?.size) return;
-          const bundle = loadedTextureSets.get(definition.textureSet);
-          if (!bundle) failedSets += 1;
-          targets.forEach((surface) => {
-            if (bundle) {
-              const useBaseColor =
-                !("useBaseColor" in definition) ||
-                definition.useBaseColor !== false;
-              if (useBaseColor) {
-                surface.map = bundle.baseColor;
-                surface.color.setHex(definition.tint);
-              }
-              surface.normalMap = bundle.normal;
-              surface.normalScale.setScalar(definition.normalScale);
-              if (bundle.rm) {
-                surface.roughnessMap = bundle.rm;
-                surface.metalnessMap = bundle.rm;
-                surface.roughness = 1;
-                surface.metalness = 1;
-              }
-              appliedMaterials += 1;
-            }
-            if (
-              "environmentIntensity" in definition &&
-              definition.environmentIntensity
-            ) {
-              surface.envMap = ensureSubjectEnvironment();
-              surface.envMapIntensity = definition.environmentIntensity;
-            }
-            surface.needsUpdate = true;
-          });
-        },
-      );
-      pbrAppliedMaterials = appliedMaterials;
-      pbrMaterialsFailed = failedSets > 0;
-      pbrMaterialsLoaded = appliedMaterials > 0 && failedSets === 0;
-      subject.userData.pbrMaterialsLoaded = pbrMaterialsLoaded;
-      subject.userData.pbrMaterialsFailed = pbrMaterialsFailed;
-      subject.userData.pbrTextureVariant = pbrTextureVariant;
-      subject.userData.pbrAppliedMaterials = pbrAppliedMaterials;
-    };
-
-    let enemyMixer = new THREE.AnimationMixer(subjectDetail);
-    const enemyClips = createSubjectMotionClips();
-    const createEnemyActions = (
-      mixer: THREE.AnimationMixer,
-      clips: THREE.AnimationClip[],
-    ) => {
-      const byName = new Map(clips.map((clip) => [clip.name, clip]));
-      return {
-        idle: mixer.clipAction(byName.get("idle") ?? enemyClips.idle),
-        moonwalk: mixer.clipAction(
-          byName.get("moonwalk") ?? enemyClips.moonwalk,
-        ),
-        investigate: mixer.clipAction(
-          byName.get("investigate") ?? enemyClips.investigate,
-        ),
-        chase: mixer.clipAction(byName.get("chase") ?? enemyClips.chase),
-      };
-    };
-    let enemyActions = createEnemyActions(enemyMixer, Object.values(enemyClips));
-    Object.values(enemyActions).forEach((action) => {
-      action.enabled = true;
-      action.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
-    });
-    let activeEnemyAction = enemyActions.moonwalk;
-    activeEnemyAction.play();
-    let rigLoadCancelled = false;
-    let gltfRigLoaded = false;
-    let gltfRigFailed = false;
-    const actionForEnemyState = (state: EnemyState) =>
-        state === "chase" || state === "ambush"
-          ? enemyActions.chase
-          : state === "investigate" ||
-              state === "search" ||
-              state === "lure" ||
-              state === "vent-watch"
-            ? enemyActions.investigate
-            : state === "listen" || state === "recover"
-              ? enemyActions.idle
-              : enemyActions.moonwalk;
-    const transitionEnemyAnimation = (state: EnemyState) => {
-      const nextAction = actionForEnemyState(state);
-      if (nextAction === activeEnemyAction) return;
-      nextAction.reset().play();
-      nextAction.crossFadeFrom(activeEnemyAction, 0.26, true);
-      activeEnemyAction = nextAction;
-    };
-    new GLTFLoader().load(
-      "/models/subject-m22.glb",
-      (gltf) => {
-        if (rigLoadCancelled) return;
-        const importedModel = gltf.scene;
-        const requiredNodes = [
-          "hips",
-          "head",
-          "jaw",
-          "hat",
-          "armLeft",
-          "armRight",
-          "legLeft",
-          "legRight",
-        ];
-        const hasRig = requiredNodes.every((name) =>
-          importedModel.getObjectByName(name),
-        );
-        const importedClipNames = new Set(
-          gltf.animations.map((clip) => clip.name),
-        );
-        const hasStateAnimations = [
-          "idle",
-          "moonwalk",
-          "investigate",
-          "chase",
-        ].every((name) => importedClipNames.has(name));
-        if (!hasRig || !hasStateAnimations) {
-          gltfRigFailed = true;
-          return;
-        }
-
-        importedModel.name = "SUJETO_M22_ASSET";
-        let detailedMeshCount = 0;
-        importedModel.traverse((object) => {
-          if (!(object instanceof THREE.Mesh)) return;
-          detailedMeshCount += 1;
-          object.castShadow = true;
-          object.receiveShadow = true;
-        });
-
-        enemyMixer.stopAllAction();
-        enemyMixer.uncacheRoot(subjectDetail);
-        subjectFallback.visible = false;
-        subjectDetailSlot.add(importedModel);
-        subjectDetail = importedModel;
-        head = subjectDetail.getObjectByName("head");
-        jaw = subjectDetail.getObjectByName("jaw");
-        subjectHat = subjectDetail.getObjectByName("hat");
-        subjectHatBaseY = subjectHat?.position.y ?? 0.75;
-        facePlateLeft = subjectDetail.getObjectByName("facePlateLeft");
-        facePlateRight = subjectDetail.getObjectByName("facePlateRight");
-        chestCore = subjectDetail.getObjectByName("chestCore");
-        eyeGlowLeft = subjectDetail.getObjectByName(
-          "eyeGlowLeft",
-        ) as THREE.PointLight | undefined;
-        eyeGlowRight = subjectDetail.getObjectByName(
-          "eyeGlowRight",
-        ) as THREE.PointLight | undefined;
-        collectServoMaterials();
-        void applySubjectPbrMaterials(subjectDetail);
-
-        enemyMixer = new THREE.AnimationMixer(subjectDetail);
-        enemyActions = createEnemyActions(enemyMixer, gltf.animations);
-        Object.values(enemyActions).forEach((action) => {
-          action.enabled = true;
-          action.setLoop(THREE.LoopRepeat, Number.POSITIVE_INFINITY);
-        });
-        activeEnemyAction = actionForEnemyState(currentEnemyMode);
-        activeEnemyAction.reset().play();
-
-        gltfRigLoaded = true;
-        subject.userData.gltfRigLoaded = true;
-        subject.userData.model = "subject-m22.glb";
-        subject.userData.meshes = detailedMeshCount;
-      },
-      undefined,
-      () => {
-        if (!rigLoadCancelled) gltfRigFailed = true;
-      },
-    );
-
-    const flashlight = new THREE.SpotLight(
-      0xe8f4e9,
-      132,
-      23,
-      Math.PI / 5.5,
-      0.58,
-      1.55,
-    );
-    flashlight.castShadow = false;
-    camera.add(flashlight);
-    flashlight.position.set(0, -0.1, 0);
-    flashlight.target.position.set(0, -0.1, -1);
-    camera.add(flashlight.target);
-    const bodyFill = new THREE.PointLight(0xa9c6af, 7.5, 5.5, 2);
-    bodyFill.position.set(0, 0.08, 0.18);
-    camera.add(bodyFill);
-    const qaSideLight = new THREE.PointLight(0xd5ad91, 9, 6, 2);
-    qaSideLight.position.set(1.75, 1.1, -0.8);
-    qaSideLight.visible = false;
-    camera.add(qaSideLight);
-    scene.add(camera);
-
-    const playPulse = (strength: number) => {
-      audioRef.current?.playHeartbeat(
-        THREE.MathUtils.clamp(strength * 5.5, 0.2, 1.65),
-      );
-    };
-
-    const playStep = () => {
-      audioRef.current?.playPlayerStep(
-        playerCrouching ? 0.08 : playerSprinting ? 0.24 : 0.16,
-      );
-    };
-
-    const playClank = (position: THREE.Vector3) => {
-      const system = audioRef.current;
-      if (!system?.isUnlocked) return;
-      system.updateEmitter("metal-impact", {
-        position,
-        occlusion: corridorLineOfSight(
-          maze,
-          positionCell(player),
-          positionCell(position),
-        )
-          ? 0
-          : 0.72,
-      });
-      system.playMetalImpact("metal-impact");
-    };
-
-    const playEnemyStep = (distanceToPlayer: number) => {
-      const system = audioRef.current;
-      if (!system?.isUnlocked) return;
-      system.playMechanicalStep("subject-m", {
-        gain: THREE.MathUtils.clamp(
-          1.15 / Math.max(1, distanceToPlayer * 0.08),
-          0.28,
-          1.15,
-        ),
-        playbackRate: currentEnemyMode === "chase" ? 1.16 : 0.94,
-      });
-    };
-
-    const playMechanicalScream = (mascot: ScareMascot) => {
-      audioRef.current?.playJumpscare(1, mascot.screamVariant);
-      vibrateScare();
-    };
-
-    const reportRun = (escapedRun: boolean, now: number) => {
-      const seconds = runStartedAt ? (now - runStartedAt) / 1000 : 0;
-      let best: number | null = null;
-      let record = false;
-      try {
-        const previous = Number.parseFloat(window.localStorage.getItem(WALK_BEST_KEY) ?? "");
-        best = Number.isFinite(previous) ? previous : null;
-        if (escapedRun && (best === null || seconds < best)) {
-          record = true;
-          best = seconds;
-          window.localStorage.setItem(WALK_BEST_KEY, seconds.toFixed(2));
-        }
-      } catch {
-        // Best time is optional.
-      }
-      if (escapedRun) unlockPremiereAchievement("walkEscape");
-      if (escapedRun && tapesHeld >= WALK_TAPES.length) unlockPremiereAchievement("walkDirectorsCut");
-      if (!escapedRun) unlockPremiereAchievement("walkCaught");
-      setRunStats({
-        escaped: escapedRun,
-        seconds,
-        meters: traveledDistance,
-        tapes: [...tapeIndices],
-        echoesUsed,
-        objectsThrown,
-        closeCalls,
-        peakBpm,
-        grade: rateRun({ escaped: escapedRun, tapes: tapesHeld, seconds }),
-        best,
-        record,
-      });
+      acousticEvents = pruneAcousticEvents([...acousticEvents, createAcousticEvent(kind, cell, now)], now);
     };
 
     const playSubjectHee = (gain: number, rate: number) => {
@@ -2232,13 +1395,82 @@ export default function WalkExe() {
       return system.playSampleAt("subject-m", buffer, { gain, playbackRate: rate });
     };
 
+    const playClank = (position: THREE.Vector3) => {
+      const system = audioRef.current;
+      if (!system?.isUnlocked) return;
+      system.updateEmitter("metal-impact", {
+        position,
+        occlusion: corridorLineOfSight(maze, positionCell(player, GRID), positionCell(position, GRID), GRID) ? 0 : 0.72,
+      });
+      system.playMetalImpact("metal-impact");
+    };
+
+    const buildAutopsyTip = () => {
+      if (lastHeardKind === "sprint-step" && simulationTime - lastHeardAt < 4000) {
+        return "Corriste demasiado cerca: el sprint se oye a 20 celdas. Usa [CTRL] en cruces ciegos.";
+      }
+      if (flashlightEnabled && !playerCrouching) {
+        return "Te vio desde lejos por la linterna encendida. Apaga [F] y agáchate [CTRL] para ocultarte, o enfócale la cara para cegarlo 2 s.";
+      }
+      if (redAlert) {
+        return "Durante la Alerta Roja Sujeto M-22 acelera. Guarda 1 Eco [G] o el Pan Sísmico [Q] para la carrera final.";
+      }
+      return "Vigila los cruces con [TAB] y aprovecha el Vinilo de Ghost (1969) para repeler a Sujeto M-22 si te acorrala.";
+    };
+
+    const reportRun = (escapedRun: boolean, now: number) => {
+      const seconds = runStartedAt ? (now - runStartedAt) / 1000 : 0;
+      let best: number | null = null;
+      let record = false;
+      try {
+        const previous = Number.parseFloat(window.localStorage.getItem(WALK_BEST_KEY) ?? "");
+        best = Number.isFinite(previous) ? previous : null;
+        if (escapedRun && difficultyRef.current !== "turista" && (best === null || seconds < best)) {
+          record = true;
+          best = seconds;
+          window.localStorage.setItem(WALK_BEST_KEY, seconds.toFixed(2));
+        }
+      } catch {
+        // Optional.
+      }
+      const ending = resolveEndingKind({
+        escaped: escapedRun,
+        tapes: tapesHeld,
+        eggsFound: eggsFound.length,
+        ghostRelic: ghostBlessed,
+      });
+      if (escapedRun) unlockPremiereAchievement("walkEscape");
+      if (escapedRun && tapesHeld >= WALK_TAPES.length) unlockPremiereAchievement("walkDirectorsCut");
+      if (escapedRun && ending === "collectors-cut") unlockPremiereAchievement("walkCollectorEnding");
+      if (!escapedRun) unlockPremiereAchievement("walkCaught");
+
+      setRunStats({
+        escaped: escapedRun,
+        seconds,
+        meters: traveledDistance,
+        tapes: [...tapeIndices],
+        eggsFound: [...eggsFound],
+        echoesUsed,
+        objectsThrown,
+        dazzles,
+        closeCalls,
+        peakBpm,
+        autopsyTip: buildAutopsyTip(),
+        grade: rateRun({
+          escaped: escapedRun,
+          tapes: tapesHeld,
+          seconds,
+          eggsFound: eggsFound.length,
+          ghostRelic: ghostBlessed,
+        }),
+        best,
+        record,
+      });
+    };
+
     const triggerCaught = (now: number) => {
-      if (caught || escaped) return;
-      const mascot = mascotForCatch(
-        seed,
-        cctvIndexRef.current,
-        cctvExposureMs,
-      );
+      if (caught || escaped || difficultyRef.current === "turista") return;
+      const mascot = mascotForCatch(seed, cctvIndexRef.current, cctvExposureMs);
       caught = true;
       caughtSequence = {
         startedAt: now,
@@ -2247,51 +1479,16 @@ export default function WalkExe() {
       };
       inputController.reset(now);
       mobilePointers.clear();
-      lastAppliedVelocity = { x: 0, z: 0 };
       document.exitPointerLock?.();
       setActiveJumpscare(mascot);
-      setMessage(
-        `${mascot.name} ha invadido la señal mientras SUJETO M cerraba el paso.`,
-      );
-      setPrompt(`${mascot.cameraCode} · ${mascot.signal}`);
-      playMechanicalScream(mascot);
-    };
-
-    const applyPlayerMovement = (
-      forward: number,
-      strafe: number,
-      speed: number,
-      delta: number,
-      crouching: boolean,
-    ) => {
-      const velocity = capsuleVelocityFromInput({
-        forward,
-        strafe,
-        yaw,
-        speed,
-      });
-      lastAppliedVelocity = velocity;
-      const result = stepCapsuleController(capsuleWorld, capsuleState, {
-        velocity,
-        deltaSeconds: delta,
-        crouch: crouching,
-      });
-      capsuleState = result.state;
-      player.x = result.state.position.x;
-      player.z = result.state.position.z;
-      player.y = result.eyeHeight;
-      lastCapsuleCollided = result.collided;
-      traveledDistance += result.moved;
-      return result;
+      setMessage(`${mascot.name} ha roto la señal mientras SUJETO M-22 cerraba el pasillo.`);
+      audioRef.current?.playJumpscare(1, mascot.screamVariant);
+      vibrateScare();
     };
 
     const dropEcho = (now: number) => {
       if (echoesHeld <= 0 || activeLure || ventTrip) {
-        setPrompt(
-          activeLure
-            ? "Ya hay una proyección activa."
-            : "No tienes ningún eco espectral.",
-        );
+        currentPrompt = activeLure ? "Ya hay un eco proyectado." : "No tienes ningún eco espectral.";
         return;
       }
       const ghost = createEcho(0xf2b2ff);
@@ -2300,147 +1497,203 @@ export default function WalkExe() {
       world.add(ghost);
       echoesHeld -= 1;
       echoesUsed += 1;
-      setEchoes(echoesHeld);
-      activeLure = {
-        mesh: ghost,
-        cell: positionCell(player),
-        expiresAt: now + 7600,
-      };
-      setPrompt("Eco proyectado. SUJETO M está cambiando de ruta.");
+      activeLure = { mesh: ghost, cell: positionCell(player, GRID), expiresAt: now + 8200 };
+      currentPrompt = "Eco espectral proyectado · Sujeto M-22 se desvía.";
     };
 
     const dropNoiseObject = (now: number) => {
       if (ventTrip || now < nextObjectDropAt) return;
       const reusable =
-        noiseObjects.find((object) => !object.mesh.visible) ??
-        noiseObjects.reduce((oldest, object) =>
-          object.activeUntil < oldest.activeUntil ? object : oldest,
-        );
+        noiseObjects.find((o) => !o.mesh.visible) ??
+        noiseObjects.reduce((oldest, o) => (o.activeUntil < oldest.activeUntil ? o : oldest));
       const forwardX = -Math.sin(yaw);
       const forwardZ = -Math.cos(yaw);
       const resolved = resolveGridMovement(
         maze,
         { x: player.x, z: player.z },
-        { x: forwardX * 2.35, z: forwardZ * 2.35 },
-        MAZE_SIZE,
+        { x: forwardX * 2.5, z: forwardZ * 2.5 },
+        GRID,
         CELL_SIZE,
         0.1,
       );
-      reusable.mesh.position.set(resolved.x, 0.11, resolved.z);
-      reusable.mesh.rotation.x = random() * Math.PI;
-      reusable.mesh.rotation.y = random() * Math.PI;
+      reusable.mesh.position.set(resolved.x, 0.12, resolved.z);
       reusable.mesh.visible = true;
-      reusable.activeUntil = now + 11500;
-      emitNoise("metal-impact", positionCell(reusable.mesh.position), now);
-      nextObjectDropAt = now + 1600;
+      reusable.activeUntil = now + 11000;
+      const targetCell = positionCell(reusable.mesh.position, GRID);
+      nextObjectDropAt = now + 1500;
       objectsThrown += 1;
-      playClank(reusable.mesh.position);
-      setPrompt("Pieza metálica lanzada. Algo está investigando el golpe.");
+
+      if (hardBreadArmed) {
+        hardBreadArmed = false;
+        audioRef.current?.playHorrorCue("hard-bread");
+        emitNoise("exit-alarm", targetCell, now);
+        // Also spawn a temporary acoustic lure right at the bread impact!
+        if (!activeLure) {
+          const ring = createEcho(0xff6b47);
+          ring.position.set(resolved.x, 0, resolved.z);
+          world.add(ring);
+          activeLure = { mesh: ring, cell: targetCell, expiresAt: now + 9500 };
+        }
+        showLore("RELIQUIA P01 · EL PAN TA' DURO", "IMPACTO SÍSMICO · El estruendo atrae a Sujeto M-22 desde todo el edificio.", 4200);
+        currentPrompt = "Barra de pan lanzada · estruendo masivo.";
+      } else {
+        emitNoise("metal-impact", targetCell, now);
+        playClank(reusable.mesh.position);
+        currentPrompt = "Pieza metálica lanzada · Sujeto M investiga el ruido.";
+      }
+    };
+
+    const triggerEgg = (eggId: StudioEggId, now: number) => {
+      const egg = studioEnv.eggs.find((e) => e.id === eggId);
+      const placement = layout.eggPlacements.find((p) => p.id === eggId);
+      if (!egg || !placement) return;
+      if (!egg.reusable && egg.used) return;
+      if (egg.reusable && now < egg.cooldownUntil) {
+        currentPrompt = "Recargando mecanismo del ala...";
+        return;
+      }
+
+      const isFirst = !eggsFound.includes(eggId);
+      if (isFirst) {
+        eggsFound.push(eggId);
+        setWingMapLabels((prev) =>
+          prev.map((w) => (w.id === eggId ? { ...w, done: true } : w)),
+        );
+      }
+      egg.used = true;
+      egg.cooldownUntil = now + 22000;
+      showLore(placement.title, placement.loreLog, 5600);
+      currentPrompt = placement.loreLog;
+
+      if (eggId === "neverland-vitrine") {
+        audioRef.current?.playHorrorCue("neverland-chime");
+        playSubjectHee(1.1, 0.66);
+        unlockPremiereAchievement("walkNeverlandLore");
+      } else if (eggId === "ghost-vinyl") {
+        ghostBlessed = true;
+        cctvPower = Math.min(100, cctvPower + 30);
+        lastReportedPower = Math.ceil(cctvPower);
+        setPower(lastReportedPower);
+        echoesHeld += 1;
+        banishedUntil = now + 8000;
+        const spinBody = egg.mesh.userData.spinBody as THREE.Object3D | undefined;
+        if (spinBody) spinBody.visible = false;
+        audioRef.current?.playHorrorCue("ghost-organ");
+        unlockPremiereAchievement("walkGhostRelic");
+      } else if (eggId === "acoustic-signal") {
+        audioRef.current?.playHorrorCue("close-24tet");
+        emitNoise("exit-alarm", egg.cell, now);
+        if (activeLure) {
+          world.remove(activeLure.mesh);
+          activeLure = null;
+        }
+        const wave = createEcho(0xffb347);
+        wave.position.copy(egg.position);
+        world.add(wave);
+        activeLure = { mesh: wave, cell: egg.cell, expiresAt: now + 11000 };
+        unlockPremiereAchievement("walkCloseSignal");
+      } else if (eggId === "fazbear-honk") {
+        cctvPower = 100;
+        lastReportedPower = 100;
+        setPower(100);
+        audioRef.current?.playHorrorCue("honk");
+        unlockPremiereAchievement("walkHonk");
+      } else if (eggId === "hard-bread") {
+        hardBreadArmed = true;
+        const loaf = egg.mesh.userData.loaf as THREE.Object3D | undefined;
+        if (loaf) loaf.visible = false;
+        audioRef.current?.playHorrorCue("hard-bread");
+        unlockPremiereAchievement("walkHardBread");
+      }
     };
 
     const interact = (now: number) => {
+      tmpPlayerFlat.set(player.x, 0, player.z);
+
+      // 1. Tapes
       const closeTape = runtimeTapes.find(
-        (tape) =>
-          !tape.collected &&
-          tape.mesh.position.distanceTo(player.clone().setY(0)) < 1.5,
+        (tape) => !tape.collected && tape.mesh.position.distanceTo(tmpPlayerFlat) < 1.65,
       );
       if (closeTape) {
         closeTape.collected = true;
         closeTape.mesh.visible = false;
+        tapeVirtualLights[closeTape.index].active = false;
         tapesHeld += 1;
         tapeIndices.push(closeTape.index);
-        setTapes([...tapeIndices]);
-        setTapeMapMarkers((current) =>
-          current.map((marker, markerIndex) =>
-            markerIndex === closeTape.index ? { ...marker, collected: true } : marker,
-          ),
+        setTapeMapMarkers((cur) =>
+          cur.map((m, idx) => (idx === closeTape.index ? { ...m, collected: true } : m)),
         );
-        // Pulling a tape out of the dark is not silent.
         emitNoise("crouch-step", closeTape.cell, now);
-        const title = WALK_TAPES[closeTape.index].title;
-        if (tapesHeld === requiredTapes) {
-          exitLight.color.setHex(0x35ff7a);
-          audioRef.current?.playChime("unlock");
-          setPrompt(`«${title}» RECUPERADA · LA SALIDA YA TIENE ENERGÍA`);
-          setMessage("Tres cintas: la puerta de emergencia se ha encendido en verde.");
+        const tapeInfo = WALK_TAPES[closeTape.index];
+        showLore(`CINTA ${tapeInfo.code} · ${tapeInfo.title}`, tapeInfo.lore, 5600);
+
+        if (tapesHeld === requiredTapes && !redAlert) {
+          redAlert = true;
+          exitVirtualLight.color = 0x35ff7a;
+          exitVirtualLight.intensity = 30;
+          if (exitBeaconMat) {
+            exitBeaconMat.color.setHex(0x0b3d1e);
+            exitBeaconMat.emissive.setHex(0x35ff7a);
+          }
+          audioRef.current?.playHorrorCue("red-alert");
+          currentPrompt = "ALERTA ROJA · LA PUERTA DE ESTRENO ESTÁ ABIERTA · ¡CORRE!";
         } else if (tapesHeld === WALK_TAPES.length) {
           audioRef.current?.playChime("unlock");
-          setPrompt(`«${title}» · LAS 5 CINTAS · DIRECTOR’S CUT DESBLOQUEADO`);
+          currentPrompt = "5/5 CINTAS RECUPERADAS · ESCAPA PARA EL FINAL SECRETO DIRECTOR’S CUT.";
         } else {
           audioRef.current?.playChime("tape");
-          setPrompt(`CINTA «${title}» RECUPERADA · ${tapesHeld}/${WALK_TAPES.length}`);
+          currentPrompt = `Cinta «${tapeInfo.title}» recuperada (${tapesHeld}/${WALK_TAPES.length}).`;
         }
         return;
       }
 
-      if (
-        !ghostRelicCollected &&
-        ghostRelicMesh.position.distanceTo(player.clone().setY(0)) < 1.6
-      ) {
-        ghostRelicCollected = true;
-        ghostRelicMesh.visible = false;
-        cctvPower = Math.min(100, cctvPower + 25);
-        lastReportedPower = Math.ceil(cctvPower);
-        setPower(lastReportedPower);
-        echoesHeld += 1;
-        setEchoes(echoesHeld);
-        setGhostRelicFound(true);
-        setRelicMapMarker((current) => (current ? { ...current, found: true } : null));
-        unlockPremiereAchievement("walkGhostRelic");
-        audioRef.current?.playChime("unlock");
-        setPrompt("SEVEN INCHES (1969) · BENDICIÓN DEL CLERO (+25% CCTV · +1 ECO)");
-        setMessage("If you have Ghosts, you have everything. Mary On A Cross te cubre la espalda.");
+      // 2. Interactive Horror Easter Eggs (5 wings!)
+      const closeEgg = studioEnv.eggs.find(
+        (egg) =>
+          (!egg.used || (egg.reusable && now >= egg.cooldownUntil)) &&
+          egg.position.distanceTo(tmpPlayerFlat) < 1.85,
+      );
+      if (closeEgg) {
+        triggerEgg(closeEgg.id, now);
         return;
       }
 
+      // 3. Spectral Echoes
       const closeEcho = runtimeEchoes.find(
-        (echo) =>
-          !echo.collected &&
-          echo.mesh.position.distanceTo(player.clone().setY(0)) < 1.45,
+        (echo) => !echo.collected && echo.mesh.position.distanceTo(tmpPlayerFlat) < 1.55,
       );
       if (closeEcho) {
         closeEcho.collected = true;
         closeEcho.mesh.visible = false;
         echoesHeld += 1;
-        setEchoes(echoesHeld);
-        setPrompt("Eco estabilizado. Pulsa G para proyectarlo como señuelo.");
+        currentPrompt = "Eco estabilizado · pulsa [G] para distraer a Sujeto M-22.";
         return;
       }
 
-      const currentCell = positionCell(player);
+      // 4. Maintenance Vents
+      const currentCell = positionCell(player, GRID);
       const pairedCell = ventByCell.get(currentCell);
       const closeVent = ventMeshes.some(
         (vent) =>
           vent.userData.cell === currentCell &&
-          vent.position.distanceTo(player.clone().setY(vent.position.y)) < 2.15,
+          Math.hypot(vent.position.x - player.x, vent.position.z - player.z) < 2.2,
       );
       if (pairedCell !== undefined && closeVent && !ventTrip) {
-        const destination = cellCenter(pairedCell);
-        const sourceVent = ventMeshes.find(
-          (vent) => vent.userData.cell === currentCell,
-        );
-        const destinationVent = ventMeshes.find(
-          (vent) => vent.userData.cell === pairedCell,
-        );
-        if (!sourceVent || !destinationVent) return;
+        const destination = cellCenter(pairedCell, GRID);
+        const sourceVent = ventMeshes.find((v) => v.userData.cell === currentCell);
+        const destVent = ventMeshes.find((v) => v.userData.cell === pairedCell);
+        if (!sourceVent || !destVent) return;
         const pairIndex = Number(sourceVent.userData.pair ?? 0);
         const ductHeight = WALL_HEIGHT + 0.78;
         const path = [
           sourceVent.position.clone().setY(ductHeight),
-          destinationVent.position.clone().setY(ductHeight),
+          destVent.position.clone().setY(ductHeight),
         ];
         player.copy(path[0]);
-        const cumulative = [0];
-        for (let index = 1; index < path.length; index += 1) {
-          cumulative[index] =
-            cumulative[index - 1] +
-            path[index - 1].distanceTo(path[index]);
-        }
-        const totalDistance = cumulative[cumulative.length - 1];
-        const ductDirection = path[1].clone().sub(path[0]);
-        if (Math.hypot(ductDirection.x, ductDirection.z) > 0.05) {
-          currentVentHeadingYaw =
-            Math.atan2(ductDirection.x, ductDirection.z) + Math.PI;
+        const totalDistance = path[0].distanceTo(path[1]);
+        const ductDir = path[1].clone().sub(path[0]);
+        if (Math.hypot(ductDir.x, ductDir.z) > 0.05) {
+          currentVentHeadingYaw = Math.atan2(ductDir.x, ductDir.z) + Math.PI;
           yaw = currentVentHeadingYaw;
         }
         pitch = 0;
@@ -2451,31 +1704,26 @@ export default function WalkExe() {
           destinationCell: pairedCell,
           pairIndex,
           path,
-          cumulative,
+          cumulative: [0, totalDistance],
           totalDistance,
           distanceAlong: 0,
         };
         emitNoise("vent-rattle", currentCell, now);
         setInVent(true);
         setVentProgress(0);
-        setVentRoute(
-          `${sectorForCell(currentCell)} → ${sectorForCell(pairedCell)}`,
-        );
-        setPrompt(
-          "Conducto activo: W/S desplaza · A/D o ratón giran la cámara.",
-        );
+        setVentRoute(`${sectorForCell(currentCell, GRID)} → ${sectorForCell(pairedCell, GRID)}`);
+        currentPrompt = "En conducto: W/S desplaza · A/D o ratón giran.";
         return;
       }
 
-      if (cellCenter(exitCell).distanceTo(player.clone().setY(0)) < 1.55) {
+      // 5. Emergency Premiere Blast Door
+      if (exitPosition.distanceTo(tmpPlayerFlat) < 1.75) {
         if (tapesHeld < requiredTapes) {
           const missing = requiredTapes - tapesHeld;
           audioRef.current?.playChime("locked");
           playClank(exitPosition);
-          emitNoise("metal-impact", exitCell, now);
-          setPrompt(
-            `SALIDA BLOQUEADA · FALTAN ${missing} CINTA${missing === 1 ? "" : "S"} DE RAÚL`,
-          );
+          emitNoise("metal-impact", layout.exitCell, now);
+          currentPrompt = `PUERTA SIN ENERGÍA · FALTAN ${missing} CINTA${missing === 1 ? "" : "S"} DE RAÚL.`;
           return;
         }
         escaped = true;
@@ -2484,215 +1732,92 @@ export default function WalkExe() {
           playerStart: player.clone(),
           playerEnd: exitPosition
             .clone()
-            .add(
-              new THREE.Vector3(
-                exitOpening.x * 3.2,
-                PLAYER_HEIGHT,
-                exitOpening.z * 3.2,
-              ),
-            ),
+            .add(new THREE.Vector3(exitOpening.x * 2.9, PLAYER_HEIGHT, exitOpening.z * 2.9)),
+          slammed: false,
+          finaleCuePlayed: false,
         };
+        // Position Sujeto M-22 in the dark corridor just behind the blast door for the 3D finale reveal!
+        subject.position.set(
+          exitPosition.x - exitOpening.x * 2.5,
+          0,
+          exitPosition.z - exitOpening.z * 2.5,
+        );
+        subject.rotation.y = Math.atan2(exitOpening.x, exitOpening.z) + Math.PI;
         inputController.reset(now);
         mobilePointers.clear();
-        lastAppliedVelocity = { x: 0, z: 0 };
-        emitNoise("exit-alarm", exitCell, now);
-        playClank(exitPosition);
         document.exitPointerLock?.();
-        setPrompt("APERTURA DE EMERGENCIA · mecanismo en movimiento");
-        setMessage("La puerta de emergencia está liberando el cierre.");
+        emitNoise("exit-alarm", layout.exitCell, now);
+        playClank(exitPosition);
+        currentPrompt = "COMPUERTA DE ESTRENO ABIERTA · ¡NO MIRES ATRÁS!";
       }
     };
 
-    const stageVentForQa = (pairIndex = 0) => {
-      if (!qaMode) return false;
-      const vent = ventMeshes.find(
-        (candidate) =>
-          Number(candidate.userData.pair ?? -1) ===
-          THREE.MathUtils.clamp(
-            Math.trunc(pairIndex),
-            0,
-            ventPairs.length - 1,
-          ),
-      );
-      if (!vent) return false;
-      player.set(vent.position.x, CROUCH_HEIGHT, vent.position.z);
-      capsuleState = createCapsuleState(
-        capsuleWorld,
-        { x: player.x, z: player.z },
-        true,
-      );
-      yaw = vent.rotation.y;
-      pitch = 0;
-      interact(simulationTime);
-      return Boolean(ventTrip);
-    };
+    // ── Input Handlers ──────────────────────────────────────────────────────
+    const normCode = (e: KeyboardEvent) =>
+      e.code || (["W", "A", "S", "D"].includes(e.key.toUpperCase()) ? `Key${e.key.toUpperCase()}` : e.key);
+    const evTime = (e: { timeStamp: number }) =>
+      !Number.isFinite(e.timeStamp) || e.timeStamp <= 0
+        ? performance.now()
+        : e.timeStamp > performance.timeOrigin
+          ? e.timeStamp - performance.timeOrigin
+          : e.timeStamp;
 
-    const teleportForQa = (x: number, z: number) => {
-      player.set(x, PLAYER_HEIGHT, z);
-      capsuleState = createCapsuleState(capsuleWorld, { x: player.x, z: player.z }, false);
-    };
-
-    const stageTapeForQa = (index = 0, pick = true) => {
-      if (!qaMode) return false;
-      const tape = runtimeTapes[THREE.MathUtils.clamp(Math.trunc(index), 0, runtimeTapes.length - 1)];
-      if (!tape || tape.collected) return false;
-      if (!pick) {
-        // Stand a step away from the tape, looking at it.
-        const center = cellCenter(tape.cell);
-        const open = openingDirection(maze[tape.cell]);
-        teleportForQa(center.x + open.x * 3.4, center.z + open.z * 3.4);
-        yaw = Math.atan2(player.x - tape.mesh.position.x, player.z - tape.mesh.position.z);
-        pitch = -0.18;
-        return true;
-      }
-      teleportForQa(tape.mesh.position.x, tape.mesh.position.z);
-      interact(simulationTime);
-      return tape.collected;
-    };
-
-    const stageExitForQa = () => {
-      if (!qaMode) return false;
-      const center = cellCenter(exitCell);
-      teleportForQa(center.x, center.z);
-      interact(simulationTime);
-      return Boolean(escapeSequence);
-    };
-
-    const openCctvForQa = (cameraIndex = 0) => {
-      if (!qaMode) return false;
-      const index = THREE.MathUtils.clamp(
-        Math.trunc(cameraIndex),
-        0,
-        cctvCameras.length - 1,
-      );
-      cctvIndexRef.current = index;
-      setCctvIndex(index);
-      tabletRef.current = true;
-      setTabletOpen(true);
-      inputController.reset(simulationTime);
-      mobilePointers.clear();
-      document.exitPointerLock?.();
-      return true;
-    };
-
-    const normalizedKeyCode = (event: KeyboardEvent) => {
-      if (event.code) return event.code;
-      const upper = event.key.toUpperCase();
-      if (upper === "W" || upper === "A" || upper === "S" || upper === "D") {
-        return `Key${upper}`;
-      }
-      return event.key;
-    };
-    const inputTimestamp = (event: { timeStamp: number }) => {
-      const timestamp = event.timeStamp;
-      if (!Number.isFinite(timestamp) || timestamp <= 0) {
-        return performance.now();
-      }
-      return timestamp > performance.timeOrigin
-        ? timestamp - performance.timeOrigin
-        : timestamp;
-    };
     const keyDown = (event: KeyboardEvent) => {
-      const code = normalizedKeyCode(event);
-      if (!event.repeat && qaMode && code === "F8") {
-        event.preventDefault();
-        stageVentForQa(0);
-        return;
-      }
-      if (!event.repeat && qaMode && code === "F9") {
-        event.preventDefault();
-        openCctvForQa(0);
-        return;
-      }
+      const code = normCode(event);
       const action = walkInputActionForCode(code);
-      const timestamp = inputTimestamp(event);
+      const ts = evTime(event);
       if (action) {
-        inputController.press(action, `keyboard:${code}`, timestamp);
+        inputController.press(action, `keyboard:${code}`, ts);
         event.preventDefault();
       }
       if (!event.repeat && code === "KeyE") interactQueuedRef.current = true;
       if (!event.repeat && code === "KeyG") dropQueuedRef.current = true;
       if (!event.repeat && code === "KeyQ") objectQueuedRef.current = true;
-      if (
-        !event.repeat &&
-        code === "Tab" &&
-        phaseRef.current === "playing" &&
-        cctvPower > 0
-      ) {
+      if (!event.repeat && code === "KeyF") {
+        flashlightEnabled = !flashlightEnabled;
+        flashlight.visible = flashlightEnabled;
+      }
+      if (!event.repeat && code === "Tab" && phaseRef.current === "playing" && cctvPower > 0) {
         event.preventDefault();
         tabletRef.current = !tabletRef.current;
-        inputController.reset(timestamp);
+        inputController.reset(ts);
         mobilePointers.clear();
         setTabletOpen(tabletRef.current);
         if (tabletRef.current) {
-          void audioRef.current?.resume().then((running) => {
-            if (running && tabletRef.current) {
-              audioRef.current?.playCctvStatic();
-            }
-          });
-        }
-        else clearCctvEncounter();
-        setPrompt(
-          tabletRef.current
-            ? "Red CCTV activa. El consumo de energía aumenta."
-            : "Cámara corporal restaurada.",
-        );
-        if (tabletRef.current) document.exitPointerLock?.();
-        else {
+          document.exitPointerLock?.();
+          void audioRef.current?.resume().then((ok) => ok && tabletRef.current && audioRef.current?.playCctvStatic());
+        } else {
+          clearCctvEncounter();
           renderer.domElement.focus({ preventScroll: true });
           requestControl();
         }
       }
-      if (!event.repeat && code === "KeyF") {
-        flashlightEnabled = !flashlightEnabled;
-        const qaInspectionActive = qaEnemyStage !== null;
-        flashlight.visible = flashlightEnabled;
-        flashlight.intensity =
-          qaInspectionActive && qaNeutralLighting ? 12 : 132;
-        bodyFill.intensity =
-          qaInspectionActive && qaNeutralLighting ? 2 : 7.5;
-        qaSideLight.visible = qaInspectionActive && qaNeutralLighting;
-      }
     };
+
     const keyUp = (event: KeyboardEvent) => {
-      const code = normalizedKeyCode(event);
+      const code = normCode(event);
       const action = walkInputActionForCode(code);
       if (!action) return;
-      inputController.release(
-        action,
-        `keyboard:${code}`,
-        inputTimestamp(event),
-      );
+      inputController.release(action, `keyboard:${code}`, evTime(event));
       event.preventDefault();
     };
+
     const pointerMove = (event: PointerEvent) => {
       const locked = document.pointerLockElement === renderer.domElement;
-      if (
-        (!locked && !draggingLook) ||
-        tabletRef.current ||
-        phaseRef.current !== "playing"
-      ) {
-        return;
-      }
-      if (!locked && dragPointerId !== null && event.pointerId !== dragPointerId) {
-        return;
-      }
-      const movementX = locked ? event.movementX : event.clientX - dragLastX;
-      const movementY = locked ? event.movementY : event.clientY - dragLastY;
+      if ((!locked && !draggingLook) || tabletRef.current || phaseRef.current !== "playing") return;
+      if (!locked && dragPointerId !== null && event.pointerId !== dragPointerId) return;
+      const mx = locked ? event.movementX : event.clientX - dragLastX;
+      const my = locked ? event.movementY : event.clientY - dragLastY;
       if (!locked) {
         dragLastX = event.clientX;
         dragLastY = event.clientY;
       }
-      yaw -= movementX * 0.0021;
-      pitch -= movementY * 0.0018;
-      pitch = Math.max(-1.02, Math.min(1.02, pitch));
+      yaw -= mx * 0.0021;
+      pitch = Math.max(-1.0, Math.min(1.0, pitch - my * 0.0018));
     };
+
     const pointerDown = (event: PointerEvent) => {
-      if (
-        event.button === 0 &&
-        phaseRef.current === "playing" &&
-        !tabletRef.current
-      ) {
+      if (event.button === 0 && phaseRef.current === "playing" && !tabletRef.current) {
         draggingLook = true;
         dragPointerId = event.pointerId;
         dragLastX = event.clientX;
@@ -2701,26 +1826,23 @@ export default function WalkExe() {
         try {
           renderer.domElement.setPointerCapture?.(event.pointerId);
         } catch {
-          // Some embedded browsers send a synthetic pointer without a
-          // capturable active button. Document-level move/up still handles it.
+          // Optional.
         }
       }
     };
+
     const pointerUp = (event?: PointerEvent) => {
       draggingLook = false;
       dragPointerId = null;
-      if (
-        event &&
-        renderer.domElement.hasPointerCapture?.(event.pointerId)
-      ) {
+      if (event && renderer.domElement.hasPointerCapture?.(event.pointerId)) {
         renderer.domElement.releasePointerCapture?.(event.pointerId);
       }
     };
+
     const canvasClick = () => {
-      if (phaseRef.current === "playing" && !tabletRef.current) {
-        requestControl();
-      }
+      if (phaseRef.current === "playing" && !tabletRef.current) requestControl();
     };
+
     const pointerLockChange = () => {
       const locked = document.pointerLockElement === renderer.domElement;
       if (!locked && pointerWasLocked) {
@@ -2728,143 +1850,69 @@ export default function WalkExe() {
         mobilePointers.clear();
       }
       pointerWasLocked = locked;
-      if (locked) {
-        setPointerHelp(false);
-      } else if (phaseRef.current === "playing" && !tabletRef.current) {
-        setPointerHelp(true);
-      }
+      setPointerHelp(!locked && phaseRef.current === "playing" && !tabletRef.current);
     };
-    const pointerLockError = () => {
-      setPointerHelp(true);
-      setPrompt("Modo alternativo: mantén WASD y arrastra para mirar.");
-    };
-    const hardResyncSimulationClock = (now: number) => {
-      const synchronization = resynchronizeFixedClock(
-        now,
-        simulationTime,
-        0,
-        FIXED_DELTA,
-      );
-      simulationTime = synchronization.simulationTimeMs;
-      simulationAccumulator = synchronization.accumulatorSeconds;
-      lastRenderTime = now;
-      lastClockLagBeforeResyncMs = synchronization.lagBeforeResyncMs;
-      clockResyncs += 1;
-    };
-    const clearHiddenInput = () => {
+
+    const clearHidden = () => {
       const now = performance.now();
       inputController.reset(now);
       mobilePointers.clear();
       draggingLook = false;
       simulationPaused = document.hidden;
-      hardResyncSimulationClock(now);
-      if (document.hidden) {
-        void audioRef.current?.pause();
-      } else if (phaseRef.current === "playing") {
-        void audioRef.current?.resume();
-      }
+      const sync = resynchronizeFixedClock(now, simulationTime, 0, FIXED_DELTA);
+      simulationTime = sync.simulationTimeMs;
+      simulationAccumulator = sync.accumulatorSeconds;
+      lastRenderTime = now;
+      if (document.hidden) void audioRef.current?.pause();
+      else if (phaseRef.current === "playing") void audioRef.current?.resume();
     };
-    const clearFocusInput = () => {
+
+    const clearFocus = () => {
       inputController.reset(performance.now());
       mobilePointers.clear();
       draggingLook = false;
     };
-    const contextLost = (event: Event) => {
-      event.preventDefault();
-      const now = performance.now();
-      simulationPaused = true;
-      inputController.reset(now);
-      mobilePointers.clear();
-      hardResyncSimulationClock(now);
-      void audioRef.current?.pause();
-      setRuntimeError("CONTEXTO WEBGL PERDIDO · esperando recuperación de la GPU");
-    };
-    const contextRestored = () => {
-      const now = performance.now();
-      setRuntimeError(null);
-      simulationPaused = document.hidden;
-      hardResyncSimulationClock(now);
-      if (!document.hidden && phaseRef.current === "playing") {
-        void audioRef.current?.resume();
-      }
-    };
 
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
-    window.addEventListener("blur", clearFocusInput);
-    document.addEventListener("visibilitychange", clearHiddenInput);
+    window.addEventListener("blur", clearFocus);
+    document.addEventListener("visibilitychange", clearHidden);
     document.addEventListener("pointermove", pointerMove);
     document.addEventListener("pointerlockchange", pointerLockChange);
-    document.addEventListener("pointerlockerror", pointerLockError);
     renderer.domElement.addEventListener("click", canvasClick);
     renderer.domElement.addEventListener("pointerdown", pointerDown);
     renderer.domElement.addEventListener("lostpointercapture", pointerUp);
     window.addEventListener("pointerup", pointerUp);
     window.addEventListener("pointercancel", pointerUp);
-    renderer.domElement.addEventListener("webglcontextlost", contextLost);
-    renderer.domElement.addEventListener("webglcontextrestored", contextRestored);
 
+    // ── Fixed 60 Hz Simulation Step (Cached BFS, ZERO allocations!) ─────────
     const fixedUpdate = (delta: number, tickNow: number) => {
       if (phaseRef.current !== "playing" || simulationPaused) return;
-      const inputSlices = inputController.consumeWindow(
-        tickNow - delta * 1000,
-        tickNow,
-      );
-      lastInputSlices = inputSlices;
-      const sampledInput = inputController.getSnapshot().sampled;
+      const inputSlices = inputController.consumeWindow(tickNow - delta * 1000, tickNow);
+      const sampled = inputController.getSnapshot().sampled;
 
       if (activeLure && tickNow >= activeLure.expiresAt) {
         world.remove(activeLure.mesh);
-        activeLure.mesh.traverse((object) => {
-          if (!(object instanceof THREE.Mesh)) return;
-          object.geometry.dispose();
-          const surfaces = Array.isArray(object.material)
-            ? object.material
-            : [object.material];
-          surfaces.forEach((surface) => surface.dispose());
-        });
         activeLure = null;
         lastSeenAt = tickNow - 5200;
-        setPrompt("La proyecciÃ³n se ha desvanecido.");
       }
 
-      noiseObjects.forEach((object) => {
-        if (object.mesh.visible && tickNow >= object.activeUntil) {
-          object.mesh.visible = false;
-        }
-      });
+      for (const obj of noiseObjects) {
+        if (obj.mesh.visible && tickNow >= obj.activeUntil) obj.mesh.visible = false;
+      }
 
       if (caughtSequence) {
-        const caughtTiming = sequenceProgress(
-          tickNow,
-          caughtSequence.startedAt,
-          JUMPSCARE_DURATION_MS,
-        );
-        const progress = caughtTiming.progress;
-        const eased = 1 - Math.pow(1 - progress, 4);
-        const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-        const target = player.clone().addScaledVector(forward, 0.72).setY(0);
-        subject.position.lerpVectors(
-          caughtSequence.subjectStart,
-          target,
-          eased,
-        );
-        const targetYaw =
-          Math.atan2(
-            player.x - subject.position.x,
-            player.z - subject.position.z,
-          ) + Math.PI;
+        const timing = sequenceProgress(tickNow, caughtSequence.startedAt, JUMPSCARE_DURATION_MS);
+        const eased = 1 - Math.pow(1 - timing.progress, 4);
+        tmpForward.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+        tmpEnemyTarget.copy(player).addScaledVector(tmpForward, 0.72).setY(0);
+        subject.position.lerpVectors(caughtSequence.subjectStart, tmpEnemyTarget, eased);
+        const tYaw = Math.atan2(player.x - subject.position.x, player.z - subject.position.z) + Math.PI;
         subject.rotation.y =
           caughtSequence.subjectYaw +
-          Math.atan2(
-            Math.sin(targetYaw - caughtSequence.subjectYaw),
-            Math.cos(targetYaw - caughtSequence.subjectYaw),
-          ) *
-            eased;
+          Math.atan2(Math.sin(tYaw - caughtSequence.subjectYaw), Math.cos(tYaw - caughtSequence.subjectYaw)) * eased;
         playerMoving = false;
-        playerSprinting = false;
-        lastAppliedVelocity = { x: 0, z: 0 };
-        if (caughtTiming.done) {
+        if (timing.done) {
           caughtSequence = null;
           setActiveJumpscare(null);
           reportRun(false, tickNow);
@@ -2873,221 +1921,141 @@ export default function WalkExe() {
         return;
       }
 
+      // ── 3D Horror Escape Finale Sequence (Door opens -> 180° lookback -> M-22 mask -> Door SLAM!) ──
       if (escapeSequence) {
-        const escapeTiming = sequenceProgress(
-          tickNow,
-          escapeSequence.startedAt,
-          3200,
-        );
-        const progress = escapeTiming.progress;
-        const doorProgress = THREE.MathUtils.smoothstep(progress, 0.04, 0.55);
-        if (exitPanel) exitPanel.position.y = doorProgress * 3.15;
-        const passage = THREE.MathUtils.smoothstep(progress, 0.42, 0.94);
-        player.lerpVectors(
-          escapeSequence.playerStart,
-          escapeSequence.playerEnd,
-          passage,
-        );
-        yaw +=
-          Math.atan2(
-            Math.sin(exitOpening.yaw - yaw),
-            Math.cos(exitOpening.yaw - yaw),
-          ) * Math.min(1, delta * 2.8);
-        pitch += (0 - pitch) * Math.min(1, delta * 2.8);
-        playerMoving = passage > 0 && passage < 1;
-        playerSprinting = false;
-        playerCrouching = false;
-        lastAppliedVelocity = { x: 0, z: 0 };
-        if (escapeTiming.done) {
+        const timing = sequenceProgress(tickNow, escapeSequence.startedAt, ESCAPE_DURATION_MS);
+        const p = timing.progress;
+        if (exitPanel) {
+          if (p < 0.78) {
+            exitPanel.position.y = THREE.MathUtils.smoothstep(p, 0.02, 0.36) * 3.1;
+          } else {
+            // Blast door SLAMS SHUT right in front of Sujeto M-22!
+            const slam = THREE.MathUtils.smoothstep(p, 0.78, 0.9);
+            exitPanel.position.y = (1 - slam) * 3.1;
+            if (!escapeSequence.slammed && p >= 0.86) {
+              escapeSequence.slammed = true;
+              audioRef.current?.playHorrorCue("door-slam");
+              playSubjectHee(0.65, 0.78);
+            }
+          }
+        }
+        const dash = THREE.MathUtils.smoothstep(p, 0.12, 0.52);
+        player.lerpVectors(escapeSequence.playerStart, escapeSequence.playerEnd, dash);
+
+        // Whip 180° around to face the closing doorway and Sujeto M-22!
+        const lookBackYaw = exitOpening.yaw + Math.PI;
+        if (p >= 0.44) {
+          const turnAlpha = THREE.MathUtils.smoothstep(p, 0.44, 0.66);
+          const diff = Math.atan2(Math.sin(lookBackYaw - yaw), Math.cos(lookBackYaw - yaw));
+          yaw += diff * Math.min(1, turnAlpha * 0.28 + delta * 5.2);
+          pitch += (0.06 - pitch) * Math.min(1, delta * 4);
+          // Sujeto M-22 glides ominously forward toward the closing gap
+          const slide = THREE.MathUtils.smoothstep(p, 0.48, 0.84);
+          subject.position.set(
+            exitPosition.x - exitOpening.x * (2.6 - slide * 1.45),
+            0,
+            exitPosition.z - exitOpening.z * (2.6 - slide * 1.45),
+          );
+          currentEnemyMode = "chase";
+        }
+
+        if (!escapeSequence.finaleCuePlayed && p >= 0.92) {
+          escapeSequence.finaleCuePlayed = true;
+          const endKind = resolveEndingKind({
+            escaped: true,
+            tapes: tapesHeld,
+            eggsFound: eggsFound.length,
+            ghostRelic: ghostBlessed,
+          });
+          if (endKind === "collectors-cut") {
+            audioRef.current?.playHorrorCue("ghost-organ");
+          }
+        }
+
+        playerMoving = p < 0.5;
+        if (timing.done) {
           escapeSequence = null;
           reportRun(true, tickNow);
           setGamePhase("escaped");
-          setMessage(
-            "La puerta se ha cerrado detrás de ti. El pasadizo sigue cambiando.",
-          );
         }
         return;
       }
 
+      // Movement & Interactions
       if (!tabletRef.current) {
         if (ventTrip) {
-          let ventMoved = 0;
-          let terminalDirection = 0;
+          let moved = 0;
+          let termDir = 0;
           for (const slice of inputSlices) {
-            const ventAdvance = advanceVentTraversal(
-              ventTrip.distanceAlong,
-              ventTrip.totalDistance,
-              slice.forward,
-              slice.durationSeconds,
-            );
-            ventTrip.distanceAlong = ventAdvance.distance;
-            ventMoved += ventAdvance.moved;
-            if (slice.forward > 0 && ventAdvance.atDestination) {
-              terminalDirection = 1;
-            } else if (slice.forward < 0 && ventAdvance.atSource) {
-              terminalDirection = -1;
-            }
+            const adv = advanceVentTraversal(ventTrip.distanceAlong, ventTrip.totalDistance, slice.forward, slice.durationSeconds);
+            ventTrip.distanceAlong = adv.distance;
+            moved += adv.moved;
+            if (slice.forward > 0 && adv.atDestination) termDir = 1;
+            else if (slice.forward < 0 && adv.atSource) termDir = -1;
           }
-          if (sampledInput.strafe !== 0) {
-            yaw -= sampledInput.strafe * delta * 1.85;
-          }
-          const distanceAlong = ventTrip.distanceAlong;
-          const progress = THREE.MathUtils.clamp(
-            distanceAlong / Math.max(0.0001, ventTrip.totalDistance),
-            0,
-            1,
-          );
-          traveledDistance += ventMoved;
-          let segment = 0;
-          while (
-            segment < ventTrip.cumulative.length - 2 &&
-            ventTrip.cumulative[segment + 1] < distanceAlong
-          ) {
-            segment += 1;
-          }
-          const segmentStart = ventTrip.cumulative[segment];
-          const segmentEnd = ventTrip.cumulative[segment + 1];
-          const segmentProgress =
-            (distanceAlong - segmentStart) /
-            Math.max(0.0001, segmentEnd - segmentStart);
-          player.lerpVectors(
-            ventTrip.path[segment],
-            ventTrip.path[segment + 1],
-            THREE.MathUtils.clamp(segmentProgress, 0, 1),
-          );
-          player.y += Math.sin(distanceAlong * 8) * 0.018;
-          const travelDirection = ventTrip.path[segment + 1]
-            .clone()
-            .sub(ventTrip.path[segment]);
-          if (Math.hypot(travelDirection.x, travelDirection.z) > 0.1) {
-            currentVentHeadingYaw =
-              Math.atan2(travelDirection.x, travelDirection.z) + Math.PI;
-          }
-          if (tickNow - lastVentHudUpdate >= 90) {
-            setVentProgress(Math.round(progress * 100));
+          if (sampled.strafe !== 0) yaw -= sampled.strafe * delta * 1.85;
+          const prog = THREE.MathUtils.clamp(ventTrip.distanceAlong / Math.max(0.0001, ventTrip.totalDistance), 0, 1);
+          traveledDistance += moved;
+          player.lerpVectors(ventTrip.path[0], ventTrip.path[1], prog);
+          player.y += Math.sin(ventTrip.distanceAlong * 8) * 0.016;
+          if (tickNow - lastVentHudUpdate >= 100) {
+            setVentProgress(Math.round(prog * 100));
             lastVentHudUpdate = tickNow;
           }
-          if (sampledInput.forward === 0) {
-            lastAppliedVelocity = { x: 0, z: 0 };
-          } else {
-            const horizontalLength = Math.hypot(
-              travelDirection.x,
-              travelDirection.z,
-            );
-            const directionScale =
-              (sampledInput.forward * 1.72) /
-              Math.max(0.0001, horizontalLength);
-            lastAppliedVelocity = {
-              x: travelDirection.x * directionScale,
-              z: travelDirection.z * directionScale,
-            };
-          }
-          playerMoving =
-            sampledInput.forward !== 0 && ventMoved > 0.0001;
-          playerSprinting = false;
+          playerMoving = sampled.forward !== 0 && moved > 0.0001;
           playerCrouching = true;
-          previousSprintCell = null;
-          latestSprintCell = null;
+          playerSprinting = false;
           if (playerMoving && tickNow >= nextNoisePulseAt) {
-            emitNoise(
-              "vent-rattle",
-              progress < 0.5
-                ? ventTrip.sourceCell
-                : ventTrip.destinationCell,
-              tickNow,
-            );
+            emitNoise("vent-rattle", prog < 0.5 ? ventTrip.sourceCell : ventTrip.destinationCell, tickNow);
             nextNoisePulseAt = tickNow + 560;
           }
-          const leaveAtDestination =
-            progress >= 1 && terminalDirection > 0;
-          const leaveAtSource = progress <= 0 && terminalDirection < 0;
-          if (leaveAtDestination || leaveAtSource) {
-            const exitCellIndex = leaveAtDestination
-              ? ventTrip.destinationCell
-              : ventTrip.sourceCell;
-            player.copy(ventTrip.to);
-            if (leaveAtSource) {
-              player.copy(cellCenter(ventTrip.sourceCell).setY(CROUCH_HEIGHT));
-            }
-            player.y = CROUCH_HEIGHT;
-            capsuleState = createCapsuleState(
-              capsuleWorld,
-              { x: player.x, z: player.z },
-              true,
-            );
-            if (ductRoutes[ventTrip.pairIndex]) {
-              ductRoutes[ventTrip.pairIndex].visible = false;
-            }
+          if ((prog >= 1 && termDir > 0) || (prog <= 0 && termDir < 0)) {
+            const atDest = prog >= 1 && termDir > 0;
+            const exitIdx = atDest ? ventTrip.destinationCell : ventTrip.sourceCell;
+            player.copy(atDest ? ventTrip.to : cellCenter(ventTrip.sourceCell, GRID).setY(CROUCH_HEIGHT));
+            capsuleState = createCapsuleState(capsuleWorld, { x: player.x, z: player.z }, true);
+            if (ductRoutes[ventTrip.pairIndex]) ductRoutes[ventTrip.pairIndex].visible = false;
             ventTrip = null;
             setInVent(false);
             setVentProgress(0);
-            setVentRoute("SIN RUTA");
-            lastAppliedVelocity = { x: 0, z: 0 };
-            emitNoise("vent-rattle", exitCellIndex, tickNow);
-            setPrompt(
-              leaveAtDestination
-                ? "Has salido al otro lado. Algo ha oído la rejilla."
-                : "Has retrocedido fuera del conducto.",
-            );
+            emitNoise("vent-rattle", exitIdx, tickNow);
           }
         } else {
           let moved = 0;
           for (const slice of inputSlices) {
-            const sliceSprinting =
-              !slice.crouch &&
-              slice.sprint &&
-              (slice.forward !== 0 || slice.strafe !== 0);
-            const movementSpeed = slice.crouch
-              ? 1.42
-              : sliceSprinting
-                ? 4.35
-                : 2.75;
-            const capsuleResult = applyPlayerMovement(
-              slice.forward,
-              slice.strafe,
-              movementSpeed,
-              slice.durationSeconds,
-              slice.crouch,
-            );
-            playerCrouching = capsuleResult.state.crouching;
-            moved += capsuleResult.moved;
+            const sprinting = !slice.crouch && slice.sprint && (slice.forward !== 0 || slice.strafe !== 0);
+            const speed = slice.crouch ? 1.55 : sprinting ? 4.5 : 2.9;
+            const velocity = capsuleVelocityFromInput({ forward: slice.forward, strafe: slice.strafe, yaw, speed });
+            const res = stepCapsuleController(capsuleWorld, capsuleState, {
+              velocity,
+              deltaSeconds: slice.durationSeconds,
+              crouch: slice.crouch,
+            });
+            capsuleState = res.state;
+            player.set(res.state.position.x, res.eyeHeight, res.state.position.z);
+            playerCrouching = res.state.crouching;
+            traveledDistance += res.moved;
+            moved += res.moved;
           }
-          playerMoving =
-            sampledInput.forward !== 0 || sampledInput.strafe !== 0;
-          playerSprinting =
-            playerMoving && !sampledInput.crouch && sampledInput.sprint;
+          playerMoving = sampled.forward !== 0 || sampled.strafe !== 0;
+          playerSprinting = playerMoving && !sampled.crouch && sampled.sprint;
           if (!playerMoving) {
-            lastAppliedVelocity = { x: 0, z: 0 };
             previousSprintCell = null;
             latestSprintCell = null;
-          }
-          if (moved > 0.0001) {
-            const movementCell = positionCell(player);
+          } else if (moved > 0.0001) {
+            const mCell = positionCell(player, GRID);
             if (tickNow >= nextNoisePulseAt) {
-              const noiseKind: NoiseKind = playerCrouching
-                ? "crouch-step"
-                : playerSprinting
-                  ? "sprint-step"
-                  : "walk-step";
-              emitNoise(noiseKind, movementCell, tickNow);
-              nextNoisePulseAt =
-                tickNow +
-                (playerCrouching ? 760 : playerSprinting ? 245 : 430);
-              if (playerSprinting) {
-                if (latestSprintCell !== movementCell) {
-                  previousSprintCell = latestSprintCell;
-                  latestSprintCell = movementCell;
-                }
-              } else {
-                previousSprintCell = null;
-                latestSprintCell = null;
+              const kind: NoiseKind = playerCrouching ? "crouch-step" : playerSprinting ? "sprint-step" : "walk-step";
+              emitNoise(kind, mCell, tickNow);
+              nextNoisePulseAt = tickNow + (playerCrouching ? 760 : playerSprinting ? 245 : 430);
+              if (playerSprinting && latestSprintCell !== mCell) {
+                previousSprintCell = latestSprintCell;
+                latestSprintCell = mCell;
               }
             }
             if (tickNow >= nextFootstep) {
-              playStep();
-              nextFootstep =
-                tickNow +
-                (playerCrouching ? 760 : playerSprinting ? 315 : 510);
+              audioRef.current?.playPlayerStep(playerCrouching ? 0.08 : playerSprinting ? 0.24 : 0.16);
+              nextFootstep = tickNow + (playerCrouching ? 740 : playerSprinting ? 305 : 490);
             }
           }
         }
@@ -3108,11 +2076,8 @@ export default function WalkExe() {
       } else {
         playerMoving = false;
         playerSprinting = false;
-        previousSprintCell = null;
-        latestSprintCell = null;
-        lastAppliedVelocity = { x: 0, z: 0 };
         cctvExposureMs += delta * 1000;
-        const battery = drainCctvBattery(cctvPower, true, delta);
+        const battery = drainCctvBattery(cctvPower, true, delta, 0.85);
         cctvPower = battery.power;
         if (Math.ceil(cctvPower) !== lastReportedPower) {
           lastReportedPower = Math.ceil(cctvPower);
@@ -3121,22 +2086,24 @@ export default function WalkExe() {
         if (battery.depleted) {
           tabletRef.current = false;
           setTabletOpen(false);
-          setPrompt("SIN ENERGÃA Â· red CCTV desconectada.");
+          currentPrompt = "SIN BATERÍA CCTV · Recárgala en la Oficina Fazbear.";
         }
       }
 
-      const enemyCell = positionCell(subject.position);
-      const playerCell = positionCell(player);
-      const routeToPlayer = mazePath(maze, enemyCell, playerCell);
-      currentRouteDistance = Math.max(0, routeToPlayer.length - 1);
-      currentPlayerDistance = subject.position.distanceTo(
-        player.clone().setY(0),
-      );
+      // ── Cached Pathfinding & Stealth AI (ZERO 180 BFS/s overhead!) ────────
+      const enemyCell = positionCell(subject.position, GRID);
+      const playerCell = positionCell(player, GRID);
+      if (enemyCell !== cachedEnemyCell) {
+        cachedEnemyDistances = mazeDistances(maze, enemyCell, GRID);
+        cachedEnemyCell = enemyCell;
+      }
+      currentRouteDistance = Math.max(0, cachedEnemyDistances[playerCell] ?? 20);
+      tmpPlayerFlat.set(player.x, 0, player.z);
+      currentPlayerDistance = subject.position.distanceTo(tmpPlayerFlat);
+
       const corridorSight =
-        !ventTrip &&
-        currentPlayerDistance < 22 &&
-        corridorLineOfSight(maze, enemyCell, playerCell);
-      const detectionStep = stepDetectionMeter({
+        !ventTrip && currentPlayerDistance < 21 && corridorLineOfSight(maze, enemyCell, playerCell, GRID);
+      const det = stepDetectionMeter({
         current: detectionMeter,
         lineOfSight: corridorSight,
         distance: currentPlayerDistance,
@@ -3145,14 +2112,12 @@ export default function WalkExe() {
         deltaSeconds: delta,
         difficulty: difficultyRef.current,
       });
-      detectionMeter = detectionStep.meter;
-      const lineOfSight = detectionStep.spotted;
+      detectionMeter = det.meter;
+      const lineOfSight = det.spotted;
 
-      const modelPreviewActive = tickNow < modelPreviewUntil;
-
-      // Flashlight dazzle ("Estatua"): shining directly at Subject M's eyes stalls him briefly.
+      // Flashlight dazzle stun ("Estatua")
       if (
-        !modelPreviewActive &&
+        difficultyRef.current !== "turista" &&
         tickNow >= dazzleCooldownUntil &&
         tickNow >= dazzledUntil &&
         currentEnemyMode !== "ambush" &&
@@ -3168,21 +2133,24 @@ export default function WalkExe() {
         })
       ) {
         dazzledUntil = tickNow + 2200;
-        dazzleCooldownUntil = tickNow + 14000;
-        setPrompt("DESLUMBRADO · LINTERNA DIRECTA · ¡SUJETO M INMOVILIZADO 2 S!");
+        dazzleCooldownUntil = tickNow + 13500;
+        dazzles += 1;
+        audioRef.current?.playHorrorCue("dazzle-zap");
+        currentPrompt = "⚡ DESLUMBRADO · SUJETO M-22 PARALIZADO 2 S · ¡ESCAPA!";
       }
+
       const isDazzled = tickNow < dazzledUntil;
+      const isBanished = tickNow < banishedUntil;
       if (lineOfSight) {
         lastSeenAt = tickNow;
         lastSeenCell = playerCell;
       }
+
       acousticEvents = pruneAcousticEvents(acousticEvents, tickNow);
-      const acousticDistances = mazeDistances(maze, enemyCell);
       acousticPerception = selectAcousticTarget(
-        acousticEvents.map((event) => ({
-          ...event,
-          routeDistanceCells:
-            acousticDistances[event.cell] ?? Number.POSITIVE_INFINITY,
+        acousticEvents.map((ev) => ({
+          ...ev,
+          routeDistanceCells: cachedEnemyDistances[ev.cell] >= 0 ? cachedEnemyDistances[ev.cell] : 999,
         })),
         tickNow,
       );
@@ -3192,103 +2160,76 @@ export default function WalkExe() {
         lastHeardKind = acousticPerception.event.kind;
       }
       const heardNoise = Boolean(acousticPerception);
-      const noiseDistance =
-        acousticPerception?.routeDistanceCells ?? Number.POSITIVE_INFINITY;
-      const predictedSprintTarget =
-        lastHeardKind === "sprint-step" &&
-        previousSprintCell !== null &&
-        latestSprintCell !== null &&
-        latestSprintCell === lastHeardCell
-          ? extrapolateAcousticTrailCell(
-              maze,
-              previousSprintCell,
-              latestSprintCell,
-            )
+      const noiseDist = acousticPerception?.routeDistanceCells ?? 999;
+      predictedHeardCell =
+        lastHeardKind === "sprint-step" && previousSprintCell !== null && latestSprintCell === lastHeardCell
+          ? extrapolateAcousticTrailCell(maze, previousSprintCell, latestSprintCell, GRID)
           : lastHeardCell;
-      predictedHeardCell = predictedSprintTarget;
-      lastNoiseDistance = noiseDistance;
-      const cctvSignalCell =
-        cctvCells[cctvIndexRef.current] ?? cctvCells[0] ?? 0;
-      const cctvSignalDistance =
-        mazePath(maze, enemyCell, cctvSignalCell).length - 1;
+      lastNoiseDistance = noiseDist;
 
-      const nextEnemyMode = modelPreviewActive
-        ? modelPreviewState
-        : decideEnemyState({
-            distanceCells: currentRouteDistance,
-            hasLure: Boolean(activeLure),
-            heardNoise,
-            noiseAgeMs: tickNow - lastHeardAt,
-            noiseDistanceCells: noiseDistance,
-            noiseConfidence: acousticPerception?.confidence ?? 0,
-            playerInVent: Boolean(ventTrip),
-            lastSeenAgeMs: tickNow - lastSeenAt,
-            cctvExposureMs,
-            cctvSignalDistanceCells: cctvSignalDistance,
-            lineOfSight,
-            currentState: currentEnemyMode,
-          });
+      const cctvSignalCell = layout.cctvCells[cctvIndexRef.current] ?? 0;
+      const cctvSignalDist = cachedEnemyDistances[cctvSignalCell] >= 0 ? cachedEnemyDistances[cctvSignalCell] : 20;
+
+      const nextEnemyMode: EnemyState = isBanished
+        ? "recover"
+        : difficultyRef.current === "turista"
+          ? "patrol"
+          : decideEnemyState({
+              distanceCells: currentRouteDistance,
+              hasLure: Boolean(activeLure),
+              heardNoise,
+              noiseAgeMs: tickNow - lastHeardAt,
+              noiseDistanceCells: noiseDist,
+              noiseConfidence: acousticPerception?.confidence ?? 0,
+              playerInVent: Boolean(ventTrip),
+              lastSeenAgeMs: tickNow - lastSeenAt,
+              cctvExposureMs,
+              cctvSignalDistanceCells: cctvSignalDist,
+              lineOfSight,
+              currentState: currentEnemyMode,
+            });
+
       if (nextEnemyMode !== currentEnemyMode) {
         currentEnemyMode = nextEnemyMode;
-        setEnemyMode(nextEnemyMode);
         transitionEnemyAnimation(nextEnemyMode);
-        if (nextEnemyMode === "chase" && tickNow - lastHeeAt > 5200) {
-          if (playSubjectHee(1.6, 0.9 + random() * 0.16)) {
+        if (nextEnemyMode === "chase" && tickNow - lastHeeAt > 4800) {
+          if (playSubjectHee(1.5, 0.88 + random() * 0.16)) {
             lastHeeAt = tickNow;
-            setPrompt("HEE-HEE · SUJETO M TE HA VISTO · ¡CORRE!");
+            currentPrompt = "HEE-HEE · SUJETO M-22 TE HA LOCALIZADO · ¡CORRE O CÉGALO CON [F]!";
           }
-        }
-        if (
-          nextEnemyMode === "investigate" &&
-          lastHeardKind === "sprint-step"
-        ) {
-          setPrompt("TE HA OÍDO CORRER · está anticipando tu siguiente cruce");
-        }
-      }
-      if (
-        currentEnemyMode !== "chase" &&
-        currentPlayerDistance < 16 &&
-        tickNow > nextGiggleAt
-      ) {
-        // A distant, slowed-down giggle somewhere in the corridors.
-        if (playSubjectHee(0.95, 0.72 + random() * 0.1)) {
-          nextGiggleAt = tickNow + 14000 + random() * 12000;
         }
       }
 
-      const patrolCells =
-        tapesHeld >= requiredTapes
-          ? [exitCell, ...(spread.length ? spread.slice(0, 4) : [0])]
-          : spread.length
-            ? spread
-            : [exitCell, 0];
+      if (currentEnemyMode !== "chase" && currentPlayerDistance < 15 && tickNow > nextGiggleAt) {
+        if (playSubjectHee(0.85, 0.68 + random() * 0.12)) {
+          nextGiggleAt = tickNow + 14000 + random() * 11000;
+        }
+      }
+
+      // Patrol waypoints: visit the 5 thematic wings (and pressure exit during Red Alert!)
+      const patrolCells = redAlert
+        ? [layout.exitCell, layout.wingCenters.crypt, layout.wingCenters.acoustic, layout.wingCenters.fazbear]
+        : [
+            layout.wingCenters.neverland,
+            layout.wingCenters.crypt,
+            layout.wingCenters.acoustic,
+            layout.wingCenters.fazbear,
+            layout.wingCenters.archive,
+          ];
+
       let targetCell: number;
-      if (activeLure) {
+      if (isBanished) {
+        targetCell = layout.enemyStartCell;
+      } else if (activeLure) {
         targetCell = activeLure.cell;
       } else if (currentEnemyMode === "chase") {
-        targetCell = lineOfSight
-          ? playerCell
-          : lastHeardAt > lastSeenAt
-            ? predictedSprintTarget
-            : lastSeenCell;
-      } else if (
-        currentEnemyMode === "vent-watch" ||
-        currentEnemyMode === "ambush"
-      ) {
+        targetCell = lineOfSight ? playerCell : lastHeardAt > lastSeenAt ? predictedHeardCell : lastSeenCell;
+      } else if (currentEnemyMode === "vent-watch" || currentEnemyMode === "ambush") {
         targetCell = ventTrip?.destinationCell ?? playerCell;
-      } else if (
-        currentEnemyMode === "listen" ||
-        currentEnemyMode === "investigate"
-      ) {
-        targetCell =
-          currentEnemyMode === "investigate" &&
-          cctvExposureMs > 6000 &&
-          !acousticPerception
-            ? cctvSignalCell
-            : predictedSprintTarget;
+      } else if (currentEnemyMode === "listen" || currentEnemyMode === "investigate") {
+        targetCell = predictedHeardCell;
       } else if (currentEnemyMode === "search") {
-        targetCell =
-          lastHeardAt > lastSeenAt ? predictedSprintTarget : lastSeenCell;
+        targetCell = lastHeardAt > lastSeenAt ? predictedHeardCell : lastSeenCell;
       } else {
         targetCell = patrolCells[patrolCursor % patrolCells.length];
         if (enemyCell === targetCell) {
@@ -3298,74 +2239,61 @@ export default function WalkExe() {
       }
 
       if (
-        tickNow >= nextPathUpdate ||
-        enemyPath[enemyPath.length - 1] !== targetCell
+        enemyCell !== cachedPlayerCell ||
+        targetCell !== cachedTargetCell ||
+        tickNow - lastPathAt > 420
       ) {
-        enemyPath = mazePath(maze, enemyCell, targetCell);
-        nextPathUpdate = tickNow + 340;
+        enemyPath = mazePath(maze, enemyCell, targetCell, GRID);
+        cachedTargetCell = targetCell;
+        cachedPlayerCell = enemyCell;
+        lastPathAt = tickNow;
       }
+
       const nextCell = enemyPath[1] ?? targetCell;
-      const enemyTarget = cellCenter(nextCell);
-      const direction = enemyTarget.sub(subject.position);
-      direction.y = 0;
-      const remaining = direction.length();
+      const nc = cellCenter2D(nextCell, GRID, CELL_SIZE);
+      tmpEnemyTarget.set(nc.x, 0, nc.z);
+      tmpDir.subVectors(tmpEnemyTarget, subject.position).setY(0);
+      const remaining = tmpDir.length();
+
       const speeds: Record<EnemyState, number> = {
-        patrol: 1.02,
+        patrol: 1.06,
         listen: 0.25,
-        investigate: 1.42,
-        search: 1.24,
-        chase: 2.32,
-        lure: 1.55,
+        investigate: 1.45,
+        search: 1.28,
+        chase: 2.38,
+        lure: 1.65,
         "vent-watch": 1.18,
-        ambush: 1.92,
-        recover: 0.78,
+        ambush: 1.95,
+        recover: 1.25,
       };
-      const sprintPressure =
-        lastHeardKind === "sprint-step" && tickNow - lastHeardAt < 2600
-          ? currentEnemyMode === "chase"
-            ? 0.24
-            : 0.16
-          : 0;
-      const rawSpeed = adaptiveEnemySpeed(
-        speeds[currentEnemyMode] + sprintPressure,
-        tapesHeld,
-        difficultyRef.current,
-      );
-      currentEnemySpeed = isDazzled ? 0 : rawSpeed;
-      if (!modelPreviewActive && !isDazzled && remaining > 0.09) {
-        direction.normalize();
-        subject.position.addScaledVector(
-          direction,
-          Math.min(remaining, currentEnemySpeed * delta),
-        );
-        const targetYaw = Math.atan2(direction.x, direction.z) + Math.PI;
+      const rawSpeed = adaptiveEnemySpeed(speeds[currentEnemyMode], tapesHeld, difficultyRef.current, redAlert);
+      // In Tourist mode, Subject M-22 respectfully freezes if closer than 4 m!
+      const touristHold = difficultyRef.current === "turista" && currentPlayerDistance < 4.0;
+      currentEnemySpeed = isDazzled || touristHold ? 0 : rawSpeed;
+
+      if (!isDazzled && !touristHold && remaining > 0.08) {
+        tmpDir.normalize();
+        subject.position.addScaledVector(tmpDir, Math.min(remaining, currentEnemySpeed * delta));
+        const targetYaw = Math.atan2(tmpDir.x, tmpDir.z) + Math.PI;
         subject.rotation.y +=
-          Math.atan2(
-            Math.sin(targetYaw - subject.rotation.y),
-            Math.cos(targetYaw - subject.rotation.y),
-          ) * Math.min(1, delta * 4.2);
+          Math.atan2(Math.sin(targetYaw - subject.rotation.y), Math.cos(targetYaw - subject.rotation.y)) *
+          Math.min(1, delta * 4.4);
       }
 
-      if (
-        tickNow >= nextEnemyStep &&
-        remaining > 0.1 &&
-        currentPlayerDistance < 22
-      ) {
-        playEnemyStep(currentPlayerDistance);
-        nextEnemyStep =
-          tickNow + (currentEnemyMode === "chase" ? 330 : 610);
+      if (tickNow >= nextEnemyStep && remaining > 0.1 && currentEnemySpeed > 0.05 && currentPlayerDistance < 20) {
+        audioRef.current?.playMechanicalStep("subject-m", {
+          gain: THREE.MathUtils.clamp(1.1 / Math.max(1, currentPlayerDistance * 0.09), 0.25, 1.1),
+          playbackRate: currentEnemyMode === "chase" ? 1.16 : 0.94,
+        });
+        nextEnemyStep = tickNow + (currentEnemyMode === "chase" ? 320 : 600);
       }
-      if (currentPlayerDistance < 1.08) triggerCaught(tickNow);
+      if (currentPlayerDistance < 1.08 && difficultyRef.current !== "turista") {
+        triggerCaught(tickNow);
+      }
 
-      currentBpm = Math.round(
-        THREE.MathUtils.clamp(
-          42 + (20 - Math.min(currentRouteDistance, 20)) * 6.2,
-          42,
-          166,
-        ),
-      );
+      currentBpm = Math.round(THREE.MathUtils.clamp(44 + (16 - Math.min(currentRouteDistance, 16)) * 7.6, 44, 168));
       if (tickNow >= nextHeartbeat && !tabletRef.current) {
-        playPulse(0.025 + (currentBpm - 42) / 610);
+        audioRef.current?.playHeartbeat(THREE.MathUtils.clamp((0.025 + (currentBpm - 44) / 600) * 5.2, 0.18, 1.6));
         nextHeartbeat = tickNow + 60000 / currentBpm;
       }
     };
@@ -3379,70 +2307,30 @@ export default function WalkExe() {
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(mount);
 
-    const cctvFrustum = new THREE.Frustum();
-    const cctvProjection = new THREE.Matrix4();
-    const enemyProbe = new THREE.Vector3();
-    const audioForward = new THREE.Vector3();
-    const audioUp = new THREE.Vector3();
-    const enemyAudioForward = new THREE.Vector3();
+    // ── Render Loop (Light Pool, Single HUD Snapshot, Zero Canvas Filter) ───
     const frameTimes: number[] = [];
-    let adaptivePixelRatio = Math.min(
-      window.devicePixelRatio,
-      graphics.pixelRatio,
-    );
-    let lastResolutionAdjust = 0;
-    let fastFramesSince = 0;
-    let fixedSteps = 0;
-    let droppedCatchUps = 0;
-    let frame = 0;
     let animation = 0;
     let wasPlaying = false;
-    let lastQaUpdate = 0;
+    let frame = 0;
     let lastCctvFrame = Number.NEGATIVE_INFINITY;
     let spatialSourcesStarted = false;
     let lastRendererCalls = 0;
     let lastRendererTriangles = 0;
-    let peakRendererCalls = 0;
-    let peakRendererTriangles = 0;
+    let lastQaUpdate = 0;
+
+    // Pre-compile base shaders right away
+    renderer.compile(scene, camera);
+    setSceneReady(true);
 
     const renderFrame = (now: number) => {
       animation = requestAnimationFrame(renderFrame);
       const rawDelta = Math.max(0, (now - lastRenderTime) / 1000);
-      const frameWasClamped = rawDelta > MAX_FRAME_DELTA;
       const delta = Math.min(rawDelta, MAX_FRAME_DELTA);
       const playing = phaseRef.current === "playing";
       frameTimes.push(delta * 1000);
-      if (frameTimes.length > 180) frameTimes.shift();
-      if (
-        playing &&
-        !tabletRef.current &&
-        now - lastResolutionAdjust > 2000 &&
-        frameTimes.length >= 90
-      ) {
-        const sorted = [...frameTimes].sort(
-          (first, second) => first - second,
-        );
-        const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
-        const cap = Math.min(window.devicePixelRatio, graphics.pixelRatio);
-        if (p95 > 22 && adaptivePixelRatio > 0.7) {
-          adaptivePixelRatio = Math.max(0.7, adaptivePixelRatio - 0.1);
-          renderer.setPixelRatio(adaptivePixelRatio);
-          renderer.setSize(mount.clientWidth, mount.clientHeight);
-          fastFramesSince = 0;
-        } else if (p95 < 14 && adaptivePixelRatio < cap) {
-          if (!fastFramesSince) fastFramesSince = now;
-          if (now - fastFramesSince > 10000) {
-            adaptivePixelRatio = Math.min(cap, adaptivePixelRatio + 0.1);
-            renderer.setPixelRatio(adaptivePixelRatio);
-            renderer.setSize(mount.clientWidth, mount.clientHeight);
-            fastFramesSince = now;
-          }
-        } else {
-          fastFramesSince = 0;
-        }
-        lastResolutionAdjust = now;
-      }
+      if (frameTimes.length > 120) frameTimes.shift();
       lastRenderTime = now;
+
       if (playing && !wasPlaying) {
         simulationTime = now;
         simulationAccumulator = 0;
@@ -3450,441 +2338,337 @@ export default function WalkExe() {
       } else if (!playing) {
         wasPlaying = false;
       }
+
       if (playing && !simulationPaused) {
         simulationAccumulator += delta;
-        let catchUpSteps = 0;
-        while (
-          simulationAccumulator >= FIXED_DELTA &&
-          catchUpSteps < MAX_CATCH_UP_STEPS
-        ) {
+        let steps = 0;
+        while (simulationAccumulator >= FIXED_DELTA && steps < MAX_CATCH_UP_STEPS) {
           simulationTime += FIXED_DELTA * 1000;
           fixedUpdate(FIXED_DELTA, simulationTime);
           simulationAccumulator -= FIXED_DELTA;
-          catchUpSteps += 1;
-          fixedSteps += 1;
+          steps += 1;
         }
-        const catchUpWasCapped =
-          catchUpSteps === MAX_CATCH_UP_STEPS &&
-          simulationAccumulator >= FIXED_DELTA;
-        if (frameWasClamped || catchUpWasCapped) {
-          const synchronization = resynchronizeFixedClock(
-            now,
-            simulationTime,
-            simulationAccumulator,
-            FIXED_DELTA,
-          );
-          simulationTime = synchronization.simulationTimeMs;
-          simulationAccumulator = synchronization.accumulatorSeconds;
-          lastClockLagBeforeResyncMs =
-            synchronization.lagBeforeResyncMs;
-          clockResyncs += 1;
-          droppedCatchUps += 1;
+        if (steps === MAX_CATCH_UP_STEPS && simulationAccumulator >= FIXED_DELTA) {
+          const sync = resynchronizeFixedClock(now, simulationTime, simulationAccumulator, FIXED_DELTA);
+          simulationTime = sync.simulationTimeMs;
+          simulationAccumulator = sync.accumulatorSeconds;
         }
-      }
-      if (now - lastQaUpdate > 500) {
-        mount.dataset.qa = JSON.stringify(qaBridge.snapshot());
-        lastQaUpdate = now;
       }
 
-      if (phaseRef.current === "playing" && runStartedAt === 0) runStartedAt = now;
+      if (playing && runStartedAt === 0) runStartedAt = now;
       if (runStartedAt && !escaped && !caught && timecodeRef.current) {
         timecodeRef.current.textContent = formatTimecode(now - runStartedAt);
       }
-      runtimeTapes.forEach((tape, index) => {
-        if (tape.collected) return;
-        const body = tape.mesh.userData.body as THREE.Group | undefined;
-        if (body && !reducedMotion) {
-          body.position.y = 0.95 + Math.sin(now * 0.002 + index * 1.7) * 0.1;
-          body.rotation.y += delta * 0.9;
-        }
-      });
 
-      if (!ghostRelicCollected) {
-        const relicBody = ghostRelicMesh.userData.body as THREE.Group | undefined;
-        if (relicBody && !reducedMotion) {
-          relicBody.position.y = 1.05 + Math.sin(now * 0.0024) * 0.11;
-          relicBody.rotation.y += delta * 1.15;
+      // Cheap animations on props (zero allocations)
+      if (!reducedMotion) {
+        runtimeTapes.forEach((tape, idx) => {
+          if (tape.collected) return;
+          const body = tape.mesh.userData.body as THREE.Group | undefined;
+          if (body) {
+            body.position.y = 0.98 + Math.sin(now * 0.0022 + idx * 1.5) * 0.08;
+            body.rotation.y += delta * 0.9;
+          }
+        });
+        runtimeEchoes.forEach((echo, idx) => {
+          if (echo.collected) return;
+          echo.mesh.position.y = Math.sin(now * 0.0016 + idx) * 0.1;
+          echo.mesh.rotation.y += delta * 0.4;
+        });
+        studioEnv.eggs.forEach((egg) => {
+          const spinBody = egg.mesh.userData.spinBody as THREE.Object3D | undefined;
+          if (spinBody && spinBody.visible) spinBody.rotation.y += delta * 1.1;
+        });
+        studioEnv.animatedFlames.forEach((flame, idx) => {
+          const s = 0.92 + Math.sin(now * 0.015 + idx * 2.1) * 0.14;
+          flame.scale.set(1, s, 1);
+        });
+        if (studioEnv.deskFanBlades) studioEnv.deskFanBlades.rotation.z += delta * 7.5;
+        if (studioEnv.waterGlassRipples) {
+          const shake = Math.max(0.08, 1 - currentPlayerDistance / 14);
+          const s = 0.7 + ((now * 0.004 * (1 + shake * 2)) % 0.6);
+          studioEnv.waterGlassRipples.scale.setScalar(s);
         }
+        dust.rotation.y = Math.sin(now * 0.00004) * 0.07;
       }
 
-      runtimeEchoes.forEach((echo, index) => {
-        if (echo.collected) return;
-        echo.mesh.position.y = reducedMotion
-          ? 0
-          : Math.sin(now * 0.0015 + index) * 0.12;
-        if (!reducedMotion) echo.mesh.rotation.y += delta * 0.36;
-      });
-      if (activeLure) {
-        activeLure.mesh.position.y = reducedMotion
-          ? 0
-          : Math.sin(now * 0.005) * 0.12;
-        if (!reducedMotion) activeLure.mesh.rotation.y += delta * 1.4;
-      }
-
-      dust.rotation.y = reducedMotion ? 0 : Math.sin(now * 0.00004) * 0.08;
       if (playing) {
-        activeEnemyAction.timeScale = THREE.MathUtils.clamp(
-          currentEnemySpeed / 1.1,
-          0.28,
-          1.9,
-        ) * (reducedMotion ? 0.35 : 1);
+        activeEnemyAction.timeScale = THREE.MathUtils.clamp(currentEnemySpeed / 1.1, 0.25, 1.9);
         enemyMixer.update(delta);
-        if (head) {
-          const neutralModelPreview =
-            simulationTime < modelPreviewUntil &&
-            modelPreviewState === "listen";
-          const threatTurn =
-            neutralModelPreview
-              ? 0
-              : currentEnemyMode === "chase" ||
-                  currentEnemyMode === "ambush"
-              ? 1
-              : currentEnemyMode === "listen"
-                ? 0.45
-                : THREE.MathUtils.clamp(
-                    1 - currentPlayerDistance / 8,
-                    0,
-                    0.35,
-                  );
-          head.rotation.y +=
-            (Math.PI * threatTurn - head.rotation.y) *
-            Math.min(1, delta * 6);
-          head.rotation.z =
-            Math.sin(now * 0.002) * 0.1 * Math.max(0.2, threatTurn);
-        }
-        if (jaw) {
-          const jawTarget =
-            currentEnemyMode === "chase" ||
-            currentEnemyMode === "ambush"
-              ? 0.5 + Math.sin(now * 0.018) * 0.14
-              : currentEnemyMode === "listen"
-                ? 0.12
-                : 0.02;
-          jaw.rotation.x +=
-            (jawTarget - jaw.rotation.x) * Math.min(1, delta * 10);
-        }
-        if (subjectHat) {
-          subjectHat.position.y +=
-            (subjectHatBaseY - subjectHat.position.y) *
-            Math.min(1, delta * 5);
-          subjectHat.rotation.z =
-            Math.sin(now * 0.0014) *
-            (currentEnemyMode === "ambush" ? 0.24 : 0.025);
-        }
-        const faceThreat =
+        const threat =
           currentEnemyMode === "ambush"
             ? 1
             : currentEnemyMode === "chase"
-              ? THREE.MathUtils.clamp(
-                  1.15 - currentPlayerDistance / 8,
-                  0.42,
-                  0.92,
-                )
+              ? THREE.MathUtils.clamp(1.15 - currentPlayerDistance / 8, 0.45, 0.95)
               : currentEnemyMode === "listen"
-                ? 0.12
+                ? 0.2
                 : 0;
-        outerShellRetracted = faceThreat > 0.58;
+        if (head) {
+          head.rotation.y += (Math.PI * threat - head.rotation.y) * Math.min(1, delta * 6);
+          head.rotation.z = Math.sin(now * 0.0022) * 0.09 * Math.max(0.18, threat);
+        }
+        if (jaw) {
+          const jTarget = currentEnemyMode === "chase" || currentEnemyMode === "ambush" ? 0.52 : 0.05;
+          jaw.rotation.x += (jTarget - jaw.rotation.x) * Math.min(1, delta * 9);
+        }
+        if (subjectHat) {
+          subjectHat.position.y += (subjectHatBaseY - subjectHat.position.y) * Math.min(1, delta * 5);
+        }
         if (facePlateLeft && facePlateRight) {
-          facePlateLeft.rotation.y +=
-            (-faceThreat * 0.5 - facePlateLeft.rotation.y) *
-            Math.min(1, delta * 8);
-          facePlateRight.rotation.y +=
-            (faceThreat * 0.5 - facePlateRight.rotation.y) *
-            Math.min(1, delta * 8);
-          facePlateLeft.rotation.z =
-            -faceThreat * 0.12 + Math.sin(now * 0.006) * faceThreat * 0.025;
-          facePlateRight.rotation.z =
-            faceThreat * 0.12 - Math.sin(now * 0.006) * faceThreat * 0.025;
+          facePlateLeft.rotation.y += (-threat * 0.52 - facePlateLeft.rotation.y) * Math.min(1, delta * 8);
+          facePlateRight.rotation.y += (threat * 0.52 - facePlateRight.rotation.y) * Math.min(1, delta * 8);
         }
-        const servoIntensity =
-          2.8 +
-          faceThreat * 6.2 +
-          Math.max(0, Math.sin(now * 0.012)) * (0.6 + faceThreat * 2.4);
-        servoMaterials.forEach((surface) => {
-          surface.emissiveIntensity = servoIntensity;
+        const servoInt = 2.8 + threat * 6;
+        servoMaterials.forEach((s) => {
+          s.emissiveIntensity = servoInt;
         });
-        if (eyeGlowLeft && eyeGlowRight) {
-          const eyeLightIntensity = 0.24 + faceThreat * 1.65;
-          eyeGlowLeft.intensity = eyeLightIntensity;
-          eyeGlowRight.intensity = eyeLightIntensity;
-        }
         if (chestCore) {
-          const reactorPulse =
-            1 +
-            Math.sin(now * (currentEnemyMode === "chase" ? 0.018 : 0.007)) *
-              (currentEnemyMode === "chase" ? 0.055 : 0.02);
-          chestCore.scale.setScalar(reactorPulse);
+          chestCore.scale.setScalar(1 + Math.sin(now * 0.012) * 0.03);
         }
 
-        if (now - lastHudUpdate > 160) {
-          const currentCell = positionCell(player);
-          const row = Math.floor(currentCell / MAZE_SIZE);
-          const column = currentCell % MAZE_SIZE;
-          setDistance(Math.max(1, Math.round(currentPlayerDistance)));
-          setTraveled(traveledDistance);
-          setBpm(currentBpm);
+        // Update 3-Light Pool every 180 ms (max 3 PointLights active at once!)
+        if (now - lastLightPoolUpdate > 180) {
+          const origin = tabletRef.current
+            ? cellCenter(layout.cctvCells[cctvIndexRef.current] ?? 0, GRID)
+            : player;
+          const activeLights = selectActivePoolLights(virtualLights, origin.x, origin.z, 3, 22);
+          poolLights.forEach((pl, idx) => {
+            const src = activeLights[idx];
+            if (!src) {
+              pl.visible = false;
+              pl.intensity = 0;
+              return;
+            }
+            pl.visible = true;
+            pl.position.set(src.x, src.y, src.z);
+            pl.color.setHex(src.color);
+            pl.intensity = src.intensity;
+            pl.distance = src.distance;
+          });
+          lastLightPoolUpdate = now;
+        }
+
+        // Emit ONE unified HudSnapshot every 220 ms (massive React perf win!)
+        if (now - lastHudUpdate > 220) {
+          const curCell = positionCell(player, GRID);
+          const row = Math.floor(curCell / GRID);
+          const col = curCell % GRID;
           peakBpm = Math.max(peakBpm, currentBpm);
-          if (currentPlayerDistance < 3.4) {
-            inCloseCall = true;
-          } else if (inCloseCall && currentPlayerDistance > 6.5) {
+          if (currentPlayerDistance < 3.4) inCloseCall = true;
+          else if (inCloseCall && currentPlayerDistance > 6.5) {
             inCloseCall = false;
             closeCalls += 1;
           }
-          setSector(
-            `${String.fromCharCode(65 + Math.floor(row / 4))}-${String(
-              column + 1,
-            ).padStart(2, "0")}`,
-          );
-          setDetectionPct(Math.round(detectionMeter * 100));
-          setDazzled(simulationTime < dazzledUntil);
-          setStealthState(
-            !flashlightEnabled && playerCrouching
-              ? "hidden"
-              : !flashlightEnabled || playerCrouching
-                ? "dim"
-                : "lit",
-          );
-          setObjectiveReading(
-            computeObjectiveReading({
-              maze,
-              playerCell: currentCell,
-              playerX: player.x,
-              playerZ: player.z,
-              playerYaw: yaw,
-              tapes: runtimeTapes.map((tape) => ({
-                cell: tape.cell,
-                code: WALK_TAPES[tape.index].code,
-                title: WALK_TAPES[tape.index].title,
-                collected: tape.collected,
-              })),
-              tapesHeld,
-              requiredTapes,
-              exitCell,
-            }),
-          );
-          setMapPlayer({
-            left: 4 + (column / Math.max(1, MAZE_SIZE - 1)) * 88,
-            top: 4 + (row / Math.max(1, MAZE_SIZE - 1)) * 88,
-          });
+
+          if (loreBanner && now > loreBanner.until) loreBanner = null;
+
+          // Distance culling on heavy rooms
           const detailOrigin = tabletRef.current
-            ? cellCenter(cctvCells[cctvIndexRef.current] ?? cctvCells[0])
+            ? cellCenter(layout.cctvCells[cctvIndexRef.current] ?? 0, GRID)
             : player;
-          ghostRelicMesh.visible =
-            !ghostRelicCollected &&
-            ghostRelicMesh.position.distanceToSquared(detailOrigin) < 30 * 30;
-          decorGroups.forEach((group) => {
-            group.visible =
-              group.position.distanceToSquared(detailOrigin) < 28 * 28;
-          });
-          runtimeTapes.forEach((tape) => {
-            tape.mesh.visible =
-              !tape.collected &&
-              tape.mesh.position.distanceToSquared(detailOrigin) < 30 * 30;
-          });
-          runtimeEchoes.forEach((echo) => {
-            echo.mesh.visible =
-              !echo.collected &&
-              echo.mesh.position.distanceToSquared(detailOrigin) < 28 * 28;
-          });
-          ventMeshes.forEach((vent) => {
-            vent.visible =
-              Boolean(ventTrip) ||
-              vent.position.distanceToSquared(detailOrigin) < 28 * 28;
+          studioEnv.decorGroups.forEach((g) => {
+            g.visible = g.position.distanceToSquared(detailOrigin) < 26 * 26;
           });
 
-          const selectedCamera =
-            cctvCameras[cctvIndexRef.current] ?? cctvCameras[0];
-          const signalCycle =
-            (now + cctvIndexRef.current * 977) % 11700;
-          cctvSignalLost =
-            tabletRef.current &&
-            (signalCycle < 360 ||
-              (currentPlayerDistance < 9 && now % 920 < 150));
-          setSignalLost(cctvSignalLost);
-          selectedCamera.updateWorldMatrix(true, false);
-          cctvProjection.multiplyMatrices(
-            selectedCamera.projectionMatrix,
-            selectedCamera.matrixWorldInverse,
+          // Contextual [E] interaction prompt
+          tmpPlayerFlat.set(player.x, 0, player.z);
+          const nearTape = runtimeTapes.find((t) => !t.collected && t.mesh.position.distanceTo(tmpPlayerFlat) < 1.65);
+          const nearEgg = studioEnv.eggs.find(
+            (e) =>
+              (!e.used || (e.reusable && simulationTime >= e.cooldownUntil)) &&
+              e.position.distanceTo(tmpPlayerFlat) < 1.85,
           );
-          cctvFrustum.setFromProjectionMatrix(cctvProjection);
-          enemyProbe.copy(subject.position).setY(1.4);
-          setMotionDetected(
-            !cctvSignalLost &&
-              cctvFrustum.containsPoint(enemyProbe) &&
-              corridorLineOfSight(
-                maze,
-                cctvCells[cctvIndexRef.current] ?? cctvCells[0],
-                positionCell(subject.position),
-              ),
+          const nearEcho = runtimeEchoes.some((e) => !e.collected && e.mesh.position.distanceTo(tmpPlayerFlat) < 1.55);
+          const nearVent = ventMeshes.some(
+            (v) => v.userData.cell === curCell && Math.hypot(v.position.x - player.x, v.position.z - player.z) < 2.2,
           );
+          const nearExit = exitPosition.distanceTo(tmpPlayerFlat) < 1.75;
 
-          const closeTape = runtimeTapes.find(
-            (tape) =>
-              !tape.collected &&
-              tape.mesh.position.distanceTo(player.clone().setY(0)) < 1.6,
-          );
-          const closeEcho = runtimeEchoes.some(
-            (echo) =>
-              !echo.collected &&
-              echo.mesh.position.distanceTo(player.clone().setY(0)) < 1.5,
-          );
-          const closeVent = ventMeshes.some(
-            (vent) =>
-              vent.userData.cell === currentCell &&
-              vent.position.distanceTo(
-                player.clone().setY(vent.position.y),
-              ) < 2.15,
-          );
-          const closeExit =
-            cellCenter(exitCell).distanceTo(player.clone().setY(0)) < 1.55;
-          if (ventTrip) {
-            setPrompt("EN CONDUCTO · W/S RECORRE · A/D O RATÓN MIRA");
-          } else if (closeTape) {
-            setPrompt(`E · RECOGER CINTA «${WALK_TAPES[closeTape.index].title}»`);
-          } else if (closeEcho) setPrompt("E · ESTABILIZAR ECO ESPECTRAL");
-          else if (closeVent) setPrompt("E · ENTRAR EN CONDUCTO");
-          else if (closeExit) {
-            setPrompt(
+          let interactPrompt: string | null = null;
+          if (ventTrip) interactPrompt = "EN CONDUCTO · [W/S] AVANZA · [A/D] GIRA";
+          else if (nearTape) interactPrompt = `[E] RECOGER CINTA ${WALK_TAPES[nearTape.index].code} · «${WALK_TAPES[nearTape.index].title}»`;
+          else if (nearEgg) {
+            const meta = layout.eggPlacements.find((p) => p.id === nearEgg.id);
+            interactPrompt = meta ? `[${meta.actionPrompt}]` : "[E] INTERACTUAR";
+          } else if (nearEcho) interactPrompt = "[E] RECOGER ECO ESPECTRAL";
+          else if (nearVent) interactPrompt = "[E] METERSE EN CONDUCTO DE MANTENIMIENTO";
+          else if (nearExit) {
+            interactPrompt =
               tapesHeld < requiredTapes
-                ? `SALIDA SIN ENERGÍA · NECESITAS ${requiredTapes} CINTAS (${tapesHeld}/${requiredTapes})`
-                : "E · ABRIR SALIDA DE EMERGENCIA",
+                ? `PUERTA BLOQUEADA · FALTAN ${requiredTapes - tapesHeld} CINTA(S)`
+                : "[E] ABRIR PUERTA DE ESTRENO Y ESCAPAR";
+          }
+
+          const wing: StudioWingId = layout.cellWings[curCell] ?? "corridor";
+          const objective = computeObjectiveReading({
+            maze,
+            size: GRID,
+            playerCell: curCell,
+            playerX: player.x,
+            playerZ: player.z,
+            playerYaw: yaw,
+            tapes: runtimeTapes.map((t) => ({
+              cell: t.cell,
+              code: WALK_TAPES[t.index].code,
+              title: WALK_TAPES[t.index].title,
+              collected: t.collected,
+            })),
+            tapesHeld,
+            requiredTapes,
+            exitCell: layout.exitCell,
+          });
+
+          setHud({
+            bpm: currentBpm,
+            distance: Math.max(1, Math.round(currentPlayerDistance)),
+            traveled: traveledDistance,
+            sector: sectorForCell(curCell, GRID),
+            wing,
+            enemyMode: currentEnemyMode,
+            echoes: echoesHeld,
+            tapes: [...tapeIndices],
+            eggsFound: [...eggsFound],
+            hardBreadArmed,
+            ghostBlessed,
+            redAlert,
+            detectionPct: Math.round(detectionMeter * 100),
+            stealthState: !flashlightEnabled && playerCrouching ? "hidden" : !flashlightEnabled || playerCrouching ? "dim" : "lit",
+            dazzled: simulationTime < dazzledUntil,
+            objective,
+            interactPrompt,
+            loreBanner: loreBanner ? { kicker: loreBanner.kicker, text: loreBanner.text } : null,
+            prompt: currentPrompt,
+            difficulty: difficultyRef.current,
+          });
+
+          setMapPlayer({ left: gridX(col), top: gridY(row) });
+
+          if (tabletRef.current) {
+            const selectedCamera = cctvCameras[cctvIndexRef.current] ?? cctvCameras[0];
+            const cycle = (now + cctvIndexRef.current * 977) % 11700;
+            cctvSignalLost = cycle < 320 || (currentPlayerDistance < 8 && now % 900 < 140);
+            setSignalLost(cctvSignalLost);
+            selectedCamera.updateWorldMatrix(true, false);
+            cctvProjection.multiplyMatrices(selectedCamera.projectionMatrix, selectedCamera.matrixWorldInverse);
+            cctvFrustum.setFromProjectionMatrix(cctvProjection);
+            enemyProbe.copy(subject.position).setY(1.4);
+            setMotionDetected(
+              !cctvSignalLost &&
+                cctvFrustum.containsPoint(enemyProbe) &&
+                corridorLineOfSight(maze, layout.cctvCells[cctvIndexRef.current] ?? 0, positionCell(subject.position, GRID), GRID),
             );
           }
+
           lastHudUpdate = now;
         }
       }
 
-      {
-        if (caughtSequence) {
-          const scareProgress = THREE.MathUtils.clamp(
-            (simulationTime - caughtSequence.startedAt) /
-              JUMPSCARE_DURATION_MS,
-            0,
-            1,
-          );
-          camera.position.copy(player);
-          camera.lookAt(
-            subject.position.x,
-            2.25 + Math.sin(scareProgress * Math.PI * 8) * 0.08,
-            subject.position.z,
-          );
-          camera.fov = 74 + Math.sin(scareProgress * Math.PI) * 24;
-        } else {
-          const bob =
-            playing && playerMoving && !ventTrip && !reducedMotion
-              ? Math.sin(now * 0.011 * (playerSprinting ? 1.45 : 1)) *
-                (playerCrouching ? 0.012 : 0.035)
-              : 0;
-          camera.position.copy(player);
-          camera.position.y += bob;
-          camera.rotation.set(pitch, yaw, 0);
-          camera.fov = escapeSequence ? 80 : 74;
-        }
-        camera.updateProjectionMatrix();
-        flashlight.visible = flashlightEnabled;
+      // Camera placement (update projection ONLY when FOV actually changes!)
+      let desiredFov = 74;
+      if (caughtSequence) {
+        const sp = THREE.MathUtils.clamp((simulationTime - caughtSequence.startedAt) / JUMPSCARE_DURATION_MS, 0, 1);
+        camera.position.copy(player);
+        camera.lookAt(subject.position.x, 2.25 + Math.sin(sp * Math.PI * 8) * 0.08, subject.position.z);
+        desiredFov = 74 + Math.sin(sp * Math.PI) * 24;
+      } else if (playing) {
+        const bob =
+          playerMoving && !ventTrip && !reducedMotion
+            ? Math.sin(now * 0.011 * (playerSprinting ? 1.4 : 1)) * (playerCrouching ? 0.012 : 0.032)
+            : 0;
+        camera.position.set(player.x, player.y + bob, player.z);
+        camera.rotation.set(pitch, yaw, 0);
+        desiredFov = escapeSequence ? 82 : redAlert ? 76 : 74;
+      } else {
+        const orbit = now * 0.00009;
+        camera.position.set(start.x + Math.sin(orbit) * 1.2, 1.65, start.z + Math.cos(orbit) * 1.2);
+        camera.lookAt(start.x, 1.4, start.z - 2);
       }
+      if (Math.abs(desiredFov - lastAppliedFov) > 0.05) {
+        camera.fov = desiredFov;
+        camera.updateProjectionMatrix();
+        lastAppliedFov = desiredFov;
+      }
+      flashlight.visible = flashlightEnabled;
 
+      // Spatial audio pose
       const spatialAudio = audioRef.current;
       if (spatialAudio?.isUnlocked) {
         if (!spatialSourcesStarted) {
           spatialAudio.startBeds();
-          ventMeshes.slice(0, 4).forEach((vent, index) => {
-            spatialAudio.startFan(`vent-fan-${index}`, vent.position, {
-              gain: 0.24,
-              playbackRate: 0.88 + index * 0.07,
-            });
-          });
           spatialSourcesStarted = true;
         }
         camera.getWorldDirection(audioForward);
         audioUp.set(0, 1, 0).applyQuaternion(camera.quaternion);
         subject.getWorldDirection(enemyAudioForward);
-        const subjectVisibleByRoute = corridorLineOfSight(
-          maze,
-          positionCell(player),
-          positionCell(subject.position),
-        );
-        spatialAudio.setListener({
-          position: camera.position,
-          forward: audioForward,
-          up: audioUp,
-        });
+        spatialAudio.setListener({ position: camera.position, forward: audioForward, up: audioUp });
         spatialAudio.updateEmitter("subject-m", {
           position: subject.position,
           orientation: enemyAudioForward,
-          occlusion: subjectVisibleByRoute ? 0 : 0.76,
+          occlusion: corridorLineOfSight(maze, positionCell(player, GRID), positionCell(subject.position, GRID), GRID) ? 0 : 0.76,
         });
       }
 
-      if (!playing) {
-        const orbit = now * 0.00008;
-        camera.position.set(
-          start.x + Math.sin(orbit) * 1.4,
-          1.6,
-          start.z + Math.cos(orbit) * 1.4,
+      // Dynamic per-biome atmosphere + Red Alert horror flicker
+      frame += 1;
+      const activeCell = tabletRef.current
+        ? (layout.cctvCells[cctvIndexRef.current] ?? 0)
+        : positionCell(player, GRID);
+      const rawWing = layout.cellWings[activeCell];
+      const activeBiome: StudioBiomeId = rawWing && rawWing !== "corridor" ? rawWing : "booth";
+      const biomeAtmo = STUDIO_BIOME_ATMOSPHERE[activeBiome];
+      const blend = Math.min(1, delta * 3.4);
+
+      const alertWave = redAlert ? 0.55 + Math.sin(now * 0.0075) * 0.45 : 0;
+      if (redAlert) {
+        currentBgColor.lerp(alertBg, blend);
+        if (scene.fog instanceof THREE.FogExp2) {
+          scene.fog.color.copy(currentBgColor);
+          scene.fog.density += (0.048 - scene.fog.density) * blend;
+        }
+        emergencyLight.color.setHex(0xff1b24);
+        emergencyLight.intensity = 0.45 + alertWave * 0.85;
+      } else {
+        targetBgColor.setHex(biomeAtmo.fogHex);
+        targetHemiSky.setHex(biomeAtmo.hemiSkyHex);
+        targetHemiGround.setHex(biomeAtmo.hemiGroundHex);
+        currentBgColor.lerp(targetBgColor, blend);
+        hemiLight.color.lerp(targetHemiSky, blend);
+        hemiLight.groundColor.lerp(targetHemiGround, blend);
+        if (scene.fog instanceof THREE.FogExp2) {
+          scene.fog.color.copy(currentBgColor);
+          scene.fog.density += (biomeAtmo.fogDensity - scene.fog.density) * blend;
+        }
+        emergencyLight.color.setHex(
+          currentEnemyMode === "chase" ? 0xff1d14 : STUDIO_WINGS[activeBiome].accentHex,
         );
-        camera.lookAt(start.x, 1.4, start.z - 2);
+        emergencyLight.intensity = frame % 230 < 5 ? 0.1 : 0.58;
       }
 
-      // Cheap failing fluorescent effect.
-      frame += 1;
-      const chasePulse =
-        currentEnemyMode === "chase"
-          ? 0.22 + Math.sin(now * 0.012) * 0.16
-          : 0;
-      emergencyLight.color.setHex(
-        currentEnemyMode === "chase" ? 0xff1d14 : 0x7f948b,
-      );
-      emergencyLight.intensity =
-        frame % 217 < 5 ? 0.08 : 0.68 + chasePulse;
-
+      // Render WebGL
       renderer.info.reset();
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, mount.clientWidth, mount.clientHeight);
-      renderer.setClearColor(0x020303, 1);
       renderer.clear();
+
       if (tabletRef.current && playing) {
-        const opticalCamera =
-          cctvCameras[cctvIndexRef.current] ?? cctvCameras[0];
-        if (
-          !cctvSignalLost &&
-          now - lastCctvFrame >= 1000 / graphics.cctvFps
-        ) {
-          opticalCamera.aspect =
-            cctvTarget.width / Math.max(1, cctvTarget.height);
-          opticalCamera.updateProjectionMatrix();
+        const optical = cctvCameras[cctvIndexRef.current] ?? cctvCameras[0];
+        if (!cctvSignalLost && now - lastCctvFrame >= 1000 / graphics.cctvFps) {
+          optical.aspect = cctvTarget.width / Math.max(1, cctvTarget.height);
+          optical.updateProjectionMatrix();
           renderer.setRenderTarget(cctvTarget);
-          renderer.setScissorTest(false);
           renderer.setViewport(0, 0, cctvTarget.width, cctvTarget.height);
-          renderer.setClearColor(0x020503, 1);
           renderer.clear();
-          renderer.render(scene, opticalCamera);
+          renderer.render(scene, optical);
           renderer.setRenderTarget(null);
           lastCctvFrame = now;
         }
         const feedBounds = cctvFeedRef.current?.getBoundingClientRect();
         const canvasBounds = renderer.domElement.getBoundingClientRect();
         if (feedBounds && feedBounds.width > 2 && feedBounds.height > 2) {
-          const viewportX = Math.max(
-            0,
-            feedBounds.left - canvasBounds.left,
-          );
-          const viewportY = Math.max(
-            0,
-            canvasBounds.bottom - feedBounds.bottom,
-          );
-          renderer.setViewport(
-            viewportX,
-            viewportY,
-            feedBounds.width,
-            feedBounds.height,
-          );
-          renderer.setScissor(
-            viewportX,
-            viewportY,
-            feedBounds.width,
-            feedBounds.height,
-          );
+          const vx = Math.max(0, feedBounds.left - canvasBounds.left);
+          const vy = Math.max(0, canvasBounds.bottom - feedBounds.bottom);
+          renderer.setViewport(vx, vy, feedBounds.width, feedBounds.height);
+          renderer.setScissor(vx, vy, feedBounds.width, feedBounds.height);
           renderer.setScissorTest(true);
           renderer.render(cctvDisplayScene, cctvDisplayCamera);
           renderer.setScissorTest(false);
@@ -3892,312 +2676,172 @@ export default function WalkExe() {
       } else {
         renderer.render(scene, camera);
       }
+
       lastRendererCalls = renderer.info.render.calls;
       lastRendererTriangles = renderer.info.render.triangles;
-      peakRendererCalls = Math.max(peakRendererCalls, lastRendererCalls);
-      peakRendererTriangles = Math.max(
-        peakRendererTriangles,
-        lastRendererTriangles,
-      );
+
+      // QA JSON snapshot ONLY when ?qa is explicitly enabled (kills 500 ms prod stutters!)
+      if (qaMode && now - lastQaUpdate > 500) {
+        const snap = qaBridge.snapshot();
+        mount.dataset.qa = JSON.stringify(snap);
+        const fps = snap.frames.medianMs > 0 ? Math.round(1000 / snap.frames.medianMs) : 0;
+        setQaSummary(
+          `QA · ${snap.gridSize}×${snap.gridSize} · ${fps} FPS (${snap.frames.medianMs.toFixed(1)}ms / p95 ${snap.frames.p95Ms.toFixed(1)}ms) · LUCES ${snap.activeLights}/3 · CALLS ${snap.renderer.calls} · TRIS ${snap.renderer.triangles} · GLB ${snap.gltfRigLoaded ? "OK" : "LOAD"}`,
+        );
+        lastQaUpdate = now;
+      }
     };
 
-    const walkWindow = window as Window & {
-      __M00NQA__?: {
-        snapshot: () => Record<string, unknown>;
-        stageEnemy: (
-          distance?: number,
-          state?: EnemyState,
-          yawOffsetDegrees?: number,
-          verticalOffset?: number,
-        ) => boolean;
-        stageVent: (pairIndex?: number) => boolean;
-        openCctv: (cameraIndex?: number) => boolean;
-      };
-    };
+    let qaBiomeCursor = 0;
+    const qaBiomeOrder: StudioBiomeId[] = ["fazbear", "crypt", "neverland", "acoustic", "archive", "booth"];
+
     const qaBridge = {
-      stageEnemy: (
-        distance = 4.6,
-        state: EnemyState = "listen",
-        yawOffsetDegrees = 0,
-        verticalOffset = 0,
-      ) => {
-        if (!new URLSearchParams(window.location.search).has("qa")) {
-          return false;
-        }
-        const stagedDistance = THREE.MathUtils.clamp(distance, 1.8, 8);
-        const stagedYawOffset = THREE.MathUtils.clamp(
-          yawOffsetDegrees,
-          -180,
-          180,
-        );
-        const stagedVerticalOffset = THREE.MathUtils.clamp(
-          verticalOffset,
-          -2.4,
-          1,
-        );
-        const viewDirection = new THREE.Vector3(0, 0, -1).applyAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          yaw,
-        );
-        subject.position
-          .copy(player)
-          .setY(stagedVerticalOffset)
-          .addScaledVector(viewDirection, stagedDistance);
-        const towardPlayer = player.clone().setY(0).sub(subject.position);
-        subject.rotation.y =
-          Math.atan2(towardPlayer.x, towardPlayer.z) +
-          Math.PI +
-          THREE.MathUtils.degToRad(stagedYawOffset);
-        currentPlayerDistance = stagedDistance;
-        currentRouteDistance = 1;
-        modelPreviewUntil = Number.POSITIVE_INFINITY;
-        modelPreviewState = state;
-        qaEnemyStage = {
-          distance: stagedDistance,
-          state,
-          yawOffsetDegrees: stagedYawOffset,
-          verticalOffset: stagedVerticalOffset,
-        };
-        flashlight.visible = true;
-        flashlight.intensity = qaNeutralLighting ? 12 : 132;
-        bodyFill.intensity = qaNeutralLighting ? 2 : 7.5;
-        qaSideLight.intensity = 7.5;
-        qaSideLight.visible = qaNeutralLighting;
-        currentEnemyMode = state;
-        setEnemyMode(state);
-        transitionEnemyAnimation(state);
-        return true;
-      },
-      stageVent: stageVentForQa,
-      stageTape: stageTapeForQa,
-      stageExit: stageExitForQa,
-      openCctv: openCctvForQa,
       snapshot: () => {
-        const sortedFrames = [...frameTimes].sort(
-          (first, second) => first - second,
-        );
-        const percentile = (ratio: number) =>
-          sortedFrames[
-            Math.min(
-              sortedFrames.length - 1,
-              Math.floor(sortedFrames.length * ratio),
-            )
-          ] ?? 0;
+        const sorted = [...frameTimes].sort((a, b) => a - b);
+        const pct = (r: number) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * r))] ?? 0;
         return {
           seed,
+          gridSize: GRID,
           phase: phaseRef.current,
-          player: {
-            x: player.x,
-            y: player.y,
-            z: player.z,
-            cell: positionCell(player),
-            traveled: traveledDistance,
-            crouching: playerCrouching,
-            sprinting: playerSprinting,
-          },
-          controller: {
-            capsuleHeight: capsuleState.height,
-            capsuleRadius: capsuleWorld.radius,
-            collided: lastCapsuleCollided,
-          },
-          vent: {
-            active: Boolean(ventTrip),
-            progress: ventTrip
-              ? ventTrip.distanceAlong /
-                Math.max(0.0001, ventTrip.totalDistance)
-              : 0,
-            lookYaw: yaw,
-            routeYaw: currentVentHeadingYaw,
-            lookOffsetRadians: Math.atan2(
-              Math.sin(yaw - currentVentHeadingYaw),
-              Math.cos(yaw - currentVentHeadingYaw),
-            ),
-            pitch,
-          },
-          sequences: {
-            escape: Boolean(escapeSequence),
-            caught: Boolean(caughtSequence),
-          },
-          tapes: {
-            held: tapesHeld,
-            required: requiredTapes,
-            cells: runtimeTapes.map((tape) => tape.cell),
-            collected: [...tapeIndices],
-            heeLoaded: Boolean(heeBufferRef.current),
-          },
-          noiseObjects: {
-            pooled: noiseObjects.length,
-            active: noiseObjects.filter((object) => object.mesh.visible).length,
-          },
-          enemy: {
-            x: subject.position.x,
-            z: subject.position.z,
-            cell: positionCell(subject.position),
-            state: currentEnemyMode,
-            routeDistance: currentRouteDistance,
-            animation: activeEnemyAction.getClip().name,
-            animationMixer: true,
-            gltfRigLoaded,
-            gltfRigFailed,
-            lodLevel: subject.getCurrentLevel(),
-            model: subject.userData.model ?? "procedural-fallback",
-            detailMeshes: subject.userData.meshes ?? 0,
-            faceMechanics: Boolean(facePlateLeft && facePlateRight),
-            pbrMaterialsLoaded,
-            pbrMaterialsFailed,
-            pbrTextureVariant,
-            pbrAppliedMaterials,
-            outerShellRetracted,
-            yawRadians: subject.rotation.y,
-            yawDegrees: THREE.MathUtils.radToDeg(subject.rotation.y),
-            qaStage: qaEnemyStage,
-          },
-          hearing: {
-            queuedEvents: acousticEvents.length,
-            heard: Boolean(acousticPerception),
-            kind: lastHeardKind,
-            sourceCell: lastHeardCell,
-            predictedCell: predictedHeardCell,
-            routeDistance: lastNoiseDistance,
-            ageMs:
-              lastHeardAt > Number.NEGATIVE_INFINITY
-                ? Math.max(0, simulationTime - lastHeardAt)
-                : null,
-            confidence: acousticPerception?.confidence ?? 0,
-          },
-          input: {
-            ...inputController.getSnapshot(),
-            appliedVelocity: { ...lastAppliedVelocity },
-            slices: lastInputSlices.map((slice) => ({ ...slice })),
-          },
-          cctv: {
-            open: tabletRef.current,
-            index: cctvIndexRef.current,
-            power: cctvPower,
-            width: cctvTarget.width,
-            height: cctvTarget.height,
-            fps: graphics.cctvFps,
-            signalLost: cctvSignalLost,
-            schematicSegments: schematic.length,
-            encounter: cctvEncounterRef.current?.id ?? null,
-            encounterPhase: cctvEncounterPhaseRef.current,
-            visits: cctvVisitRef.current,
-            quietVisits: cctvQuietVisitsRef.current,
-          },
-          simulation: {
-            fixedSteps,
-            droppedCatchUps,
-            accumulator: simulationAccumulator,
-            paused: simulationPaused,
-            clockResyncs,
-            lastClockLagBeforeResyncMs,
-            clockOffsetMs: Math.max(
-              0,
-              lastRenderTime -
-                (simulationTime + simulationAccumulator * 1000),
-            ),
-          },
-          audio: audioRef.current?.getQaCounters() ?? {
-            contextState: "uninitialized",
-            activeNodes: 0,
-            activeOneShots: 0,
-            activePersistentSources: 0,
-            mascotWarningsPlayed: 0,
-            mascotScreamsPlayed: 0,
-            mascotScreamsFailed: 0,
-            lastMascotVariant: null,
-          },
-          renderer: {
-            calls: lastRendererCalls,
-            triangles: lastRendererTriangles,
-            peakCalls: peakRendererCalls,
-            peakTriangles: peakRendererTriangles,
-            geometries: renderer.info.memory.geometries,
-            textures: renderer.info.memory.textures,
-            pixelRatio: adaptivePixelRatio,
-            webgl2: renderer.capabilities.isWebGL2,
-          },
-          frames: {
-            samples: sortedFrames.length,
-            medianMs: percentile(0.5),
-            p95Ms: percentile(0.95),
-            p99Ms: percentile(0.99),
-          },
+          difficulty: difficultyRef.current,
+          tapesHeld,
+          eggsFound: [...eggsFound],
+          redAlert,
+          activeLights: poolLights.filter((l) => l.visible).length,
+          biomeProps: biomeComplex.propCount,
+          gltfRigLoaded,
+          renderer: { calls: lastRendererCalls, triangles: lastRendererTriangles },
+          frames: { samples: sorted.length, medianMs: pct(0.5), p95Ms: pct(0.95) },
+          hearing: { lastNoiseDistance },
         };
       },
+      visitNextBiome: () => {
+        if (!qaMode) return false;
+        const biomeId = qaBiomeOrder[qaBiomeCursor % qaBiomeOrder.length];
+        qaBiomeCursor += 1;
+        // Prefer an adjacent furnished hallway cell facing into that biome's centerpiece!
+        const centerCell = layout.wingCenters[biomeId];
+        const neighbors = [
+          maze[centerCell]?.n ? centerCell - GRID : -1,
+          maze[centerCell]?.s ? centerCell + GRID : -1,
+          maze[centerCell]?.e ? centerCell + 1 : -1,
+          maze[centerCell]?.w ? centerCell - 1 : -1,
+        ].filter((c) => c >= 0 && c < GRID * GRID && layout.cellWings[c] === biomeId);
+        const targetCell = neighbors[0] ?? centerCell;
+        const pos = cellCenter(targetCell, GRID);
+        const lookAt = cellCenter(centerCell, GRID);
+        player.set(pos.x, PLAYER_HEIGHT, pos.z);
+        capsuleState = createCapsuleState(capsuleWorld, { x: pos.x, z: pos.z });
+        if (targetCell !== centerCell) {
+          yaw = Math.atan2(-(lookAt.x - pos.x), -(lookAt.z - pos.z));
+        } else {
+          yaw = openingDirection(maze[targetCell]).yaw;
+        }
+        pitch = -0.04;
+        return biomeId;
+      },
+      triggerRedAlert: () => {
+        if (!qaMode) return false;
+        while (tapeIndices.length < requiredTapes) {
+          const idx = tapeIndices.length;
+          tapeIndices.push(idx);
+          if (runtimeTapes[idx]) {
+            runtimeTapes[idx].collected = true;
+            runtimeTapes[idx].mesh.visible = false;
+            tapeVirtualLights[idx].active = false;
+          }
+        }
+        tapesHeld = Math.max(tapesHeld, requiredTapes);
+        redAlert = true;
+        exitVirtualLight.color = 0x35ff7a;
+        exitVirtualLight.intensity = 30;
+        if (exitBeaconMat) {
+          exitBeaconMat.color.setHex(0x0b3d1e);
+          exitBeaconMat.emissive.setHex(0x35ff7a);
+        }
+        audioRef.current?.playHorrorCue("red-alert");
+        currentPrompt = "ALERTA ROJA · LA PUERTA DE ESTRENO ESTÁ ABIERTA · ¡CORRE!";
+        return true;
+      },
+      triggerEscape: () => {
+        if (!qaMode) return false;
+        qaBridge.triggerRedAlert();
+        player.set(exitPosition.x, PLAYER_HEIGHT, exitPosition.z);
+        interact(simulationTime);
+        return Boolean(escapeSequence);
+      },
+      triggerSecretEscape: () => {
+        if (!qaMode) return false;
+        for (let i = 0; i < WALK_TAPES.length; i += 1) {
+          if (!tapeIndices.includes(i)) tapeIndices.push(i);
+        }
+        tapesHeld = WALK_TAPES.length;
+        ghostBlessed = true;
+        (["neverland-vitrine", "ghost-vinyl", "fazbear-honk"] as StudioEggId[]).forEach((id) => {
+          if (!eggsFound.includes(id)) eggsFound.push(id);
+        });
+        redAlert = true;
+        player.set(exitPosition.x, PLAYER_HEIGHT, exitPosition.z);
+        interact(simulationTime);
+        return Boolean(escapeSequence);
+      },
     };
+    const walkWindow = window as Window & { __M00NQA__?: typeof qaBridge };
     walkWindow.__M00NQA__ = qaBridge;
+    qaActionsRef.current = qaMode ? qaBridge : null;
+
+    // If launched via Quick Retry, immediately start audio & pointer lock
+    if (autoStartNextRunRef.current) {
+      autoStartNextRunRef.current = false;
+      startAudio();
+      requestControl();
+    }
+
     renderFrame(performance.now());
 
     return () => {
+      rigLoadCancelled = true;
       cctvEncounterGenerationRef.current += 1;
-      cctvEncounterTimersRef.current.forEach((timer) =>
-        window.clearTimeout(timer),
-      );
-      cctvEncounterTimersRef.current.clear();
+      encounterTimers.forEach((t) => window.clearTimeout(t));
+      encounterTimers.clear();
       inputController.reset(performance.now());
       mobilePointers.clear();
       cancelAnimationFrame(animation);
       resizeObserver.disconnect();
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
-      window.removeEventListener("blur", clearFocusInput);
-      document.removeEventListener("visibilitychange", clearHiddenInput);
+      window.removeEventListener("blur", clearFocus);
+      document.removeEventListener("visibilitychange", clearHidden);
       document.removeEventListener("pointermove", pointerMove);
       document.removeEventListener("pointerlockchange", pointerLockChange);
-      document.removeEventListener("pointerlockerror", pointerLockError);
       renderer.domElement.removeEventListener("click", canvasClick);
       renderer.domElement.removeEventListener("pointerdown", pointerDown);
       renderer.domElement.removeEventListener("lostpointercapture", pointerUp);
       window.removeEventListener("pointerup", pointerUp);
       window.removeEventListener("pointercancel", pointerUp);
-      renderer.domElement.removeEventListener("webglcontextlost", contextLost);
-      renderer.domElement.removeEventListener(
-        "webglcontextrestored",
-        contextRestored,
-      );
       if (document.pointerLockElement === renderer.domElement) document.exitPointerLock?.();
-      rigLoadCancelled = true;
       enemyMixer.stopAllAction();
       enemyMixer.uncacheRoot(subjectDetail);
-      pbrTextures.forEach((texture) => texture.dispose());
-      pbrTextures.clear();
-      subjectEnvironmentTarget?.dispose();
-      subjectEnvironmentTarget = null;
-      scene.traverse((object) => {
-        if (
-          !(object instanceof THREE.Mesh) &&
-          !(object instanceof THREE.Points)
-        ) {
-          return;
-        }
-        object.geometry.dispose();
-        const materials = Array.isArray(object.material)
-          ? object.material
-          : [object.material];
-        materials.forEach((item) => item.dispose());
-      });
-      concreteColor.dispose();
-      concreteRelief.dispose();
-      hazardTexture.dispose();
+      pbrTextures.forEach((t) => t.dispose());
+      biomeComplex.dispose();
+      studioEnv.dispose();
       cctvTarget.dispose();
       cctvDisplayGeometry.dispose();
       cctvDisplayMaterial.dispose();
+      scene.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh) && !(obj instanceof THREE.Points)) return;
+        obj.geometry.dispose();
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((m) => m.dispose());
+      });
       renderer.dispose();
       mount.removeChild(renderer.domElement);
       canvasRef.current = null;
-      if (walkWindow.__M00NQA__ === qaBridge) {
-        delete walkWindow.__M00NQA__;
-      }
+      if (walkWindow.__M00NQA__ === qaBridge) delete walkWindow.__M00NQA__;
+      if (qaActionsRef.current === qaBridge) qaActionsRef.current = null;
       delete mount.dataset.qa;
     };
-  }, [
-    clearCctvEncounter,
-    quality,
-    requestControl,
-    seed,
-    setGamePhase,
-  ]);
+  }, [clearCctvEncounter, quality, requestControl, runEpoch, seed, setGamePhase, startAudio]);
 
   useEffect(() => {
     audioRef.current?.setLevels(audioLevels);
@@ -4205,199 +2849,119 @@ export default function WalkExe() {
 
   useEffect(
     () => () => {
-      if (!audioRef.current) return;
-      void audioRef.current.cleanup();
-      audioRef.current = null;
+      if (audioRef.current) {
+        void audioRef.current.cleanup();
+        audioRef.current = null;
+      }
     },
     [],
   );
 
-  const chooseCamera = (index: number, eventTimestamp: number) => {
-    clearCctvEncounter();
-    cctvIndexRef.current = index;
-    setCctvIndex(index);
-    void primeCctvAudio().then((running) => {
-      if (running && tabletRef.current) {
-        audioRef.current?.playCctvStatic({ duration: 0.22, gain: 0.14 });
+  const chooseCamera = useCallback(
+    (index: number, eventTimestamp: number) => {
+      clearCctvEncounter();
+      cctvIndexRef.current = index;
+      setCctvIndex(index);
+      void primeCctvAudio().then((ok) => ok && tabletRef.current && audioRef.current?.playCctvStatic({ duration: 0.2, gain: 0.14 }));
+      if (difficultyRef.current === "turista") return;
+      const visitCount = cctvVisitRef.current + 1;
+      cctvVisitRef.current = visitCount;
+      const decision = decideCctvEncounter(
+        seed,
+        index,
+        visitCount,
+        cctvQuietVisitsRef.current,
+        eventTimestamp - cctvLastEncounterAtRef.current,
+        motionDetected,
+      );
+      if (!decision.trigger) {
+        cctvQuietVisitsRef.current += 1;
+        return;
       }
-    });
-    const now = eventTimestamp;
-    const visitCount = cctvVisitRef.current + 1;
-    cctvVisitRef.current = visitCount;
-    const decision = decideCctvEncounter(
-      seed,
-      index,
-      visitCount,
-      cctvQuietVisitsRef.current,
-      now - cctvLastEncounterAtRef.current,
-      motionDetected,
-    );
-    if (!decision.trigger) {
-      cctvQuietVisitsRef.current += 1;
-      setPrompt(`${cameraNames[index]} · sin actividad confirmada.`);
-      return;
-    }
-
-    cctvQuietVisitsRef.current = 0;
-    cctvLastEncounterAtRef.current = now;
-    const mascot = mascotForCamera(seed + visitCount * 13, index);
-    const generation = cctvEncounterGenerationRef.current;
-    setPrompt("Interferencia localizada. No apartes la vista.");
-
-    const schedule = (delay: number, action: () => void) => {
-      const timer = window.setTimeout(() => {
-        cctvEncounterTimersRef.current.delete(timer);
-        if (
-          generation !== cctvEncounterGenerationRef.current ||
-          !tabletRef.current
-        ) {
-          return;
-        }
-        action();
-      }, delay);
-      cctvEncounterTimersRef.current.add(timer);
-    };
-
-    schedule(decision.revealDelayMs, () => {
-      cctvEncounterRef.current = mascot;
-      cctvEncounterPhaseRef.current = "presence";
-      setCctvEncounter(mascot);
-      setCctvEncounterPhase("presence");
-      setPrompt(`${mascot.cameraCode} · presencia no autorizada.`);
-      const engine = audioRef.current;
-      if (engine?.playMascotWarning(mascot.screamVariant)) return;
-      void engine?.resume().then((running) => {
-        if (
-          running &&
-          generation === cctvEncounterGenerationRef.current &&
-          tabletRef.current
-        ) {
-          engine.playMascotWarning(mascot.screamVariant);
-        }
+      cctvQuietVisitsRef.current = 0;
+      cctvLastEncounterAtRef.current = eventTimestamp;
+      const mascot = mascotForCamera(seed + visitCount * 13, index);
+      const gen = cctvEncounterGenerationRef.current;
+      const sched = (delay: number, fn: () => void) => {
+        const timer = window.setTimeout(() => {
+          cctvEncounterTimersRef.current.delete(timer);
+          if (gen === cctvEncounterGenerationRef.current && tabletRef.current) fn();
+        }, delay);
+        cctvEncounterTimersRef.current.add(timer);
+      };
+      sched(decision.revealDelayMs, () => {
+        cctvEncounterRef.current = mascot;
+        cctvEncounterPhaseRef.current = "presence";
+        setCctvEncounter(mascot);
+        setCctvEncounterPhase("presence");
+        audioRef.current?.playMascotWarning(mascot.screamVariant);
       });
-    });
-    schedule(decision.revealDelayMs + 620, () => {
-      cctvEncounterPhaseRef.current = "scream";
-      setCctvEncounterPhase("scream");
-      setPrompt(`${mascot.name} · ¡BAJA EL MONITOR!`);
-      vibrateScare();
-      const engine = audioRef.current;
-      if (engine?.playMascotScream(mascot.screamVariant, 1.18)) return;
-      void engine?.resume().then((running) => {
-        if (
-          running &&
-          generation === cctvEncounterGenerationRef.current &&
-          tabletRef.current
-        ) {
-          engine.playMascotScream(mascot.screamVariant, 1.18);
-        }
+      sched(decision.revealDelayMs + 620, () => {
+        cctvEncounterPhaseRef.current = "scream";
+        setCctvEncounterPhase("scream");
+        vibrateScare();
+        audioRef.current?.playMascotScream(mascot.screamVariant, 1.18);
       });
-    });
-    schedule(
-      decision.revealDelayMs + decision.visibleDurationMs,
-      () => {
+      sched(decision.revealDelayMs + decision.visibleDurationMs, () => {
         cctvEncounterRef.current = null;
         cctvEncounterPhaseRef.current = "idle";
         setCctvEncounter(null);
         setCctvEncounterPhase("idle");
-        setPrompt(`${cameraNames[index]} · la señal vuelve a estar vacía.`);
-      },
-    );
-  };
+      });
+    },
+    [clearCctvEncounter, motionDetected, primeCctvAudio, seed],
+  );
 
-  const pointerInputTimestamp = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ) => {
-    const timestamp = event.timeStamp;
-    if (!Number.isFinite(timestamp) || timestamp <= 0) {
-      return performance.now();
-    }
-    return timestamp > performance.timeOrigin
-      ? timestamp - performance.timeOrigin
-      : timestamp;
-  };
-
-  const beginMobileAction = (
-    action: WalkInputAction,
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ) => {
+  const beginMobileAction = (action: WalkInputAction, event: ReactPointerEvent<HTMLButtonElement>) => {
     if (phaseRef.current !== "playing" || tabletRef.current) return;
     event.preventDefault();
-    const timestamp = pointerInputTimestamp(event);
+    const ts = pointerEventTimestamp(event);
     const source = `touch:${event.pointerId}`;
-    const previous = mobilePointersRef.current.get(event.pointerId);
-    if (previous && previous.action !== action) {
-      inputControllerRef.current?.release(
-        previous.action,
-        previous.source,
-        timestamp,
-      );
-    }
+    const prev = mobilePointersRef.current.get(event.pointerId);
+    if (prev && prev.action !== action) inputControllerRef.current?.release(prev.action, prev.source, ts);
     mobilePointersRef.current.set(event.pointerId, { action, source });
-    inputControllerRef.current?.press(action, source, timestamp);
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Pointer capture is optional; window cancellation still clears input.
-    }
+    inputControllerRef.current?.press(action, source, ts);
   };
 
-  const endMobileAction = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ) => {
-    const activePointer = mobilePointersRef.current.get(event.pointerId);
-    if (!activePointer) return;
+  const endMobileAction = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const active = mobilePointersRef.current.get(event.pointerId);
+    if (!active) return;
     event.preventDefault();
-    inputControllerRef.current?.release(
-      activePointer.action,
-      activePointer.source,
-      pointerInputTimestamp(event),
-    );
+    inputControllerRef.current?.release(active.action, active.source, pointerEventTimestamp(event));
     mobilePointersRef.current.delete(event.pointerId);
-    try {
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-    } catch {
-      // The browser may already have released a cancelled pointer.
-    }
   };
 
-  const updateAudioLevel = (key: keyof AudioLevels, value: number) => {
+  const updateAudioLevel = useCallback((key: keyof AudioLevels, value: number) => {
     setAudioLevels((levels) => ({ ...levels, [key]: value }));
-  };
+  }, []);
 
   return (
     <main
-      className={`walk-game phase-${phase} enemy-${enemyMode}`}
-      style={{ "--fear": phase === "playing" ? fearLevel(bpm).toFixed(3) : 0 } as CSSProperties}
+      className={`walk-game phase-${phase} enemy-${hud.enemyMode} ${hud.redAlert ? "red-alert" : ""}`}
+      style={{ "--fear": phase === "playing" ? fearLevel(hud.bpm).toFixed(3) : 0 } as CSSProperties}
     >
-      <div ref={mountRef} className="walk-stage" aria-label="Laberinto tridimensional M00NW4LK.EXE" />
+      <div ref={mountRef} className="walk-stage" aria-label="Estudios Plató 22 · M00NW4LK.EXE" />
       <div className="walk-noise" aria-hidden="true" />
       <div className="walk-vignette" aria-hidden="true" />
       <div className="walk-fear" aria-hidden="true" />
-      {phase === "playing" && (
+      {phase === "playing" && !tabletOpen && (
         <div className="walk-vhs" aria-hidden="true">
           <i className="vhs-tracking" />
-          <span className="vhs-play">▶ PLAY · SP</span>
+          <span className="vhs-play">▶ PLAY · SP · PLATÓ 22</span>
         </div>
       )}
+
       {activeJumpscare && (
-        <div
-          className={`mascot-jumpscare mascot-${activeJumpscare.id}`}
-          aria-hidden="true"
-        >
-          <div
-            className="mascot-jumpscare-face"
-            style={{ backgroundImage: `url(${activeJumpscare.image})` }}
-          />
+        <div className={`mascot-jumpscare mascot-${activeJumpscare.id}`} aria-hidden="true">
+          <div className="mascot-jumpscare-face" style={{ backgroundImage: `url(${activeJumpscare.image})` }} />
           <div className="mascot-jumpscare-id">
-            <span>ARCHIVO PARASITO · SCREAM FEED</span>
+            <span>ARCHIVO PARÁSITO · SCREAM FEED</span>
             <strong>{activeJumpscare.name}</strong>
             <small>{activeJumpscare.signal}</small>
           </div>
         </div>
       )}
+
       {runtimeError && (
         <div className="runtime-error" role="alert">
           <strong>RECUPERANDO MOTOR 3D</strong>
@@ -4409,132 +2973,39 @@ export default function WalkExe() {
         <Link href="/#juegos" className="walk-back">← VOLVER A JUEGOS</Link>
         <div>
           <span className="rec-dot" />
-          BODY CAM · M00NW4LK.EXE
+          BODY CAM · M00NW4LK.EXE · 13×13
         </div>
         <span className="walk-timecode">
           <b ref={timecodeRef}>00:00:00:00</b>
-          <small>SEMILLA {seed}</small>
+          <small>PLATÓ #{seed}</small>
         </span>
       </header>
 
-      {phase === "playing" && (
-        <>
-          <section className="walk-hud" aria-label="Estado de la partida">
-            <div className="hud-block heartbeat-block">
-              <span>PROXIMIDAD</span>
-              <strong>{bpm}<small>BPM</small></strong>
-              <div className="heart-line">
-                {Array.from({ length: 15 }, (_, index) => <i key={index} />)}
-              </div>
-            </div>
-            <div className="hud-block">
-              <span>SECTOR</span>
-              <strong>{sector}</strong>
-              <small>ESTADO IA · {enemyStateLabels[enemyMode]}</small>
-              <small>RECORRIDO · {traveled.toFixed(1)} m</small>
-              <small>SUJETO M · ~{distance} m</small>
-            </div>
-            <div className="hud-block echo-block">
-              <span>ECOS DISPONIBLES</span>
-              <strong>{String(echoes).padStart(2, "0")}</strong>
-              <small>G · PROYECTAR SEÑUELO</small>
-            </div>
-            <div className={`hud-block tapes-block ${tapes.length >= TAPES_TO_EXIT ? "unlocked" : ""}`}>
-              <span>CINTAS DE RAÚL</span>
-              <strong>
-                {tapes.length}
-                <small>/{WALK_TAPES.length}</small>
-              </strong>
-              <div className="tape-slots" aria-hidden="true">
-                {WALK_TAPES.map((tape, index) => (
-                  <i
-                    key={tape.code}
-                    className={tapes.includes(index) ? "got" : ""}
-                    style={{ "--tape": tapeColor(tape.color) } as CSSProperties}
-                  />
-                ))}
-              </div>
-              <small>
-                {tapes.length >= TAPES_TO_EXIT
-                  ? "SALIDA CON ENERGÍA"
-                  : `SALIDA · FALTAN ${TAPES_TO_EXIT - tapes.length}`}
-              </small>
-            </div>
-          </section>
+      {phase === "playing" && !tabletOpen && (
+        <WalkHud
+          hud={hud}
+          pointerHelp={pointerHelp}
+          tabletOpen={tabletOpen}
+          onRequestControl={requestControl}
+        />
+      )}
 
-          <div className="crosshair" aria-hidden="true"><i /><i /></div>
-
-          <aside className={`objective-card ${objectiveReading?.kind === "exit" ? "exit-ready" : ""}`}>
-            <div className="objective-head">
-              <span>OBJETIVO ACTUAL</span>
-              <span className={`stealth-pill stealth-${stealthState}`}>
-                {dazzled
-                  ? "⚡ M-22 DESLUMBRADO"
-                  : stealthState === "hidden"
-                    ? "● OCULTO EN SOMBRA"
-                    : stealthState === "dim"
-                      ? "◐ PERFIL BAJO"
-                      : "☀ VISIBLE (LINTERNA ON)"}
-              </span>
-            </div>
-            <strong>
-              {tapes.length < TAPES_TO_EXIT
-                ? `RECUPERA ${TAPES_TO_EXIT} CINTAS DE RAÚL (${tapes.length}/${TAPES_TO_EXIT})`
-                : tapes.length < WALK_TAPES.length
-                  ? "SALIDA ABIERTA · ESCAPA O VE A POR LAS 5"
-                  : "DIRECTOR’S CUT · ESCAPA POR LA SALIDA"}
-            </strong>
-            {objectiveReading && (
-              <div className={`signal-beacon strength-${objectiveReading.signalStrength}`}>
-                <b className="signal-arrow" aria-hidden="true">{objectiveReading.arrow}</b>
-                <div>
-                  <small>
-                    {objectiveReading.kind === "exit"
-                      ? "SEÑAL PUERTA DE EMERGENCIA"
-                      : `RASTREADOR VHS · ${objectiveReading.code}`}
-                  </small>
-                  <strong>{objectiveReading.label}</strong>
-                </div>
-                <span className="signal-dist">
-                  ~{objectiveReading.meters} m
-                </span>
-              </div>
-            )}
-            {detectionPct > 4 && (
-              <div className="detection-bar" role="status" aria-label={`Nivel de detección ${detectionPct}%`}>
-                <span>DETECCIÓN VISUAL</span>
-                <div><i style={{ width: `${detectionPct}%` }} /></div>
-                <b>{detectionPct}%</b>
-              </div>
-            )}
-            {ghostRelicFound && (
-              <small className="relic-badge">✦ SEVEN INCHES (1969) · BENDICIÓN DEL CLERO ACTIVA</small>
-            )}
-            <p>{prompt}</p>
-          </aside>
-
-          <div className="controls-hint">
-            <span><b>WASD</b> MOVER</span>
-            <span><b>SHIFT</b> CORRER (RUIDO)</span>
-            <span><b>CTRL</b> AGACHARSE</span>
-            <span><b>E</b> INTERACTUAR</span>
-            <span><b>G</b> SEÑUELO</span>
-            <span><b>Q</b> LANZAR PIEZA</span>
-            <span><b>TAB</b> CÁMARAS</span>
-            <span><b>F</b> LINTERNA</span>
-          </div>
-
-          {pointerHelp && !tabletOpen && (
-            <button
-              className="pointer-help"
-              type="button"
-              onClick={requestControl}
-            >
-              <span>CONTROL ALTERNATIVO ACTIVO</span>
-              CLIC PARA CAPTURAR · O WASD + ARRASTRAR
-            </button>
-          )}
-        </>
+      {qaSummary && phase === "playing" && !tabletOpen && (
+        <div className="qa-bar" role="region" aria-label="Diagnóstico QA">
+          <span>{qaSummary}</span>
+          <button type="button" onClick={() => qaActionsRef.current?.visitNextBiome()}>
+            QA: SIGUIENTE BIOMA
+          </button>
+          <button type="button" onClick={() => qaActionsRef.current?.triggerRedAlert()}>
+            QA: ALERTA ROJA
+          </button>
+          <button type="button" onClick={() => qaActionsRef.current?.triggerEscape()}>
+            QA: ESCAPE 3D
+          </button>
+          <button type="button" onClick={() => qaActionsRef.current?.triggerSecretEscape()}>
+            QA: FINAL SECRETO
+          </button>
+        </div>
       )}
 
       {inVent && !tabletOpen && (
@@ -4544,518 +3015,97 @@ export default function WalkExe() {
             <small>CONDUCTO DE MANTENIMIENTO · {ventRoute}</small>
             <strong>{String(ventProgress).padStart(2, "0")}%</strong>
             <div><i style={{ width: `${ventProgress}%` }} /></div>
-            <span>W/S AVANZA O RETROCEDE · A/D O RATÓN GIRAN LA CÁMARA</span>
+            <span>W/S AVANZA · A/D O RATÓN GIRAN</span>
           </div>
         </div>
       )}
 
       {tabletOpen && phase === "playing" && (
-        <section className="cctv-tablet" aria-label="Red de cámaras del laberinto">
-          <div className="tablet-shell">
-            <div
-              ref={cctvFeedRef}
-              className={`cctv-feed${signalLost ? " signal-lost" : ""}`}
-            >
-              <div className="cctv-scan" />
-              {!signalLost && cctvEncounter && (
-                <div
-                  className={`cctv-intruder encounter-${cctvEncounterPhase}${
-                    cctvEncounterPhase === "scream" ? " detected" : ""
-                  }`}
-                  style={{ backgroundImage: `url(${cctvEncounter.image})` }}
-                  aria-hidden="true"
-                >
-                  <span>{cctvEncounter.cameraCode}</span>
-                  <strong>{cctvEncounter.name}</strong>
-                  <small>{cctvEncounter.role}</small>
-                  <em>AUDIO · {cctvEncounter.signal}</em>
-                </div>
-              )}
-              {signalLost && (
-                <div className="cctv-signal-loss">
-                  <strong>SIGNAL LOST</strong>
-                  <span>RENEGOCIANDO ENLACE...</span>
-                </div>
-              )}
-              <div className="cctv-feed-top">
-                <span>● LIVE</span>
-                <strong>{cameraNames[cctvIndex]}</strong>
-                <span>12:{String(cctvIndex + 1).padStart(2, "0")} AM</span>
-              </div>
-              <div className="cctv-warning">
-                <span>SEÑAL DE MOVIMIENTO</span>
-                <b>
-                  {signalLost
-                    ? "SIN SEÑAL"
-                    : cctvEncounterPhase === "scream"
-                    ? "¡RETROCEDE!"
-                    : cctvEncounter
-                    ? "PRESENCIA PARÁSITA"
-                    : motionDetected
-                    ? "OBJETO NO IDENTIFICADO"
-                    : "SIN ACTIVIDAD"}
-                </b>
-              </div>
-            </div>
-            <div className="cctv-panel">
-              <div className="cctv-map">
-                <svg
-                  className="map-schematic"
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                  aria-hidden="true"
-                >
-                  {mapSegments.map((segment, index) => (
-                    <line
-                      key={`${segment.x1}-${segment.y1}-${index}`}
-                      x1={segment.x1}
-                      y1={segment.y1}
-                      x2={segment.x2}
-                      y2={segment.y2}
-                    />
-                  ))}
-                </svg>
-                <span
-                  className="map-office"
-                  style={{
-                    left: `${mapPlayer.left}%`,
-                    top: `${mapPlayer.top}%`,
-                  }}
-                >
-                  YOU
-                </span>
-                {tapeMapMarkers.map(
-                  (marker) =>
-                    !marker.collected && (
-                      <span
-                        key={marker.code}
-                        className="map-tape-dot"
-                        title={`Cinta ${marker.code}`}
-                        style={
-                          {
-                            left: `${marker.left}%`,
-                            top: `${marker.top}%`,
-                            "--tape": marker.color,
-                          } as CSSProperties
-                        }
-                      >
-                        ◆
-                      </span>
-                    ),
-                )}
-                {exitMapMarker && (
-                  <span
-                    className={`map-exit-dot ${tapes.length >= TAPES_TO_EXIT ? "unlocked" : ""}`}
-                    title={tapes.length >= TAPES_TO_EXIT ? "Salida abierta" : "Salida bloqueada (necesita 3 cintas)"}
-                    style={{
-                      left: `${exitMapMarker.left}%`,
-                      top: `${exitMapMarker.top}%`,
-                    }}
-                  >
-                    {tapes.length >= TAPES_TO_EXIT ? "SALIDA" : "🔒"}
-                  </span>
-                )}
-                {relicMapMarker && !relicMapMarker.found && (
-                  <span
-                    className="map-relic-dot"
-                    title="Señal anómala · 1969"
-                    style={{
-                      left: `${relicMapMarker.left}%`,
-                      top: `${relicMapMarker.top}%`,
-                    }}
-                  >
-                    ✦
-                  </span>
-                )}
-                {cameraNames.map((name, index) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className={cctvIndex === index ? "active" : ""}
-                    onPointerDown={() => {
-                      void primeCctvAudio();
-                    }}
-                    onClick={(event) => chooseCamera(index, event.timeStamp)}
-                    style={{
-                      left: `${cameraMapPositions[index]?.left ?? 12}%`,
-                      top: `${cameraMapPositions[index]?.top ?? 12}%`,
-                    }}
-                  >
-                    C{index + 1}
-                  </button>
-                ))}
-              </div>
-              <div className="cctv-map-legend" aria-hidden="true">
-                <span><b>YOU</b> TÚ</span>
-                <span><i className="leg-tape">◆</i> CINTAS</span>
-                <span><i className="leg-exit">■</i> SALIDA</span>
-                <span><i className="leg-relic">✦</i> 1969</span>
-              </div>
-              <div className="cctv-power">
-                <span>ENERGÍA DE RED</span>
-                <div><i style={{ width: `${power}%` }} /></div>
-                <strong>{power}%</strong>
-              </div>
-              <button
-                className="tablet-close"
-                type="button"
-                onClick={() => {
-                  tabletRef.current = false;
-                  setTabletOpen(false);
-                  clearCctvEncounter();
-                  requestControl();
-                }}
-              >
-                BAJAR MONITOR · TAB
-              </button>
-            </div>
-          </div>
-        </section>
+        <WalkCctv
+          cctvFeedRef={cctvFeedRef}
+          cameraNames={CAMERA_NAMES}
+          cctvIndex={cctvIndex}
+          signalLost={signalLost}
+          motionDetected={motionDetected}
+          cctvEncounter={cctvEncounter}
+          cctvEncounterPhase={cctvEncounterPhase}
+          power={power}
+          tapesHeld={hud.tapes.length}
+          mapSegments={mapSegments}
+          mapPlayer={mapPlayer}
+          cameraMapPositions={cameraMapPositions}
+          tapeMapMarkers={tapeMapMarkers}
+          wingMapLabels={wingMapLabels}
+          exitMapMarker={exitMapMarker}
+          onPrimeAudio={() => void primeCctvAudio()}
+          onChooseCamera={chooseCamera}
+          onClose={handleCloseTablet}
+        />
       )}
 
       {phase === "briefing" && (
-        <section className={`game-overlay briefing boot-${bootStep >= BOOT_LINES.length ? "done" : "running"}`}>
-          <pre className="boot-terminal" aria-hidden="true">
-            {BOOT_LINES.slice(0, bootStep).join("\n")}
-            {bootStep < BOOT_LINES.length && <i className="boot-caret" />}
-          </pre>
-          <div className="briefing-kicker">
-            <span>EXPERIENCIA 3D · PROCEDURAL</span>
-            <span>ARCHIVO CLASIFICADO 22</span>
-          </div>
-          <h1>M00N<br /><strong>W4LK.EXE</strong></h1>
-          <p>
-            Tu misión en el laberinto: <b>recupera {TAPES_TO_EXIT} cintas de Raúl</b> para
-            dar energía a la puerta de emergencia y escapa sin que <b>SUJETO M-22</b> te
-            atrape. Sigue el rastreador direccional VHS o consulta el mapa con <b>TAB</b>.
-          </p>
-          <div className="briefing-grid">
-            <div>
-              <span>01 · OBJETIVO</span>
-              <strong>RECUPERA {TAPES_TO_EXIT} DE {WALK_TAPES.length} CINTAS</strong>
-              <small>Cógelas con E · las 5 juntas desbloquean el final secreto Director&apos;s Cut</small>
-            </div>
-            <div>
-              <span>02 · SIGILO Y LINTERNA</span>
-              <strong>OCÚLTATE O DESLUMBRA</strong>
-              <small>CTRL + F apagada te oculta en la oscuridad · F directa a su cara lo frena 2 s</small>
-            </div>
-            <div>
-              <span>03 · SUPERVIVENCIA</span>
-              <strong>SEÑUELOS, CCTV Y RELIQUIA</strong>
-              <small>TAB muestra cintas y salida · G/Q distraen · busca el vinilo oculto de 1969</small>
-            </div>
-          </div>
-          <div className="briefing-tapes" aria-label="Las cinco cintas de Raúl">
-            <span className="briefing-roster-title">
-              OBJETIVO · RECUPERA {TAPES_TO_EXIT} DE LAS {WALK_TAPES.length} CINTAS PARA DAR ENERGÍA A LA SALIDA
-            </span>
-            <div>
-              {WALK_TAPES.map((tape) => (
-                <figure key={tape.code} style={{ "--tape": tapeColor(tape.color) } as CSSProperties}>
-                  <img src={tape.thumbnail} alt="" loading="lazy" />
-                  <figcaption>
-                    <small>{tape.code}</small>
-                    {tape.title}
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-            <small>Las cinco juntas desbloquean el final secreto: DIRECTOR&apos;S CUT. Hay además un vinilo oculto de Ghost (+25% CCTV y +1 eco).</small>
-          </div>
-          <div className="briefing-cta-row">
-            <button type="button" className="briefing-start-primary" onClick={beginGame}>
-              ▶ ENTRAR EN EL PASADIZO <span>WASD →</span>
-            </button>
-            <div className="difficulty-picker" role="group" aria-label="Dificultad de la incursión">
-              <button
-                type="button"
-                className={difficulty === "estreno" ? "active" : ""}
-                onClick={() => setDifficulty("estreno")}
-              >
-                MODO ESTRENO <small>EQUILIBRADO</small>
-              </button>
-              <button
-                type="button"
-                className={difficulty === "pesadilla" ? "active" : ""}
-                onClick={() => setDifficulty("pesadilla")}
-              >
-                MODO PESADILLA <small>IA AGRESIVA</small>
-              </button>
-            </div>
-          </div>
-          <details className="briefing-advanced">
-            <summary>⚙ OPCIONES AVANZADAS · GRÁFICOS, AUDIO Y PRUEBA DE SCREAMS</summary>
-            <div className="briefing-roster" aria-label="Archivo de animatrónicos">
-              <span className="briefing-roster-title">
-                RED MASCOTA CORRUPTA · 4 SCREAMS PROCEDURALES
-              </span>
-              <div>
-                {SCARE_ROSTER.map((mascot) => (
-                  <article key={mascot.id}>
-                    <i
-                      className="briefing-mascot-image"
-                      style={{ backgroundImage: `url(${mascot.image})` }}
-                      aria-hidden="true"
-                    />
-                    <span>
-                      <strong>{mascot.name}</strong>
-                      <small>{mascot.role}</small>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => previewMascotScream(mascot)}
-                      aria-label={`Oír scream de ${mascot.name}`}
-                    >
-                      ▶ OÍR
-                    </button>
-                  </article>
-                ))}
-              </div>
-            </div>
-            <div className="quality-picker" aria-label="Calidad gráfica">
-              <span>PERFIL GRÁFICO</span>
-              <div>
-                {(["low", "medium", "high", "ultra"] as const).map(
-                  (profile) => (
-                    <button
-                      key={profile}
-                      type="button"
-                      className={quality === profile ? "active" : ""}
-                      onClick={() => setQuality(profile)}
-                    >
-                      {profile === "low"
-                        ? "BAJO"
-                        : profile === "medium"
-                          ? "MEDIO"
-                          : profile === "high"
-                            ? "ALTO"
-                            : "ULTRA"}
-                    </button>
-                  ),
-                )}
-              </div>
-            </div>
-            <div className="audio-mixer" aria-label="Mezclador de audio">
-              {(
-                [
-                  ["master", "GENERAL"],
-                  ["ambience", "AMBIENTE"],
-                  ["music", "MÚSICA"],
-                  ["sfx", "EFECTOS"],
-                  ["heartbeat", "LATIDO"],
-                  ["jumpscare", "JUMPSCARE"],
-                ] as Array<[keyof AudioLevels, string]>
-              ).map(([key, label]) => (
-                <label key={key}>
-                  <span>{label}</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={audioLevels[key]}
-                    onChange={(event) =>
-                      updateAudioLevel(key, Number(event.target.value))
-                    }
-                  />
-                </label>
-              ))}
-            </div>
-          </details>
-          <small className="fiction-note">
-            Parodia de terror completamente ficticia · Recomendado con auriculares y ordenador
-          </small>
-          <p className="system-message">{message}</p>
-        </section>
+        <WalkBriefing
+          bootLines={BOOT_LINES}
+          bootStep={bootStep}
+          difficulty={difficulty}
+          quality={quality}
+          audioLevels={audioLevels}
+          message={message}
+          sceneReady={sceneReady}
+          onDifficulty={setDifficulty}
+          onQuality={setQuality}
+          onAudioLevel={updateAudioLevel}
+          onPreviewMascot={previewMascotScream}
+          onBegin={beginGame}
+        />
       )}
 
-      {phase === "caught" && (
-        <section className="game-overlay result caught">
-          <span className="result-code">ERROR_CERVICAL_180</span>
-          <h2>TE HA<br />ENCONTRADO.</h2>
-          <p>{message}</p>
-          {runStats && <RunReport stats={runStats} />}
-          <button type="button" onClick={restart}>GENERAR OTRO LABERINTO</button>
-          <Link href="/#juegos">VOLVER A LA PREMIERE</Link>
-        </section>
-      )}
-
-      {phase === "escaped" && (
-        <section className="game-overlay result escaped">
-          <span className="result-code">SALIDA_DE_EMERGENCIA_ABIERTA</span>
-          <h2>HAS SALIDO.<br /><strong>ÉL TAMBIÉN.</strong></h2>
-          <p>{message}</p>
-          {runStats && <RunReport stats={runStats} />}
-          <button type="button" onClick={restart}>ENTRAR EN OTRA RUTA</button>
-          <Link href="/#final">CONTINUAR AL FINAL DE LA PREMIERE →</Link>
-        </section>
+      {(phase === "caught" || phase === "escaped") && (
+        <WalkEnding
+          phase={phase}
+          message={message}
+          stats={runStats}
+          onQuickRetry={quickRetry}
+          onNewMaze={newMaze}
+        />
       )}
 
       {phase === "playing" && (
         <div className="mobile-controls" aria-label="Controles táctiles">
           <div className="mobile-pad">
-            <button
-              type="button"
-              onPointerDown={(event) => beginMobileAction("forward", event)}
-              onPointerUp={endMobileAction}
-              onPointerCancel={endMobileAction}
-              onPointerLeave={endMobileAction}
-              onLostPointerCapture={endMobileAction}
-            >W</button>
-            <button
-              type="button"
-              onPointerDown={(event) => beginMobileAction("left", event)}
-              onPointerUp={endMobileAction}
-              onPointerCancel={endMobileAction}
-              onPointerLeave={endMobileAction}
-              onLostPointerCapture={endMobileAction}
-            >A</button>
-            <button
-              type="button"
-              onPointerDown={(event) => beginMobileAction("backward", event)}
-              onPointerUp={endMobileAction}
-              onPointerCancel={endMobileAction}
-              onPointerLeave={endMobileAction}
-              onLostPointerCapture={endMobileAction}
-            >S</button>
-            <button
-              type="button"
-              onPointerDown={(event) => beginMobileAction("right", event)}
-              onPointerUp={endMobileAction}
-              onPointerCancel={endMobileAction}
-              onPointerLeave={endMobileAction}
-              onLostPointerCapture={endMobileAction}
-            >D</button>
+            {(["forward", "left", "backward", "right"] as const).map((dir, i) => (
+              <button
+                key={dir}
+                type="button"
+                onPointerDown={(e) => beginMobileAction(dir, e)}
+                onPointerUp={endMobileAction}
+                onPointerCancel={endMobileAction}
+              >
+                {["W", "A", "S", "D"][i]}
+              </button>
+            ))}
           </div>
           <div className="mobile-actions">
-            <button
-              type="button"
-              onPointerDown={(event) => beginMobileAction("sprint", event)}
-              onPointerUp={endMobileAction}
-              onPointerCancel={endMobileAction}
-              onPointerLeave={endMobileAction}
-              onLostPointerCapture={endMobileAction}
-            >
-              RUN
-            </button>
-            <button
-              type="button"
-              onPointerDown={(event) => beginMobileAction("crouch", event)}
-              onPointerUp={endMobileAction}
-              onPointerCancel={endMobileAction}
-              onPointerLeave={endMobileAction}
-              onLostPointerCapture={endMobileAction}
-            >
-              CTRL
-            </button>
+            <button type="button" onPointerDown={(e) => beginMobileAction("sprint", e)} onPointerUp={endMobileAction}>RUN</button>
+            <button type="button" onPointerDown={(e) => beginMobileAction("crouch", e)} onPointerUp={endMobileAction}>CTRL</button>
             <button
               type="button"
               onClick={() => {
                 if (power <= 0) return;
                 void primeCctvAudio();
                 tabletRef.current = !tabletRef.current;
-                inputControllerRef.current?.reset(performance.now());
-                mobilePointersRef.current.clear();
                 setTabletOpen(tabletRef.current);
-                if (tabletRef.current) {
-                  void audioRef.current?.resume().then((running) => {
-                    if (running && tabletRef.current) {
-                      audioRef.current?.playCctvStatic();
-                    }
-                  });
-                }
                 if (tabletRef.current) document.exitPointerLock?.();
               }}
             >
               CAM
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                interactQueuedRef.current = true;
-              }}
-            >
-              E
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                dropQueuedRef.current = true;
-              }}
-            >
-              G
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                objectQueuedRef.current = true;
-              }}
-            >
-              Q
-            </button>
+            <button type="button" onClick={() => { interactQueuedRef.current = true; }}>E</button>
+            <button type="button" onClick={() => { dropQueuedRef.current = true; }}>G</button>
+            <button type="button" onClick={() => { objectQueuedRef.current = true; }}>Q</button>
           </div>
         </div>
       )}
     </main>
-  );
-}
-
-/** The take report shown when a run ends: the director grades it. */
-function RunReport({ stats }: { stats: RunStats }) {
-  const minutes = Math.floor(stats.seconds / 60);
-  const seconds = Math.floor(stats.seconds % 60);
-  return (
-    <div className={`run-report grade-${stats.grade.grade}`}>
-      <div className="run-grade" aria-label={`Nota ${stats.grade.grade}`}>
-        <b>{stats.grade.grade}</b>
-        <span>{stats.grade.title}</span>
-      </div>
-      <p className="run-line">{stats.grade.line}</p>
-      <dl className="run-stats">
-        <div>
-          <dt>TIEMPO</dt>
-          <dd>{minutes}:{String(seconds).padStart(2, "0")}</dd>
-        </div>
-        <div>
-          <dt>RECORRIDO</dt>
-          <dd>{stats.meters.toFixed(0)} m</dd>
-        </div>
-        <div>
-          <dt>CINTAS</dt>
-          <dd>{stats.tapes.length}/{WALK_TAPES.length}</dd>
-        </div>
-        <div>
-          <dt>SUSTOS ESQUIVADOS</dt>
-          <dd>{stats.closeCalls}</dd>
-        </div>
-        <div>
-          <dt>ECOS USADOS</dt>
-          <dd>{stats.echoesUsed}</dd>
-        </div>
-        <div>
-          <dt>PULSO MÁXIMO</dt>
-          <dd>{stats.peakBpm} BPM</dd>
-        </div>
-      </dl>
-      {stats.escaped && stats.best !== null && (
-        <p className="run-best">
-          {stats.record ? "¡NUEVO RÉCORD!" : "MEJOR TIEMPO"} ·{" "}
-          {Math.floor(stats.best / 60)}:{String(Math.floor(stats.best % 60)).padStart(2, "0")}
-        </p>
-      )}
-      <div className="run-tapes" aria-label="Cintas recuperadas">
-        {WALK_TAPES.map((tape, index) => (
-          <span
-            key={tape.code}
-            className={stats.tapes.includes(index) ? "got" : ""}
-            style={{ "--tape": tapeColor(tape.color) } as CSSProperties}
-            title={tape.title}
-          >
-            {tape.code}
-          </span>
-        ))}
-      </div>
-    </div>
   );
 }

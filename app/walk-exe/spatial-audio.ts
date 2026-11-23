@@ -751,6 +751,116 @@ export class SpatialAudioEngine {
     return played;
   }
 
+  /** Synthesizes atmospheric horror cues for the 5 studio wings, easter eggs, Red Alert, and finale. */
+  playHorrorCue(
+    kind:
+      | "ghost-organ"
+      | "honk"
+      | "close-24tet"
+      | "red-alert"
+      | "hard-bread"
+      | "neverland-chime"
+      | "dazzle-zap"
+      | "door-slam",
+  ) {
+    const context = this.context;
+    const bus = this.buses.get("sfx");
+    if (!context || !bus || context.state !== "running") return false;
+    const now = context.currentTime + 0.015;
+
+    const note = (
+      freq: number,
+      at: number,
+      duration: number,
+      peak: number,
+      type: OscillatorType,
+      endFreq?: number,
+    ) => {
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, at);
+      if (endFreq !== undefined) {
+        osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), at + duration);
+      }
+      gain.gain.setValueAtTime(SILENCE, at);
+      gain.gain.exponentialRampToValueAtTime(Math.max(SILENCE, peak), at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(SILENCE, at + duration);
+      osc.connect(gain);
+      gain.connect(bus);
+      osc.start(at);
+      osc.stop(at + duration + 0.04);
+      osc.addEventListener("ended", () => {
+        osc.disconnect();
+        gain.disconnect();
+      });
+    };
+
+    if (kind === "ghost-organ") {
+      // Haunting detuned D-minor cathedral chord + deep church bell toll
+      [73.42, 146.83, 220, 293.66, 349.23, 351.8].forEach((freq, idx) => {
+        note(freq, now + idx * 0.04, 2.8, 0.095, idx % 2 === 0 ? "sawtooth" : "triangle");
+      });
+      note(110, now + 0.05, 3.2, 0.16, "sine", 98);
+      return true;
+    }
+
+    if (kind === "honk") {
+      // Classic Fazbear nose honk twisted into an unsettling analog echo
+      note(540, now, 0.14, 0.24, "triangle", 435);
+      note(810, now, 0.11, 0.1, "square", 620);
+      note(218, now + 0.18, 0.65, 0.08, "sawtooth", 172);
+      return true;
+    }
+
+    if (kind === "close-24tet") {
+      // Warped 24-TET Close Encounters five-note broadcast
+      const steps = [293.66, 339.2, 261.63, 134.8, 196.0];
+      steps.forEach((freq, index) => {
+        const at = now + index * 0.42;
+        note(freq, at, 0.56, 0.12, "sawtooth");
+        note(freq * 0.5, at, 0.62, 0.1, "triangle");
+      });
+      return true;
+    }
+
+    if (kind === "red-alert") {
+      // 3-pulse industrial klaxon + sub-bass dread wave
+      for (let pulse = 0; pulse < 3; pulse += 1) {
+        const at = now + pulse * 0.72;
+        note(460, at, 0.42, 0.16, "sawtooth", 310);
+        note(115, at, 0.52, 0.2, "triangle", 76);
+      }
+      return true;
+    }
+
+    if (kind === "hard-bread") {
+      // Seismic concrete-loaf drop
+      note(145, now, 0.45, 0.45, "sine", 36);
+      note(310, now, 0.22, 0.18, "square", 88);
+      return true;
+    }
+
+    if (kind === "neverland-chime") {
+      // Eerie glass-box chime descending in pitch
+      [880, 783.99, 659.25, 554.37].forEach((freq, idx) => {
+        note(freq, now + idx * 0.22, 0.9, 0.08, "sine", freq * 0.96);
+      });
+      return true;
+    }
+
+    if (kind === "dazzle-zap") {
+      note(1240, now, 0.18, 0.14, "sawtooth", 210);
+      note(190, now + 0.03, 0.28, 0.2, "square", 75);
+      return true;
+    }
+
+    // "door-slam": heavy hydraulic steel impact
+    note(132, now, 0.75, 0.46, "sine", 28);
+    note(260, now, 0.34, 0.22, "sawtooth", 54);
+    return true;
+  }
+
   getQaCounters(): SpatialAudioQaCounters {
     const contextState = this.destroyed
       ? "destroyed"

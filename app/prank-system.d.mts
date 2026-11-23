@@ -36,7 +36,12 @@ export type AchievementId =
   | "declassified"
   | "walkEscape"
   | "walkDirectorsCut"
+  | "walkCollectorEnding"
   | "walkCaught"
+  | "walkNeverlandLore"
+  | "walkHonk"
+  | "walkHardBread"
+  | "walkCloseSignal"
   | "walkGhostRelic"
   | "ghostRitual"
   | "squareHammer";
