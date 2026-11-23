@@ -61,11 +61,14 @@ test("the corrupt mascot network ships four distinct high-resolution faces", asy
 });
 
 test("every mascot is wired to CCTV, a named scream and the caught sequence", async () => {
-  const [roster, audio, game] = await Promise.all([
+  const [roster, audio, gameCore, briefingUi, cctvUi] = await Promise.all([
     readFile(path.join(ROOT, "app", "walk-exe", "scare-roster.ts"), "utf8"),
     readFile(path.join(ROOT, "app", "walk-exe", "spatial-audio.ts"), "utf8"),
     readFile(path.join(ROOT, "app", "walk-exe", "WalkGame.tsx"), "utf8"),
+    readFile(path.join(ROOT, "app", "walk-exe", "WalkBriefing.tsx"), "utf8"),
+    readFile(path.join(ROOT, "app", "walk-exe", "WalkCctv.tsx"), "utf8"),
   ]);
+  const game = `${gameCore}\n${briefingUi}\n${cctvUi}`;
 
   for (const mascot of MASCOTS) {
     assert.match(roster, new RegExp(`id: "${mascot}"`));

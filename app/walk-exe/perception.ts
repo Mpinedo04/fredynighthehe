@@ -1,4 +1,4 @@
-export type WalkDifficulty = "estreno" | "pesadilla";
+export type WalkDifficulty = "turista" | "estreno" | "pesadilla";
 
 export type DetectionStepInput = Readonly<{
   current: number;
@@ -26,6 +26,7 @@ export function visualDetectionRange(
   crouching: boolean,
   difficulty: WalkDifficulty = "estreno",
 ) {
+  if (difficulty === "turista") return 4.5;
   const base = flashlightOn
     ? crouching
       ? 13.5
@@ -38,6 +39,9 @@ export function visualDetectionRange(
 
 export function stepDetectionMeter(input: DetectionStepInput): DetectionStepResult {
   const difficulty = input.difficulty ?? "estreno";
+  if (difficulty === "turista") {
+    return { meter: 0, spotted: false, effectiveRange: 4.5 };
+  }
   const effectiveRange = visualDetectionRange(
     input.flashlightOn,
     input.crouching,
@@ -87,17 +91,19 @@ export function isFlashlightDazzle(input: {
   const forwardX = -Math.sin(input.playerYaw);
   const forwardZ = -Math.cos(input.playerYaw);
   const dot = (dx / len) * forwardX + (dz / len) * forwardZ;
-  // cos(22 deg) ≈ 0.927
   return dot >= 0.925;
 }
 
-/** Adaptive speed scaling: tension climbs as Raúl recovers more tapes. */
+/** Adaptive speed scaling: tension climbs as Raúl recovers more tapes or hits Red Alert. */
 export function adaptiveEnemySpeed(
   baseSpeed: number,
   tapesHeld: number,
   difficulty: WalkDifficulty = "estreno",
+  redAlert = false,
 ) {
+  if (difficulty === "turista") return baseSpeed * 0.55;
   const tapeBoost = Math.max(0, Math.min(5, tapesHeld)) * 0.045;
+  const alertBoost = redAlert ? 0.12 : 0;
   const diffScale = difficulty === "pesadilla" ? 1.12 : 0.94;
-  return baseSpeed * (1 + tapeBoost) * diffScale;
+  return baseSpeed * (1 + tapeBoost + alertBoost) * diffScale;
 }

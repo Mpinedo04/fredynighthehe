@@ -113,12 +113,11 @@
 
 .walk-noise {
   z-index: 10;
-  opacity: .09;
+  opacity: .065;
   background:
-    repeating-linear-gradient(0deg, transparent 0 3px, rgba(224,255,225,.34) 3px 4px),
-    repeating-linear-gradient(90deg, transparent 0 127px, rgba(255,255,255,.08) 128px 129px);
-  mix-blend-mode: screen;
-  animation: walk-static .16s steps(2) infinite;
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(218,250,224,.22) 3px 4px),
+    repeating-linear-gradient(90deg, transparent 0 127px, rgba(255,255,255,.06) 128px 129px);
+  animation: walk-static .2s steps(2) infinite;
 }
 
 .walk-vignette {
@@ -186,8 +185,7 @@
   min-height: 4.2rem;
   padding: .75rem .85rem;
   border: 1px solid rgba(186,205,185,.2);
-  background: rgba(4,7,6,.72);
-  backdrop-filter: blur(8px);
+  background: rgba(4,7,6,.86);
 }
 
 .hud-block > span,
@@ -289,7 +287,7 @@
   position: absolute;
   z-index: 66;
   left: 50%;
-  top: 58%;
+  top: 67%;
   display: grid;
   gap: .32rem;
   padding: .8rem 1.1rem;
@@ -810,12 +808,13 @@
 }
 
 .cctv-map::before {
-  content: "SECURITY NETWORK · GRID 22";
+  content: "SECURITY NETWORK · PLATÓ 13×13";
   position: absolute;
-  top: .6rem;
+  top: .5rem;
   left: .6rem;
   color: #78877b;
-  font-size: .595rem;
+  font-size: .56rem;
+  letter-spacing: .12em;
 }
 
 .cctv-map button,
@@ -824,12 +823,13 @@
   z-index: 3;
   display: grid;
   place-items: center;
-  width: 2.15rem;
-  height: 1.45rem;
+  width: 2rem;
+  height: 1.35rem;
+  transform: translate(-50%, -50%);
   border: 1px solid #59675b;
   background: #141a15;
   color: #a5b5a6;
-  font: 700 .623rem var(--font-mono), monospace;
+  font: 700 .6rem var(--font-mono), monospace;
   cursor: pointer;
 }
 
@@ -969,9 +969,8 @@
   gap: .45rem 1rem;
   padding: .85rem 1rem;
   border: 1px solid #3a433d;
-  background: rgba(5,7,6,.86);
+  background: rgba(5,7,6,.94);
   box-shadow: 0 .8rem 2rem rgba(0,0,0,.46);
-  backdrop-filter: blur(8px);
 }
 
 .vent-route-readout small,
@@ -1016,8 +1015,12 @@
 
 .result {
   align-items: center;
+  justify-content: flex-start;
+  overflow-y: auto;
+  padding-top: clamp(4.6rem, 6vw, 5.5rem);
+  padding-bottom: 2.8rem;
   text-align: center;
-  background: rgba(1,2,2,.93);
+  background: rgba(1,2,2,.94);
 }
 
 .result-code {

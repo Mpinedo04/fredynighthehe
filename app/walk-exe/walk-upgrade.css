@@ -19,13 +19,7 @@
   animation: fearPulse calc(1.15s - var(--fear) * 0.65s) ease-in-out infinite;
 }
 
-.walk-stage canvas {
-  filter:
-    saturate(calc(1 - var(--fear) * 0.35))
-    contrast(calc(1 + var(--fear) * 0.18));
-  transition: filter 0.6s ease;
-}
-
+/* Canvas kept filter-free for full 60 FPS WebGL compositing */
 .walk-game.enemy-chase .walk-stage {
   animation: fearShake 0.22s steps(2) infinite;
 }
@@ -53,9 +47,8 @@
   position: absolute;
   left: 0;
   right: 0;
-  height: calc(10px + var(--fear) * 40px);
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, calc(0.04 + var(--fear) * 0.12)), transparent);
-  mix-blend-mode: screen;
+  height: calc(10px + var(--fear) * 32px);
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, calc(0.035 + var(--fear) * 0.09)), transparent);
   animation: vhsTrack calc(7s - var(--fear) * 4.5s) linear infinite;
 }
 
@@ -500,8 +493,9 @@
 
 .map-exit-dot {
   padding: 0.12rem 0.28rem;
+  transform: translate(-50%, -125%);
   border: 1px solid rgba(255, 80, 80, 0.65);
-  background: rgba(20, 4, 4, 0.9);
+  background: rgba(20, 4, 4, 0.94);
   color: #ff7c7c;
   font-size: 0.52rem;
   letter-spacing: 0.08em;
@@ -619,46 +613,456 @@
 /* ── Polished HUD spacing & above-the-fold Briefing ────────────────────── */
 .walk-topbar {
   z-index: 80;
-  background: rgba(2, 4, 3, 0.92);
-  backdrop-filter: blur(10px);
+  background: rgba(2, 4, 3, 0.94);
+}
+
+.walk-hud {
+  width: 12.6rem;
 }
 
 .walk-game .briefing {
-  padding-top: clamp(4.6rem, 6vw, 5.4rem);
-  padding-bottom: 2.5rem;
+  padding-top: clamp(4.1rem, 5vw, 4.7rem);
+  padding-bottom: 1.5rem;
 }
 
 .walk-game .boot-terminal {
-  min-height: 5.6rem;
-  margin-bottom: 0.7rem;
-  font-size: 0.66rem;
-  line-height: 1.42;
+  min-height: 4.1rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.61rem;
+  line-height: 1.32;
 }
 
 .walk-game .briefing h1 {
-  margin: 0.55rem 0 0.4rem;
-  font-size: clamp(3.4rem, 7vw, 6.2rem);
+  margin: 0.3rem 0 0.28rem;
+  font-size: clamp(2.5rem, 5vw, 4.2rem);
+  line-height: 0.9;
 }
 
 .walk-game .briefing > p {
-  margin: 0.35rem 0 0.9rem;
+  margin: 0.25rem 0 0.65rem;
+  font-size: 0.7rem;
+  line-height: 1.58;
+}
+
+.walk-game .briefing-grid > div {
+  min-height: auto;
+  padding: 0.65rem 0.85rem;
+}
+
+.walk-game .briefing-grid strong {
+  margin: 0.3rem 0;
 }
 
 .walk-game .briefing-tapes {
-  margin: 0.9rem 0 0.3rem;
+  margin: 0.6rem 0 0.2rem;
+}
+
+.walk-game .briefing-tapes img {
+  aspect-ratio: 21 / 9;
+}
+
+.walk-game .briefing-cta-row {
+  margin-top: 0.72rem;
+}
+
+.walk-game .briefing-advanced {
+  margin-top: 0.62rem;
+  padding: 0.58rem 0.85rem;
+}
+
+.walk-game .fiction-note {
+  margin-top: 0.45rem;
+}
+
+.qa-bar {
+  position: absolute;
+  z-index: 85;
+  top: 17.5rem;
+  right: 1.35rem;
+  width: 12.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid rgba(109, 255, 156, 0.45);
+  background: rgba(4, 12, 8, 0.94);
+  color: #8bf7af;
+  font: 700 0.54rem/1.4 var(--font-mono), monospace;
+  letter-spacing: 0.06em;
+}
+
+.qa-bar button {
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(255, 177, 61, 0.65);
+  background: rgba(255, 177, 61, 0.14);
+  color: #ffe8bd;
+  font: 700 0.55rem var(--font-mono), monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.qa-bar button:hover {
+  background: #ffb13d;
+  color: #060806;
 }
 
 .walk-game .controls-hint {
   top: 4.6rem;
   right: 1.35rem;
   bottom: auto;
-  width: 11.8rem;
+  width: 12.2rem;
   padding: 0.7rem 0.8rem;
-  border: 1px solid rgba(186, 205, 185, 0.16);
-  background: rgba(4, 7, 6, 0.68);
-  backdrop-filter: blur(8px);
+  border: 1px solid rgba(186, 205, 185, 0.18);
+  background: rgba(4, 7, 6, 0.86);
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
   gap: 0.32rem;
+}
+
+/* ── M00NW4LK.EXE 2.0 · 3-Mode Picker, Wings, Red Alert, Lore & Endings ── */
+.difficulty-picker.three-modes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  flex: 1.4 1 25rem;
+}
+
+.game-overlay .difficulty-picker.three-modes button:nth-child(2).active {
+  border-color: #ef3b3b;
+  background: rgba(223, 23, 23, 0.18);
+  color: #ffe2e2;
+}
+
+.game-overlay .difficulty-picker.three-modes button:nth-child(2).active small {
+  color: #ff7b7b;
+}
+
+.game-overlay .difficulty-picker.three-modes button:nth-child(3).active {
+  border-color: #6fd8ff;
+  background: rgba(111, 216, 255, 0.14);
+  color: #e4f8ff;
+}
+
+.game-overlay .difficulty-picker.three-modes button:nth-child(3).active small {
+  color: #7ee0ff;
+}
+
+.wing-block {
+  border-left: 3px solid var(--wing-accent, #78857b);
+}
+
+.wing-block strong {
+  font-size: 1.04rem;
+  line-height: 1.1;
+  color: #f0f4ef;
+  letter-spacing: 0.06em;
+}
+
+.wing-block > span {
+  color: var(--wing-accent, #9aa89d);
+}
+
+.walk-game.red-alert .walk-vignette {
+  box-shadow: inset 0 0 15vw 4.5vw rgba(120, 0, 0, 0.65);
+  background:
+    radial-gradient(circle at center, transparent 32%, rgba(86, 0, 0, 0.42) 82%),
+    radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.58) 92%);
+  animation: threat-breathe 0.7s ease-in-out infinite alternate;
+}
+
+.red-alert-banner {
+  position: absolute;
+  z-index: 42;
+  top: 4.55rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: calc(100vw - 28rem);
+  padding: 0.46rem 0.9rem;
+  border: 1px solid rgba(255, 58, 58, 0.72);
+  background: rgba(42, 4, 4, 0.92);
+  color: #ffe4e4;
+  font: 700 0.63rem var(--font-mono), monospace;
+  letter-spacing: 0.14em;
+  box-shadow: 0 0 22px rgba(223, 23, 23, 0.35);
+  pointer-events: none;
+  text-align: center;
+}
+
+.red-alert-banner i {
+  width: 0.52rem;
+  height: 0.52rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #ff2b2b;
+  box-shadow: 0 0 10px #ff2b2b;
+  animation: rec-blink 0.55s steps(1) infinite;
+}
+
+.lore-transmission {
+  position: absolute;
+  z-index: 41;
+  top: 7.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(34rem, calc(100vw - 27rem));
+  padding: 0.7rem 0.95rem;
+  border: 1px solid rgba(232, 184, 77, 0.38);
+  border-left: 3px solid #e8b84d;
+  background: rgba(7, 8, 9, 0.92);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.72);
+  pointer-events: none;
+  animation: loreSlideIn 0.35s ease-out;
+}
+
+.lore-transmission small {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #e8b84d;
+  font: 700 0.58rem var(--font-mono), monospace;
+  letter-spacing: 0.15em;
+}
+
+.lore-transmission p {
+  margin: 0;
+  color: #e6ece5;
+  font: 0.78rem/1.48 var(--font-sans, sans-serif);
+}
+
+@keyframes loreSlideIn {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.interact-callout {
+  position: absolute;
+  z-index: 36;
+  left: 50%;
+  top: calc(50% + 2.5rem);
+  transform: translateX(-50%);
+  padding: 0.48rem 0.85rem;
+  border: 1px solid rgba(255, 206, 112, 0.72);
+  background: rgba(5, 7, 6, 0.9);
+  color: #fff4d8;
+  font: 700 0.66rem var(--font-mono), monospace;
+  letter-spacing: 0.12em;
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.map-wing-tag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 3;
+  color: var(--wing-color, #e8b84d);
+  font: 700 0.74rem var(--font-mono), monospace;
+  text-shadow: 0 0 8px var(--wing-color, #e8b84d);
+}
+
+.map-wing-tag.done {
+  color: #6dff9c;
+  text-shadow: 0 0 6px rgba(109, 255, 156, 0.7);
+  opacity: 0.85;
+}
+
+/* ── Two Horror Endings, Forensic Autopsy & Easter Eggs Archive ────────── */
+.result.collectors-cut {
+  background:
+    radial-gradient(circle at 50% 16%, rgba(164, 96, 255, 0.22), rgba(245, 196, 81, 0.08) 38%, transparent 70%),
+    rgba(3, 3, 6, 0.95);
+}
+
+.result.collectors-cut .result-code {
+  color: #f5c451;
+}
+
+.result.collectors-cut h2 strong {
+  color: #f5c451;
+  text-shadow: 0 0 28px rgba(245, 196, 81, 0.35);
+}
+
+.result.escaped:not(.collectors-cut) .result-code {
+  color: #82e8a4;
+}
+
+.result.escaped:not(.collectors-cut) h2 strong {
+  color: #b7d2bf;
+}
+
+.result .ending-epilogue {
+  max-width: 44rem;
+  margin: 0.35rem auto 1rem;
+  color: #dde5de;
+  font: 0.85rem/1.68 var(--font-sans, sans-serif);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.92);
+}
+
+.autopsy-tip {
+  width: min(42rem, 100%);
+  margin: 0.25rem auto 0.2rem;
+  padding: 0.78rem 1rem;
+  border: 1px solid rgba(223, 23, 23, 0.5);
+  border-left: 3px solid var(--walk-red);
+  background: rgba(34, 5, 5, 0.84);
+  text-align: left;
+}
+
+.autopsy-tip span {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #ff7c7c;
+  font: 700 0.58rem var(--font-mono), monospace;
+  letter-spacing: 0.14em;
+}
+
+.autopsy-tip strong {
+  display: block;
+  color: #f4ecec;
+  font: 600 0.8rem/1.45 var(--font-sans, sans-serif);
+}
+
+.grade-Splus .run-grade {
+  color: #ffe073;
+  box-shadow:
+    0 0 22px rgba(245, 196, 81, 0.32),
+    inset 0 0 14px rgba(176, 108, 255, 0.26);
+}
+
+.run-eggs {
+  grid-column: 1 / -1;
+  margin-top: 0.2rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(186, 205, 185, 0.16);
+  text-align: left;
+}
+
+.run-eggs > small {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #8e9c91;
+  font: 700 0.6rem var(--font-mono), monospace;
+  letter-spacing: 0.14em;
+}
+
+.run-eggs ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.38rem 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.run-eggs li {
+  display: grid;
+  grid-template-columns: 0.9rem auto 1fr;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.32rem 0.45rem;
+  border: 1px solid rgba(186, 205, 185, 0.12);
+  background: rgba(7, 10, 8, 0.65);
+  color: #6d7870;
+  font-size: 0.64rem;
+}
+
+.run-eggs li.found {
+  border-color: rgba(232, 184, 77, 0.42);
+  background: rgba(34, 26, 9, 0.42);
+  color: #ece6d2;
+}
+
+.run-eggs li b {
+  color: #6d7870;
+}
+
+.run-eggs li.found b {
+  color: #f5c451;
+}
+
+.run-eggs li span {
+  font: 700 0.56rem var(--font-mono), monospace;
+  letter-spacing: 0.08em;
+  color: #9ba89d;
+}
+
+.run-eggs li.found span {
+  color: #f5c451;
+}
+
+.run-eggs li em {
+  font-style: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+.game-overlay .ending-actions button {
+  margin-top: 0;
+}
+
+.game-overlay .ending-actions .btn-quick-retry {
+  border-color: #ff4e4e;
+  background: #df1717;
+  color: #fff6f6;
+  box-shadow: 0 0 22px rgba(223, 23, 23, 0.32);
+}
+
+.result .ending-home-link {
+  margin-top: 0;
+  padding: 0.96rem 1.2rem;
+  border: 1px solid rgba(186, 205, 185, 0.34);
+  background: rgba(10, 14, 12, 0.84);
+  color: #d6e0d7;
+  font: 700 0.65rem var(--font-mono), monospace;
+  letter-spacing: 0.11em;
+  text-decoration: none;
+}
+
+.result .ending-home-link:hover {
+  border-color: #e6f0e6;
+  color: #ffffff;
+}
+
+@media (max-width: 800px) {
+  .walk-hud {
+    width: 9.2rem;
+  }
+  .difficulty-picker.three-modes {
+    grid-template-columns: 1fr;
+  }
+  .red-alert-banner {
+    max-width: calc(100vw - 1.5rem);
+    top: 4.1rem;
+    font-size: 0.55rem;
+  }
+  .lore-transmission {
+    width: calc(100vw - 1.5rem);
+    top: 7.4rem;
+  }
+  .interact-callout {
+    max-width: calc(100vw - 2rem);
+    white-space: normal;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .walk-game.red-alert .walk-vignette,
+  .red-alert-banner i,
+  .lore-transmission {
+    animation: none;
+  }
 }
